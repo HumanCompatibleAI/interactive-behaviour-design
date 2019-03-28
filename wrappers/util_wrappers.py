@@ -357,7 +357,7 @@ class SaveMidStateWrapper(Wrapper):
         if 'Seaquest' in self.env.spec.id:
             # Filter out states which are too close to the end
             # (after the submarine has already died)
-            self.states = [(state, step_n) for state, step_n in self.states if step_n < self.step_n - 25]
+            self.states = [state for state in self.states if state.step_n < self.step_n - 25]
 
     def reset(self):
         self.filter_states()
