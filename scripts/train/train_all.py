@@ -23,7 +23,7 @@ rl_envs = [
 
 prefs_envs = [
     ('seaquest', 'SeaquestDeepMindDense-v0'),
-    ('fetchpp', 'FetchPickAndPlace-Repeat3-BinaryGripper-NoGripObs-5InitialBlockPos-FixedGoal-Delta-GripperBonuses-v0'),
+    ('fetchpp', 'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-5InitialBlockPos-FixedGoal-Delta-GripperBonuses-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
@@ -43,7 +43,7 @@ for seed in seeds:
             if 'Repeat3' in env_id:
                 rollout_length_seconds = 0.15
             elif 'Repeat1' in env_id:
-                rollout_length_seconds = 0.5
+                rollout_length_seconds = 1 / 6.0  # 5 frames
             else:
                 raise Exception()
         else:

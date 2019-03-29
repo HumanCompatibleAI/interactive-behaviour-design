@@ -15,30 +15,30 @@ class FetchTD3Policy(TD3Policy):
             return super().step(obs, **step_kwargs)
 
         elif self.manual_action == FetchAction.BACKWARDOPEN:
-            return [0.1, 0, 0, +0.8]
+            return [0.2, 0, 0, +1.0]
         elif self.manual_action == FetchAction.FORWARDOPEN:
-            return [-0.1, 0, 0, +0.8]
+            return [-0.2, 0, 0, +1.0]
         elif self.manual_action == FetchAction.LEFTOPEN:
-            return [0, 0.1, 0, +0.8]
+            return [0, 0.2, 0, +1.0]
         elif self.manual_action == FetchAction.RIGHTOPEN:
-            return [0, -0.1, 0, +0.8]
+            return [0, -0.2, 0, +1.0]
         elif self.manual_action == FetchAction.UPOPEN:
-            return [0, 0, 0.1, +0.8]
+            return [0, 0, 0.2, +1.0]
         elif self.manual_action == FetchAction.DOWNOPEN:
-            return [0, 0, -0.1, +0.8]
+            return [0, 0, -0.2, +1.0]
 
         elif self.manual_action == FetchAction.BACKWARDCLOSE:
-            return [0.1, 0, 0, -0.8]
+            return [0.2, 0, 0, -1.0]
         elif self.manual_action == FetchAction.FORWARDCLOSE:
-            return [-0.1, 0, 0, -0.8]
+            return [-0.2, 0, 0, -1.0]
         elif self.manual_action == FetchAction.LEFTCLOSE:
-            return [0, 0.1, 0, -0.8]
+            return [0, 0.2, 0, -1.0]
         elif self.manual_action == FetchAction.RIGHTCLOSE:
-            return [0, -0.1, 0, -0.8]
+            return [0, -0.2, 0, -1.0]
         elif self.manual_action == FetchAction.UPCLOSE:
-            return [0, 0, 0.1, -0.8]
+            return [0, 0, 0.2, -1.0]
         elif self.manual_action == FetchAction.DOWNCLOSE:
-            return [0, 0, -0.1, -0.8]
+            return [0, 0, -0.2, -1.0]
 
     def load_checkpoint(self, path):
         if 'FetchAction' in path:
