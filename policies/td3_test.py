@@ -137,7 +137,7 @@ class TestTD3(unittest.TestCase):
         batches_per_cycle=1000, l2_coef=0.0, noise_type='gaussian', polyak=0.995
     )
 
-    fetch_hyperparams = dict()
+    fetch_hyperparams = dict(hidden_sizes=(256, 256, 256, 256))
 
     def _test_cheetah_single(self):
         test_ret = self.run_td3_rl('HalfCheetah-v2', n_envs=1, n_epochs=10, hyperparams=self.spinningup_hyperparams)
