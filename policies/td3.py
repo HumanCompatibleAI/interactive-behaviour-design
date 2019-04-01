@@ -347,55 +347,7 @@ class TD3Policy(Policy):
         if cycle_done:
             print(f"Cycle {self.cycle_n} done")
 
-            fetch_vals_l = defaultdict(list)
-            for batch_n in range(self.batches_per_cycle):
-                batch = self.replay_buffer.sample_batch(self.batch_size)
-                feed_dict = {
-                    self.x_ph: batch['obs1'],
-                    self.x2_ph: batch['obs2'],
-                    self.a_ph: batch['acts'],
-                    self.r_ph: batch['rews'],
-                    self.d_ph: batch['done'],
-                }
-                fetches = {
-                    'loss_q': self.q_loss,
-                    'loss_q1': self.q1_loss,
-                    'loss_q2': self.q2_loss,
-                    'q1_vals': self.q1,
-                    'q2_vals': self.q2
-                }
-                fetch_vals = self.sess.run(list(fetches.values()) + [self.train_q_op], feed_dict)[:-1]
-                for k, v in zip(fetches.keys(), fetch_vals):
-                    if isinstance(v, np.float32):
-                        fetch_vals_l[k].append(v)
-                    else:
-                        fetch_vals_l[k].extend(v)
-
-                # Delayed policy update
-                if batch_n % self.policy_delay == 0:
-                    fetches = {
-                        'loss_td3_pi': self.td3_pi_loss,
-                        'loss_l2': self.l2_loss,
-                    }
-                    if self.train_mode ==PolicyTrainMode.R_PLUS_BC:
-                        bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-                        feed_dict.update({
-                            self.bc_x_ph: bc_batch['obses'],
-                            self.bc_a_ph: bc_batch['acts']
-                        })
-                        fetches.update({'loss_bc_pi': self.bc_pi_loss})
-                    if self.train_mode == PolicyTrainMode.R_PLUS_BC:
-                        fetches.update({'loss_td3_plus_bc_pi': self.td3_plus_bc_pi_loss})
-                    fetch_vals = self.sess.run(list(fetches.values()) + [self.train_pi_op, self.target_update],
-                                               feed_dict)[:-2]
-                    for k, v in zip(fetches.keys(), fetch_vals):
-                        if isinstance(v, np.float32):
-                            fetch_vals_l[k].append(v)
-                        else:
-                            fetch_vals_l[k].extend(v)
-
-            for k, l in fetch_vals_l.items():
-                self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
+            self._train_rl()
 
             for n in range(self.act_dim):
                 self.logger.logkv(f'policy_{self.name}/actions_mean_{n}', self.action_stats.mean[n])
@@ -414,6 +366,56 @@ class TD3Policy(Policy):
                 self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
 
             self.cycle_n += 1
+
+    def _train_rl(self):
+        fetch_vals_l = defaultdict(list)
+        for batch_n in range(self.batches_per_cycle):
+            batch = self.replay_buffer.sample_batch(self.batch_size)
+            feed_dict = {
+                self.x_ph: batch['obs1'],
+                self.x2_ph: batch['obs2'],
+                self.a_ph: batch['acts'],
+                self.r_ph: batch['rews'],
+                self.d_ph: batch['done'],
+            }
+            fetches = {
+                'loss_q': self.q_loss,
+                'loss_q1': self.q1_loss,
+                'loss_q2': self.q2_loss,
+                'q1_vals': self.q1,
+                'q2_vals': self.q2
+            }
+            fetch_vals = self.sess.run(list(fetches.values()) + [self.train_q_op], feed_dict)[:-1]
+            for k, v in zip(fetches.keys(), fetch_vals):
+                if isinstance(v, np.float32):
+                    fetch_vals_l[k].append(v)
+                else:
+                    fetch_vals_l[k].extend(v)
+
+            # Delayed policy update
+            if batch_n % self.policy_delay == 0:
+                fetches = {
+                    'loss_td3_pi': self.td3_pi_loss,
+                    'loss_l2': self.l2_loss,
+                }
+                if self.train_mode == PolicyTrainMode.R_PLUS_BC:
+                    bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
+                    feed_dict.update({
+                        self.bc_x_ph: bc_batch['obses'],
+                        self.bc_a_ph: bc_batch['acts']
+                    })
+                    fetches.update({'loss_bc_pi': self.bc_pi_loss})
+                if self.train_mode == PolicyTrainMode.R_PLUS_BC:
+                    fetches.update({'loss_td3_plus_bc_pi': self.td3_plus_bc_pi_loss})
+                fetch_vals = self.sess.run(list(fetches.values()) + [self.train_pi_op, self.target_update],
+                                           feed_dict)[:-2]
+                for k, v in zip(fetches.keys(), fetch_vals):
+                    if isinstance(v, np.float32):
+                        fetch_vals_l[k].append(v)
+                    else:
+                        fetch_vals_l[k].extend(v)
+        for k, l in fetch_vals_l.items():
+            self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
 
     # Why use two functions rather than just having a 'deterministic' argument?
     # Because we need to be careful that the batch size matches the number of
