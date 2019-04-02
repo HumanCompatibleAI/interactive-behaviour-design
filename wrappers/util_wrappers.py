@@ -64,7 +64,7 @@ class VecLogRewards(CustomVecEnvWrapper):
         self.episode_reward_sum = 0
         self.logger = easy_tf_log.Logger()
         self.logger.set_log_dir(log_dir)
-        self.log_key = 'env/episode_reward_sum_vec'
+        self.log_key = 'env_train/episode_reward_sum_vec'
         if postfix is not None:
             self.log_key += postfix
 
