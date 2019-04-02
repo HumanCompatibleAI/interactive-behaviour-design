@@ -34,7 +34,7 @@ def monitor_segments_dir_loop(dir, n_to_keep):
 
 def write_segments_loop(queue, dir):
     while True:
-        obses, rewards, frames = queue.get()
+        obses, rewards, frames, episode_n = queue.get()
         frames = make_small_change(frames)
         segment = CompressedRollout(final_env_state=None,
                                     obses=obses,
@@ -42,7 +42,8 @@ def write_segments_loop(queue, dir):
                                     frames=frames,
                                     vid_filename=None,
                                     generating_policy=None,
-                                    actions=None)
+                                    actions=None,
+                                    extra_info=dict(episode_n=episode_n))
         base_name = os.path.join(dir, str(segment.hash))
         vid_filename = base_name + '.mp4'
         save_video(segment.frames, vid_filename)

@@ -3,17 +3,19 @@ import json
 import os
 import pickle
 import random
+from collections import defaultdict
 from itertools import combinations
 
+from rollouts import CompressedRollout
 from web_app import web_globals
 from web_app.utils import add_pref, nocache
 
 from flask import Blueprint, render_template, request, send_from_directory
 
 comparisons_app = Blueprint('comparisons', __name__)
+n_prefs_by_episode = defaultdict(int)
 
-
-def get_segment(hash):
+def get_segment(hash) -> CompressedRollout:
     with open(os.path.join(web_globals._segments_dir, hash + '.pkl'), 'rb') as f:
         rollout = pickle.load(f)
     return rollout
@@ -81,24 +83,34 @@ def get_comparison():
 
 @comparisons_app.route('/prefer_segment', methods=['POST'])
 def choose_segment():
+    global n_prefs_by_episode
+
     hash1 = request.form['hash1']
     hash2 = request.form['hash2']
     pref = json.loads(request.form['pref'])
     print(hash1, hash2, pref)
 
+    s1 = get_segment(hash1)
+    s2 = get_segment(hash2)
+
+    n_prefs_by_episode[s1.extra_info['episode_n']] += 1
+    n_prefs_by_episode[s2.extra_info['episode_n']] += 1
+    with open(os.path.join(web_globals._segments_dir, 'n_prefs_by_episode.txt'), 'w') as f:
+        f.write(str(n_prefs_by_episode))
+
     if pref is None:
         chosen_segment_n = 'n'
     elif pref == [0.5, 0.5]:
-        add_pref(get_segment(hash1), get_segment(hash2), [0.5, 0.5])
+        add_pref(s1, s2, [0.5, 0.5])
         chosen_segment_n = 'e'
     elif pref == [1, 0]:
-        chosen_segment = get_segment(hash1)
-        other_segment = get_segment(hash2)
+        chosen_segment = s1
+        other_segment = s2
         add_pref(chosen_segment, other_segment, [1.0, 0.0])
         chosen_segment_n = '1'
     elif pref == [0, 1]:
-        chosen_segment = get_segment(hash2)
-        other_segment = get_segment(hash1)
+        chosen_segment = s2
+        other_segment = s1
         add_pref(chosen_segment, other_segment, [1.0, 0.0])
         chosen_segment_n = '2'
     else:

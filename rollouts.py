@@ -39,7 +39,7 @@ class Rollout():
 class CompressedRollout(CompressedAttributes):
     def __init__(self, final_env_state: EnvState,
                  obses: List, actions: List[int], rewards: List[float], frames: List,
-                 vid_filename: str = None, generating_policy: str = None):
+                 vid_filename: str = None, generating_policy: str = None, extra_info=None):
         CompressedAttributes.__init__(self)
         self.final_env_state = final_env_state
         self.obses = obses
@@ -51,6 +51,7 @@ class CompressedRollout(CompressedAttributes):
         self.uuid = uuid.uuid4()
         # NB this is not actually a hash. It used to be but that caused problems. Now it's more like an ID.
         self.hash = RolloutHash(str(self.uuid))
+        self.extra_info = extra_info
 
     def __hash__(self):
         return self.hash.__hash__()

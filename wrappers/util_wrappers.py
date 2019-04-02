@@ -509,6 +509,7 @@ class SaveSegments(Wrapper):
         self.segment_frames = None
         self.segment_obses = None
         self.segment_rewards = None
+        self.episode_n = -1
         self._reset_segment()
 
     def _reset_segment(self):
@@ -529,7 +530,7 @@ class SaveSegments(Wrapper):
         self.segment_rewards.append(reward)
         if done or len(self.segment_obses) == self.FRAMES_PER_SEGMENT:
             self._pad_segment()
-            tuple = (self.segment_obses, self.segment_rewards, self.segment_frames)
+            tuple = (self.segment_obses, self.segment_rewards, self.segment_frames, self.episode_n)
             try:
                 self.queue.put(tuple, block=False)
             except queue.Full:
@@ -542,6 +543,7 @@ class SaveSegments(Wrapper):
         # receive an explicit reset, we're doing something unusual. We might be part-way through an episode and only
         # have a couple of frames in the segment so far, so let's play it safe by dropping the current segment.
         self._reset_segment()
+        self.episode_n += 1
         return self.env.reset()
 
 
