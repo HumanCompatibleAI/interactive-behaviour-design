@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DRLHP preferences</title>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+
+    <script>
+        prefs = [];
+
+        function getPrefs() {
+            var $select = $("#pref_select");
+            $.get('/get_prefs', function (data) {
+                prefs = JSON.parse(data);
+                var i = 0;
+                $.each(prefs, function () {
+                    $select.append($("<option />").val(i).text(this[0] + ' ' + this[1]));
+                    i++;
+                });
+                $select.val(prefs.length - 1);
+                console.log($select.val());
+                $select.trigger('change');
+            });
+        }
+
+        function main() {
+            var $select = $("#pref_select");
+            $select.on('change', function () {
+                p = prefs[this.value];
+                let $v1 = $('#vid1');
+                let $v2 = $('#vid2');
+                let h1 = p[0];
+                let h2 = p[1];
+
+                $.get('/check_pref?h1=' + h1 + '&h2=' + h2, function (data) {
+                    $('#info').html(data);
+                });
+
+                $v1.attr('src', '/get_vid?hash=' + h1);
+                $v2.attr('src', '/get_vid?hash=' + h2);
+
+                $v1.css('border-style', 'none');
+                $v2.css('border-style', 'none');
+                if (p[2] === '1') {
+                    $v1.css('border-style', 'solid');
+                } else if (p[2] === '2') {
+                    $v2.css('border-style', 'solid');
+                }
+            });
+            getPrefs();
+        }
+
+        window.onload = main;
+    </script>
+</head>
+<body>
+
+<label for="pref_select" style="padding-right: 5px">Preference:</label><select id="pref_select"></select> <br/>
+<br/>
+<video autoplay loop id="vid1"></video>
+<video autoplay loop id="vid2"></video>
+<div id="info"></div>
+
+</body>
+</html>

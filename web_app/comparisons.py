@@ -19,9 +19,9 @@ def get_segment(hash):
     return rollout
 
 
-def mark_compared(hash1, hash2):
+def mark_compared(hash1, hash2, preferred):
     with open(os.path.join(web_globals._segments_dir, 'compared_segments.txt'), 'a') as f:
-        f.write(f'{hash1} {hash2}\n')
+        f.write(f'{hash1} {hash2} {preferred}\n')
 
 
 def already_compared(hash1, hash2):
@@ -87,20 +87,23 @@ def choose_segment():
     print(hash1, hash2, pref)
 
     if pref is None:
-        pass
+        chosen_segment_n = 'n'
     elif pref == [0.5, 0.5]:
         add_pref(get_segment(hash1), get_segment(hash2), [0.5, 0.5])
+        chosen_segment_n = 'e'
     elif pref == [1, 0]:
         chosen_segment = get_segment(hash1)
         other_segment = get_segment(hash2)
         add_pref(chosen_segment, other_segment, [1.0, 0.0])
+        chosen_segment_n = '1'
     elif pref == [0, 1]:
         chosen_segment = get_segment(hash2)
         other_segment = get_segment(hash1)
         add_pref(chosen_segment, other_segment, [1.0, 0.0])
+        chosen_segment_n = '2'
     else:
         return f"Error: invalid preference '{pref}'"
 
-    mark_compared(hash1, hash2)
+    mark_compared(hash1, hash2, chosen_segment_n)
 
     return ""
