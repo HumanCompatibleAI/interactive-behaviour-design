@@ -15,13 +15,13 @@ else:
 
 rl_envs = [
     ('seaquest', 'SeaquestDeepMind-v0'),
-    ('fetch', 'FetchPickAndPlace-Repeat1-BinaryGripper-5InitialBlockPos-FixedGoal-NoGripperBonus-NoET-FastGripper-VanillaRL-FullObs-Delta-v0'),
+    ('fetch', 'FetchPickAndPlace-Repeat1-BinaryGripper-WithGripObs-FullObs-5InitialBlockPos-FixedGoal-NoET-FastGripper-VanillaRL-Delta-NoGripperBonus-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
 prefs_envs = [
     ('seaquest', 'SeaquestDeepMindDense-v0'),
-    ('fetchpp', 'FetchPickAndPlace-Repeat1-BinaryGripper-5InitialBlockPos-FixedGoal-GripperBonus-NoET-SlowGripper-NoVanillaRL-PartialObs-NonDelta-v0'),
+    ('fetchpp', 'FetchPickAndPlace-Repeat1-BinaryGripper-NoGripObs-PartialObs-5InitialBlockPos-FixedGoal-NoET-SlowGripper-NoVanillaRL-NonDelta-GripperBonus-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
