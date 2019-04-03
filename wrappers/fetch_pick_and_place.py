@@ -358,3 +358,17 @@ class RandomInitialPosition(Wrapper):
             self.env.unwrapped.sim.step()
         obs, _, _, _ = self.env.step([0, 0, 0, 0])
         return obs
+
+
+class PickOnly(Wrapper):
+    def __init__(self, env):
+        assert env.observation_space.shape == (28,)
+        super().__init__(env)
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        obs_by_name = decode_fetch_obs(obs)
+        if np.linalg.norm(obs_by_name['object_rel_pos']) < 0.1:
+            done = True
+            reward += 10  # Make sure the oracle definitely prefers this segment
+        return obs, reward, done, info
