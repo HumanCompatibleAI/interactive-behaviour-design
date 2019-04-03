@@ -23,19 +23,19 @@ class TestSegmentComparisons(unittest.TestCase):
             actual_samples = set([sample_seg_pair() for _ in range(100)])
             self.assertEqual(actual_samples, expected_samples)
 
-            mark_compared('0', '1')
+            mark_compared('0', '1', 1)
             expected_samples.remove(('0', '1'))
             expected_samples.remove(('1', '0'))
             actual_samples = set([sample_seg_pair() for _ in range(100)])
             self.assertEqual(actual_samples, expected_samples)
 
-            mark_compared('0', '2')
+            mark_compared('0', '2', 1)
             expected_samples.remove(('0', '2'))
             expected_samples.remove(('2', '0'))
             actual_samples = set([sample_seg_pair() for _ in range(100)])
             self.assertEqual(actual_samples, expected_samples)
 
-            mark_compared('1', '2')
+            mark_compared('1', '2', 1)
             with self.assertRaises(IndexError):
                 sample_seg_pair()
 

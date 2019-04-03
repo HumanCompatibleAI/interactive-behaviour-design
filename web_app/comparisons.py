@@ -31,7 +31,7 @@ def already_compared(hash1, hash2):
         return False
     with open(fname, 'r') as f:
         lines = f.read().rstrip().split('\n')
-        compared_pairs = [line.split() for line in lines]
+        compared_pairs = [line.split()[:2] for line in lines]
     if [hash1, hash2] in compared_pairs or [hash2, hash1] in compared_pairs:
         return True
     else:
