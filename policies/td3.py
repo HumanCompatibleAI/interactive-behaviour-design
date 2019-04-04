@@ -83,7 +83,7 @@ class TD3Policy(Policy):
                  noise_type='ou', noise_sigma=0.2,
                  n_initial_episodes=100, replay_size=int(1e6),
                  l2_coef=1e-4, train_mode=PolicyTrainMode.R_ONLY,
-                 hidden_sizes=(64, 64),
+                 hidden_sizes=(256, 256, 256, 256),
                  sess_config=None):
         assert policy_delay < batches_per_cycle
         assert noise_type in ['gaussian', 'ou']
