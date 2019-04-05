@@ -20,7 +20,6 @@ from wrappers.fetch_pick_and_place import RandomInitialPosition
 from wrappers.util_wrappers import LogEpisodeStats
 
 tf.logging.set_verbosity(tf.logging.ERROR)
-register()
 
 
 class Oracle:
@@ -124,6 +123,9 @@ def get_replay_buffer(env, env_id):
 
 
 class TestTD3(unittest.TestCase):
+    def setUpClass(cls):
+        register()
+
     @staticmethod
     def env_fn(seed, env_id):
         env = gym.make(env_id)
