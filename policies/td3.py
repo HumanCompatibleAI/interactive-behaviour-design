@@ -286,7 +286,7 @@ class TD3Policy(Policy):
         for _ in range(self.batches_per_cycle):
             bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
             feed_dict = {
-                self.bc_x_ph: bc_batch['obses'], self.bc_a_ph: bc_batch['acts']
+                self.bc_x_ph: bc_batch['obs1'], self.bc_a_ph: bc_batch['acts']
             }
             bc_pi_loss, l2_loss, _ = self.sess.run([self.bc_pi_loss, self.l2_loss, self.train_pi_bc_only_op], feed_dict)
             loss_bc_pi_l.append(bc_pi_loss)
@@ -435,7 +435,7 @@ class TD3Policy(Policy):
                 # Behavioral cloning
                 if self.train_mode == PolicyTrainMode.R_PLUS_BC:
                     bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-                    feed_dict.update({self.bc_x_ph: bc_batch['obses'],
+                    feed_dict.update({self.bc_x_ph: bc_batch['obs1'],
                                       self.bc_a_ph: bc_batch['acts']})
                     fetches.update({'loss_bc_pi': self.bc_pi_loss,
                                     'loss_td3_plus_bc_pi': self.td3_plus_bc_pi_loss})
