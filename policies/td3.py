@@ -260,6 +260,8 @@ class TD3Policy(Policy):
         self.ckpt_n = 0
         self.l2_loss = l2_loss
         self.seen_demonstrations = set()
+        self.monitor_q_s = []
+        self.monitor_q_a = []
 
         self.reset_noise()
 
@@ -450,6 +452,16 @@ class TD3Policy(Policy):
                         fetch_vals_l[k].append(v)
                     else:
                         fetch_vals_l[k].extend(v)
+
+        if self.monitor_q_s:
+            q1, q2, pi = self.sess.run([self.q1, self.q2, self.pi],
+                                       feed_dict={self.x_ph: self.monitor_q_s,
+                                                  self.a_ph: self.monitor_q_a})
+            for i in range(len(q1)):
+                self.logger.logkv(f'q_checks/q1_{i}', q1[i])
+                self.logger.logkv(f'q_checks/q2_{i}', q2[i])
+                self.logger.logkv(f'q_checks/pi_{i}', np.linalg.norm(pi - self.monitor_q_a[i]))
+
         for k, l in fetch_vals_l.items():
             self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
 

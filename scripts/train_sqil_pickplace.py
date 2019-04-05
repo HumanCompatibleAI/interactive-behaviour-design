@@ -6,6 +6,7 @@ import subprocess
 import sys
 
 import gym
+import numpy as np
 import tensorflow as tf
 from cloudpickle import cloudpickle
 from gym.wrappers import Monitor
@@ -65,6 +66,7 @@ def main():
     parser.add_argument('--lr', type=float, default=1e-3)
     parser.add_argument('--polyak', type=float, default=0.9995)
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--goal_state_reward', type=int)
     args = parser.parse_args()
     os.makedirs(args.log_dir, exist_ok=True)
     record_context(os.path.join(args.log_dir, 'context.txt'), args)
@@ -90,6 +92,7 @@ def main():
 
     obs_space = train_env.observation_space
     act_space = train_env.action_space
+
     def make_policy_fn():
         return TD3Policy('dummyname',
                          args.env_id,
@@ -103,7 +106,6 @@ def main():
                          polyak=args.polyak,
                          seed=args.seed
                          )
-
 
     policy = make_policy_fn()
     policy.init_logger(os.path.join(args.log_dir, 'train'))
@@ -119,6 +121,23 @@ def main():
     oracle = Oracle('smooth')
     n_demos = 1
     gen_demonstrations(args.env_id, os.path.join(args.log_dir, 'demos'), n_demos, policy.demonstrations_buffer, oracle)
+
+    if args.goal_state_reward:
+        b = policy.demonstrations_buffer
+        i = b.ptr - 1
+        obs1, action, reward, obs2, done = b.obs1_buf[i], b.acts_buf[i], b.rews_buf[i], b.obs2_buf[i], b.done_buf[i]
+        assert done
+        goal_state = obs2
+        stay_put_action = np.zeros(act_space.shape)
+        policy.demonstrations_buffer.store(obs=goal_state,
+                                           act=stay_put_action,
+                                           rew=args.goal_state_reward,
+                                           # should be ignored because done = True; set this to something really large
+                                           # so that if we're wrong we see an obvious failure
+                                           next_obs=sys.maxsize * np.ones_like(goal_state),
+                                           done=True)
+        policy.monitor_q_s = [goal_state]
+        policy.monitor_q_a = [stay_put_action]
 
     last_cycle_n = None
     while policy.cycle_n < 1000:
