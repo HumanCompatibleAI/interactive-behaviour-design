@@ -51,28 +51,21 @@ class ReplayBuffer:
                     done=self.done_buf[idxs])
 
 
-class DemonstrationsBuffer:
+class LockedReplayBuffer(ReplayBuffer):
     def __init__(self, obs_dim, act_dim, size):
-        self.obses_buf = np.zeros([size, obs_dim], dtype=np.float32)
-        self.acts_buf = np.zeros([size, act_dim], dtype=np.float32)
-        self.ptr, self.size, self.max_size = 0, 0, size
+        super().__init__(obs_dim, act_dim, size)
         self.lock = threading.Lock()
 
-    def store(self, obs, act):
+    def store(self, obs, act, rew=None, next_obs=None, done=None):
         with self.lock:
-            self.obses_buf[self.ptr] = obs
-            self.acts_buf[self.ptr] = act
-            self.ptr = (self.ptr + 1) % self.max_size
-            self.size = min(self.size + 1, self.max_size)
+            super().store(obs, act, rew, next_obs, done)
 
     def sample_batch(self, batch_size=32):
         while self.size == 0:
             print("Warning: demonstrations buffer empty; waiting...")
             time.sleep(1)
         with self.lock:
-            idxs = np.random.randint(0, self.size, size=batch_size)
-            return dict(obses=self.obses_buf[idxs],
-                        acts=self.acts_buf[idxs])
+            return super().sample_batch(batch_size)
 
 
 class TD3Policy(Policy):
@@ -139,7 +132,7 @@ class TD3Policy(Policy):
 
             # Experience buffer
             replay_buffer = ReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
-            demonstrations_buffer = DemonstrationsBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
+            demonstrations_buffer = LockedReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
 
             # Bellman backup for Q functions, using Clipped Double-Q targets
             min_q_targ = tf.minimum(q1_targ, q2_targ)
@@ -398,17 +391,20 @@ class TD3Policy(Policy):
                     'loss_td3_pi': self.td3_pi_loss,
                     'loss_l2': self.l2_loss,
                 }
+
+                # Behavioral cloning
                 if self.train_mode == PolicyTrainMode.R_PLUS_BC:
                     bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-                    feed_dict.update({
-                        self.bc_x_ph: bc_batch['obses'],
-                        self.bc_a_ph: bc_batch['acts']
-                    })
-                    fetches.update({'loss_bc_pi': self.bc_pi_loss})
-                if self.train_mode == PolicyTrainMode.R_PLUS_BC:
-                    fetches.update({'loss_td3_plus_bc_pi': self.td3_plus_bc_pi_loss})
+                    feed_dict.update({self.bc_x_ph: bc_batch['obses'],
+                                      self.bc_a_ph: bc_batch['acts']})
+                    fetches.update({'loss_bc_pi': self.bc_pi_loss,
+                                    'loss_td3_plus_bc_pi': self.td3_plus_bc_pi_loss})
+
+                # train_pi_op is automatically set to be appropriate for the mode
+                # (i.e. it /does/ do BC training if the policy was initialised with a BC mode)
                 fetch_vals = self.sess.run(list(fetches.values()) + [self.train_pi_op, self.target_update],
                                            feed_dict)[:-2]
+
                 for k, v in zip(fetches.keys(), fetch_vals):
                     if isinstance(v, np.float32):
                         fetch_vals_l[k].append(v)
