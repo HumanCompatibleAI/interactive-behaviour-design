@@ -84,4 +84,6 @@ class PolicyTrainMode(Enum):
     R_ONLY = 1
     R_PLUS_BC = 2
     BC_ONLY = 3
-    NO_TRAINING = 4
+    SQIL_ONLY = 4
+    R_PLUS_SQIL = 5
+    NO_TRAINING = 6

@@ -19,6 +19,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from policies.base_policy import Policy, PolicyTrainMode
 from rollouts import RolloutsByHash
 
+SQIL_REWARD = 5
+
 
 class ReplayBuffer:
     """
@@ -168,6 +170,8 @@ class TD3Policy(Policy):
             train_pi_td3_plus_bc_op = pi_optimizer.minimize(td3_plus_bc_pi_loss, var_list=get_vars('main/pi'))
             train_pi_ops = {
                 PolicyTrainMode.R_ONLY: train_pi_td3_only_op,
+                PolicyTrainMode.SQIL_ONLY: train_pi_td3_only_op,
+                PolicyTrainMode.R_PLUS_SQIL: train_pi_td3_only_op,
                 PolicyTrainMode.BC_ONLY: train_pi_bc_only_op,
                 PolicyTrainMode.R_PLUS_BC: train_pi_td3_plus_bc_op
             }
@@ -352,7 +356,8 @@ class TD3Policy(Policy):
             self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
             n_total_steps = self.n_serial_steps * self.n_envs
             self.logger.logkv(f'policy_{self.name}/n_total_steps', n_total_steps)
-            self.logger.measure_rate(f'policy_{self.name}/n_total_steps', n_total_steps, f'policy_{self.name}/n_total_steps_per_second')
+            self.logger.measure_rate(f'policy_{self.name}/n_total_steps', n_total_steps,
+                                     f'policy_{self.name}/n_total_steps_per_second')
 
             if self.cycle_n and self.cycle_n % self.cycles_per_epoch == 0:
                 self.epoch_n += 1
@@ -360,10 +365,44 @@ class TD3Policy(Policy):
 
             self.cycle_n += 1
 
+    @staticmethod
+    def combine_batches(b1, b2):
+        assert len(list(b1.keys())) == len(list(b2.keys()))
+        for k in b1.keys():
+            assert b1[k].shape == b2[k].shape
+            assert isinstance(b1[k], np.ndarray)
+            assert isinstance(b2[k], np.ndarray)
+
+        b = {}
+        b['obs1'] = np.concatenate([b1['obs1'], b2['obs1']], axis=0)
+        b['obs2'] = np.concatenate([b1['obs2'], b2['obs2']], axis=0)
+        b['acts'] = np.concatenate([b1['acts'], b2['acts']], axis=0)
+        b['rews'] = np.concatenate([b1['rews'], b2['rews']], axis=0)
+        b['done'] = np.concatenate([b1['done'], b2['done']], axis=0)
+
+        for k in b1.keys():
+            expected_shape = (b1[k].shape[0] + b2[k].shape[0],) + b1[k].shape[1:]
+            assert b[k].shape == expected_shape
+
+        return b
+
     def _train_rl(self):
         fetch_vals_l = defaultdict(list)
         for batch_n in range(self.batches_per_cycle):
-            batch = self.replay_buffer.sample_batch(self.batch_size)
+            # Experience from normal replay buffer for regular Q-learning
+            explore_batch = self.replay_buffer.sample_batch(self.batch_size)
+            if self.train_mode == PolicyTrainMode.R_PLUS_SQIL:
+                max_r = np.max(explore_batch['rews'])
+                if max_r >= SQIL_REWARD:
+                    print("(Potential) error: max. reward while exploring {:.3f}is greater than SQIL reward".format(max_r))
+            if self.train_mode in [PolicyTrainMode.SQIL_ONLY, PolicyTrainMode.R_PLUS_SQIL]:
+                demo_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
+                if self.train_mode == PolicyTrainMode.SQIL_ONLY:
+                    explore_batch['rews'] = np.array([0] * self.batch_size)
+                demo_batch['rews'] = np.array([SQIL_REWARD] * self.batch_size)
+                batch = self.combine_batches(explore_batch, demo_batch)
+            else:
+                batch = explore_batch
             feed_dict = {
                 self.x_ph: batch['obs1'],
                 self.x2_ph: batch['obs2'],
@@ -371,6 +410,7 @@ class TD3Policy(Policy):
                 self.r_ph: batch['rews'],
                 self.d_ph: batch['done'],
             }
+
             fetches = {
                 'loss_q': self.q_loss,
                 'loss_q1': self.q1_loss,
@@ -458,7 +498,6 @@ class TD3Policy(Policy):
         assert deterministic
         return self.test_step(o)
 
-
     def make_saver(self):
         with self.graph.as_default():
             with self.sess.as_default():
@@ -499,9 +538,15 @@ class TD3Policy(Policy):
                         continue
                     d = demonstrations[demonstration_hash]
                     assert len(d.obses) == len(d.actions)
-                    for o, a in zip(d.obses, d.actions):
-                        self.demonstrations_buffer.store(obs=o, act=a)
+                    o1s = d.obses[:-1]
+                    acts = d.actions[:-1]
+                    o2s = d.obses[1:]
+                    dones = [0] * (len(d.obses) - 1) + [1]
+                    assert len(o1s) == len(acts) == len(o2s) == len(dones)
+                    for o, a, o2, done in zip(o1s, acts, o2s, dones):
+                        self.demonstrations_buffer.store(obs=o, act=a, next_obs=o2, done=done, rew=None)
                     self.seen_demonstrations.add(demonstration_hash)
                 self.logger.logkv(f'policy_{self.name}/replay_buffer_demo_ptr', self.demonstrations_buffer.ptr)
                 time.sleep(1)
+
         Thread(target=f).start()

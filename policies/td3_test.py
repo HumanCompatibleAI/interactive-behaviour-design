@@ -97,9 +97,10 @@ def gen_demonstrations(env_id, log_dir, n_demonstrations, demonstrations_buffer:
         obs, done = env.reset(), False
         oracle.reset()
         while not done:
+            last_obs = obs
             action = oracle.get_action(obs)
-            demonstrations_buffer.store(obs, action)
             obs, reward, done, info = env.step(action)
+            demonstrations_buffer.store(obs=last_obs, act=action, next_obs=obs, done=done, rew=None)
 
 
 def get_replay_buffer(env, env_id):
