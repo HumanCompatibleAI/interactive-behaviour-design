@@ -180,7 +180,21 @@ def main():
     obs_space = env.observation_space
     ac_space = env.action_space
 
+    if args.policy_args:
+        policy_args = {k: v for k, v in [a.split('=') for a in args.policy_args.split(';')]}
+        for k, v in policy_args.items():
+            if k == 'hidden_sizes':
+                policy_args['hidden_sizes'] = list(map(int, policy_args['hidden_sizes'].split(',')))
+            elif '.' in v:
+                policy_args[k] = float(v)
+            else:
+                policy_args[k] = int(v)
+    else:
+        policy_args = {}
+
     def make_policy(name, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs.update(policy_args)
         return policy_type(name=name,
                            env_id=args.env,
                            obs_space=obs_space,

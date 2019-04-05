@@ -6,8 +6,8 @@ from policies.td3 import TD3Policy
 
 
 class FetchTD3Policy(TD3Policy):
-    def __init__(self, name, env_id, obs_space, ac_space, n_envs, seed=0, fetch_action=None):
-        super().__init__(name, env_id, obs_space, ac_space, n_envs, seed)
+    def __init__(self, name, env_id, obs_space, ac_space, n_envs, seed=0, fetch_action=None, **kwargs):
+        super().__init__(name, env_id, obs_space, ac_space, n_envs, seed, **kwargs)
         self.manual_action = fetch_action
 
     def step(self, obs, **step_kwargs):
