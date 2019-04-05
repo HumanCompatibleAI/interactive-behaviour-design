@@ -12,9 +12,10 @@ from flask import render_template, Blueprint
 from flask import request, send_from_directory
 from gym.wrappers.monitoring.video_recorder import ImageEncoder
 
+from policies.td3 import SQIL_REWARD
 from utils import save_video
 from web_app.utils import nocache
-from web_app.web_globals import _classifiers
+from web_app.web_globals import _classifiers, _demonstrations_replay_buffer
 from web_app.web_globals import _cur_label, FPS
 from web_app.web_globals import _reward_switcher_wrapper
 from web_app.web_globals import experience_dir
@@ -63,6 +64,36 @@ def tag():
           global_experience_buffer.label_counts(label_name))
 
     return ""
+
+
+@labelling_app.route('/tag_goal_state', methods=['POST'])
+def tag_goal_state():
+    post_data = json.loads(request.data)
+    ep_name = post_data["epName"]
+
+    if 'videoTime' in post_data:
+        frame_idx = int(post_data['videoTime'] * FPS)
+    elif 'frameIdx' in post_data:
+        frame_idx = post_data['frameIdx']
+    else:
+        raise Exception("Frame reference not found in POST data")
+
+    obs = global_experience_buffer.episodes[ep_name].labelled_obses[frame_idx].obs
+    # Unclear what we should set the action to.
+    # We want to say: "Don't care about the action; just know that this state is really good."
+    # So we could sample a bunch of random actions?
+    act = None
+
+    raise Exception('TODO: implement tag goal state')
+    # _demonstrations_replay_buffer.store(
+    #     obs=obs,
+    #     act=act,
+    #     rew=None,       # ignored
+    #     next_obs=None,  # should be ignored with done=True
+    #     done=True
+    # )
+
+    # return ""
 
 
 @labelling_app.route('/sample_predictions', methods=['GET'])

@@ -1,7 +1,9 @@
 import multiprocessing
 from typing import Dict
 
+import web_app
 from policies.base_policy import Policy
+from policies.td3 import TD3Policy
 from rollouts import RolloutsByHash
 
 
@@ -31,11 +33,14 @@ class PolicyCollection:
         for policy in self.policies.values():
             policy.stop_training()
         if name is not None:
-            self.policies[name].init_logger(self.log_dir)
-            self.policies[name].set_training_env(self.env)
-            self.policies[name].use_demonstrations(self.demonstrations)
-            self.policies[name].start_training()
+            policy = self.policies[name]
+            policy.init_logger(self.log_dir)
+            policy.set_training_env(self.env)
+            policy.use_demonstrations(self.demonstrations)
+            policy.start_training()
             self.eval_policy_name_queue.put(name)
+            if isinstance(policy, TD3Policy):
+                web_app.web_globals._demonstrations_replay_buffer = policy.demonstrations_buffer
         self.cur_policy = name
 
     def names(self):

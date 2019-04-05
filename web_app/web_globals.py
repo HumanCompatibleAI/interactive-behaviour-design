@@ -5,6 +5,7 @@ from checkpointer import Checkpointer
 from classifier_buffer import ClassifierDataBuffer
 from classifier_collection import ClassifierCollection
 from policies.policy_collection import PolicyCollection
+from policies.td3 import LockedReplayBuffer
 from policy_rollouter import PolicyRollouter
 from rollouts import RolloutsByHash, RolloutHash, CompressedRollout
 from drlhp.pref_db import PrefDBTestTrain
@@ -35,3 +36,4 @@ _segments_dir = None  # type: str
 FPS = 30.0
 _checkpointer = None  # type: Checkpointer
 _max_demonstration_length = None # type: int
+_demonstrations_replay_buffer = None  # type: LockedReplayBuffer
