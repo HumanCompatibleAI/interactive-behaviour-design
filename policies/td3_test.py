@@ -124,6 +124,7 @@ def get_replay_buffer(env, env_id):
 
 
 class TestTD3(unittest.TestCase):
+    @classmethod
     def setUpClass(cls):
         register()
 
