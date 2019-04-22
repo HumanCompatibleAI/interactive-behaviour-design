@@ -37,7 +37,7 @@ def monitor_segments_dir_loop(dir, n_to_keep):
     logger = easy_tf_log.Logger()
     logger.set_log_dir(dir)
     while True:
-        time.sleep(30)
+        time.sleep(5)
         prune_old_segments(dir, n_to_keep)
         n_segments = len(glob.glob(os.path.join(dir, '*.pkl')))
         logger.logkv('episode_segments/n_segments', n_segments)
