@@ -46,6 +46,7 @@ def parse_args():
 
     global_variables.segment_save_mode = args.segment_save_mode
     global_variables.max_segs = args.max_segs
+    global_variables.render_segments = args.render_segments
 
     if args.render_every_nth_episode is None:
         if 'Fetch' in args.env:

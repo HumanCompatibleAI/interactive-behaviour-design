@@ -7,3 +7,4 @@ env_creation_lock = None
 
 segment_save_mode = None
 max_segs = None
+render_segments = None
