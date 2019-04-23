@@ -16,6 +16,7 @@ from wrappers.util_wrappers import StoredResetsWrapper, SaveMidStateWrapper, \
     SaveEpisodeObs, SaveSegments, \
     EpisodeLengthLimitWrapper, SaveEpisodeStats, LogEpisodeStats, DummyRender, LogDoneInfo
 from wrappers.state_boundary_wrapper import StateBoundaryWrapper
+from wrappers.wrappers_debug import DrawEnvN
 
 
 def set_timeouts(env):
@@ -72,6 +73,8 @@ def make_env(env_id, num_env, seed, experience_dir,
 
             env = StoredResetsWrapper(env, reset_mode_value, reset_state_server_queue)
             env = EpisodeLengthLimitWrapper(env, max_episode_steps_value)
+
+            env = DrawEnvN(env, rank)
 
             if rank == 0:
                 env = LogEpisodeStats(env, suffix='_train', log_dir=experience_dir)

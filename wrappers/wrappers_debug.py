@@ -105,6 +105,7 @@ class DrawActions(Wrapper):
         else:
             return self.env.render(mode)
 
+
 class DrawRewards(Wrapper):
     def __init__(self, env):
         super().__init__(env)
@@ -154,3 +155,17 @@ class DrawObses(Wrapper):
             return im
         else:
             return self.env.render(mode)
+
+
+class DrawEnvN(Wrapper):
+    def __init__(self, env, n):
+        super().__init__(env)
+        self.n = n
+
+    def reset(self, **kwargs):
+        return self.env.reset()
+
+    def render(self, mode='human', **kwargs):
+        im = self.env.render(mode='rgb_array')
+        im = draw_dict_on_image(im, {'env_n': self.n}, mode='concat')
+        return im
