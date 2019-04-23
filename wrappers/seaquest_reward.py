@@ -2,11 +2,10 @@ from collections import deque
 
 import gym
 import numpy as np
-from gym import Wrapper, ObservationWrapper, spaces
+from baselines.common.atari_wrappers import wrap_deepmind, NoopResetEnv, MaxAndSkipEnv, ClipRewardEnv
+from gym import Wrapper, ObservationWrapper, spaces, Env
 from gym.envs import register as gym_register
 
-from baselines.common.atari_wrappers import wrap_deepmind, NoopResetEnv, MaxAndSkipEnv, ClipRewardEnv
-from utils import draw_dict_on_image
 from wrappers.util_wrappers import SeaquestStatsWrapper
 
 DEATH_BRIGHTNESS_THRESHOLD = 220
@@ -25,27 +24,24 @@ UP_EARLY_REWARD = -51  # To differentiate from DEATH_REWARD
 class SeaquestRewardWrapper(Wrapper):
 
     def __init__(self, env):
-        if not all([w in repr(env) for w in ['ClipRewardEnv', 'WarpFrame', 'EpisodicLifeEnv', 'MaxAndSkipEnv']]):
+        if not all([w in repr(env) for w in ['ClipRewardEnv', 'WarpFrame']]):
             raise RuntimeError("SeaquestRewardWrapper should be applied after wrap_deepmind")
         Wrapper.__init__(self, env)
         self.obs_max_history = deque(maxlen=10)
         self.last_state = None
         self.last_oxygen = np.float('inf')
         self.low_oxygen = None
-        self.episode_start = None
         self.up_actions = [i
                            for i, a in enumerate(self.env.unwrapped.get_action_meanings())
                            if 'UP' in a]
         self.down_actions = [i
                              for i, a in enumerate(self.env.unwrapped.get_action_meanings())
                              if 'DOWN' in a]
-        self.debug_dict = {}
 
     def reset(self):
         obs = self.env.reset()
         self.last_state = self.env.unwrapped.ale.getRAM()
-        self.low_oxygen = False
-        self.episode_start = True
+        self.low_oxygen = True
         return obs
 
     def detect_death(self, obs):
@@ -56,15 +52,12 @@ class SeaquestRewardWrapper(Wrapper):
         else:
             return False
 
-    def max_oxygen(self, obs):
+    def detect_low_oxygen(self, obs):
         # If oxygen bar is fully replenished
         # (This pixel is at bottom right of oxygen bar)
-        return obs[69][57][-1] == 214
-
-    def set_low_oxygen(self, obs):
-        if self.max_oxygen(obs):
+        if obs[69][57][-1] == 214:
             self.low_oxygen = False
-        # If oxygen bar has started flashing black/white
+        # If oxygen bar has started flashing
         # (This pixel is at the bottom left corner of the oxygen bar)
         if obs[69][26][-1] == 0:
             self.low_oxygen = True
@@ -78,48 +71,31 @@ class SeaquestRewardWrapper(Wrapper):
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
 
-        if self.max_oxygen(obs):
-            self.episode_start = False
-
-        self.set_low_oxygen(obs)
-
-        oxygen = np.sum(obs[69, :54])  # Oxygen bar row; oxygen is bright pixels; sum to before low oxygen deactivated
-        self.last_oxygen = oxygen
-
         just_died = self.detect_death(obs)
         self.obs_max_history.append(np.max(obs))
+        reward += DEATH_REWARD * just_died
 
         state = self.env.unwrapped.ale.getRAM()
         picked_up_diver = self.detect_diver_pickup(state)
+        reward += DIVER_REWARD * picked_up_diver
         self.last_state = state
 
+        self.detect_low_oxygen(obs)
         if just_died:
             # Oxygen bar stops flashing once dead
             self.low_oxygen = False
+        if self.low_oxygen:
+            if action in self.down_actions:
+                reward -= GO_UP_WHEN_LOW_OXYGEN_REWARD
+            elif action in self.up_actions:
+                reward += GO_UP_WHEN_LOW_OXYGEN_REWARD
 
-        if not self.episode_start:
-            reward += DEATH_REWARD * just_died
-            reward += DIVER_REWARD * picked_up_diver
-            if self.low_oxygen:
-                if action in self.down_actions:
-                    reward -= GO_UP_WHEN_LOW_OXYGEN_REWARD
-                elif action in self.up_actions:
-                    reward += GO_UP_WHEN_LOW_OXYGEN_REWARD
-            if oxygen > self.last_oxygen and not self.low_oxygen:
-                reward += UP_EARLY_REWARD
-
-        self.debug_dict['just_died'] = just_died
-        self.debug_dict['low_oxygen'] = self.low_oxygen
-        self.debug_dict['oxygen'] = oxygen
-        self.debug_dict['picked_up_diver'] = picked_up_diver
-        self.debug_dict['episode_start'] = self.episode_start
+        oxygen = np.sum(obs[69, :54])  # Oxygen bar row; oxygen is bright pixels; sum to before low oxygen deactivated
+        if oxygen > self.last_oxygen and not self.low_oxygen:
+            reward += UP_EARLY_REWARD
+        self.last_oxygen = oxygen
 
         return obs, reward, done, info
-
-    def render(self, mode='human', **kwargs):
-        im = self.env.render(mode='rgb_array')
-        im = draw_dict_on_image(im, self.debug_dict, mode='concat')
-        return im
 
 
 class FlattenObs(ObservationWrapper):
