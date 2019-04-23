@@ -139,22 +139,18 @@ M = namedtuple('M', 'tag name smoothing fillsmoothing')
 def detect_metrics(env_name, train_env_key):
     metrics = []
     if env_name == 'Lunar Lander':
-        metrics.append(M(f'{train_env_key}/reward_sum', 'Reward', 0.95, 0.95))
+        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 0.95, 0.95))
         metrics.append(M(f'{train_env_key}/crash_rate', 'Crash rate', 0.95, 0.95))
         metrics.append(M(f'{train_env_key}/successful_landing_rate', 'Successful landing rate', 0.95, 0.95))
     if env_name == 'Seaquest':
-        metrics.append(M(f'{train_env_key}/reward_sum', 'Reward', 0.9, 0.9))
+        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 0.9, 0.95))
         metrics.append(M(f'{train_env_key}/n_diver_pickups', 'Diver pickups per episode', 0.99, None))
     if env_name == 'Fetch':
-        metrics.append(M(f'{train_env_key}/reward_sum_post_wrappers', 'Reward', 0.95, 0.9))
-        metrics.append(M(f'{train_env_key}/gripper_to_block_cumulative_distance', 'Distance from gripper to block',
-                         0.99, 0.95))
-        metrics.append(M(f'{train_env_key}/block_to_target_cumulative_distance', 'Distance from block to target',
-                         0.99, 0.99))
-        metrics.append(
-            M(f'{train_env_key}/block_to_target_min_distance', 'Minimum distance from block to target', 0.95, 0.95))
-        metrics.append(
-            M(f'{train_env_key}/ep_frac_aligned_with_block', 'Fraction of episode aligned with block', 0.95, 0.95))
+        metrics.append(M(f'{train_env_key}/reward_sum_post_wrappers', 'Episode reward', 0.95, 0.95))
+        metrics.append(M(f'{train_env_key}/gripper_to_block_cumulative_distance', 'Distance from gripper to block', 0.95, 0.95))
+        metrics.append(M(f'{train_env_key}/block_to_target_cumulative_distance', 'Distance from block to target', 0.95, 0.95))
+        metrics.append(M(f'{train_env_key}/block_to_target_min_distance', 'Minimum distance from block to target', 0.95, 0.95))
+        metrics.append(M(f'{train_env_key}/ep_frac_aligned_with_block', 'Fraction of episode aligned with block', 0.95, 0.95))
         metrics.append(M(f'{train_env_key}/ep_frac_gripping_block', 'Fraction of episode gripping block', 0.95, 0.95))
         metrics.append(M(f'{train_env_key}/success_rate', 'Success rate', 0.95, 0.95))
     return metrics
@@ -309,6 +305,47 @@ def get_values_by_time(events, metric, max_hours):
     return timestamps, values
 
 
+def add_steps_to_bc_run(events_by_env_name_by_run_type_by_seed, max_steps):
+    # BC runs don't actually interact with the environment, so don't log n_total_steps.
+    # But we still want BC results to appear on the graphs by steps.
+    # So let's fake the step values.
+    #
+    # We want to create step values so that we effectively take the first section of the BC metrics and stretch it to
+    # fill the space up to max_steps. We shouldn't take /all/ the data, because the other runs might run for longer
+    # than max_steps; there we might be taking 3/4 or 4/5 of the data, so if we took all the BC data, we would give
+    # BC an unfair advantage. To be conservative, we should find the worst-case fraction of the other runs we take
+    # (i.e. prefer 1/4 to 3/4), and take the same amount of BC data.
+
+    for env_name in events_by_env_name_by_run_type_by_seed.keys():
+        if 'BC' not in events_by_env_name_by_run_type_by_seed[env_name]:
+            continue
+        # Find non-BC run that we keep the least of
+        min_frac = float('inf')
+        events_with_min_frac = None
+        for run_type in ['DRLHP', 'SDRLHP', 'SDRLHP-BC', 'RL']:
+            if run_type not in events_by_env_name_by_run_type_by_seed[env_name]:
+                continue
+            for seed in events_by_env_name_by_run_type_by_seed[env_name][run_type].keys():
+                events: dict = events_by_env_name_by_run_type_by_seed[env_name][run_type][seed][0]
+                last_n_steps = events['policy_master/n_total_steps'][-1][1]
+                frac = max_steps / last_n_steps
+                if frac < min_frac:
+                    min_frac = frac
+                    events_with_min_frac = events
+
+        # Find timestamp corresponding to max_steps
+        steps = [tup[1] for tup in events_with_min_frac['policy_master/n_total_steps']]
+        i = np.argmin(np.abs(np.array(steps) - max_steps))
+        i = int(i)
+        timestamp_for_max_steps = events_with_min_frac['policy_master/n_total_steps'][i][0]
+
+        # Create fake steps such that we reach max_steps at that timestamp
+        for events, _ in events_by_env_name_by_run_type_by_seed[env_name]['BC'].values():
+            fake_steps = [(timestamp, timestamp / timestamp_for_max_steps * max_steps)
+                          for timestamp, value in events['policy_master/n_updates']]
+            events['policy_master/n_total_steps'] = fake_steps
+
+
 def main():
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
@@ -330,18 +367,28 @@ def main():
     for run_dir in os.scandir(args.runs_dir):
         print(f"Reading events for {run_dir.name}...")
         events = read_all_events(run_dir.path)
-        env_name, run_type, seed = parse_run_name(run_dir.name)
+        try:
+            env_name, run_type, seed = parse_run_name(run_dir.name)
+        except Exception as e:
+            print(e)
+            continue
         if run_type in ['DRLHP', 'SDRLHP', 'SDRLHP-BC']:
             filter_pretraining_events(run_dir.path, events)
         make_timestamps_relative_hours(events)
         events_by_env_name_by_run_type_by_seed[env_name][run_type][seed] = (events, run_dir.name)
 
+    if args.max_steps:
+        add_steps_to_bc_run(events_by_env_name_by_run_type_by_seed, args.max_steps)
+
+    time_values_fn = partial(get_values_by_time, max_hours=args.max_hours)
+    step_values_fn = partial(get_values_by_step, max_steps=args.max_steps)
+
     for env_name, events_by_run_type_by_seed in events_by_env_name_by_run_type_by_seed.items():
         print(f"Plotting {env_name}...")
         metrics = detect_metrics(env_name, args.train_env_key)
         for value_fn, x_type, x_label, x_lim in [
-            (partial(get_values_by_time, max_hours=args.max_hours), 'time', 'Hours', args.max_hours),
-            (partial(get_values_by_step, max_steps=args.max_steps), 'step', 'Steps', args.max_steps)]:
+            (time_values_fn, 'time', 'Hours', args.max_hours),
+            (step_values_fn, 'step', 'Total environment steps', args.max_steps)]:
             for metric_n, metric in enumerate(metrics):
                 figure(metric_n)
                 all_min_y = float('inf')
