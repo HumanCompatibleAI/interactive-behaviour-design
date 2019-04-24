@@ -30,7 +30,7 @@ from matplotlib.pyplot import close, fill_between
 
 matplotlib.use('Agg')
 
-from pylab import plot, xlabel, ylabel, figure, legend, savefig, grid, ylim, xlim
+from pylab import plot, xlabel, ylabel, figure, legend, savefig, grid, ylim, xlim, ticklabel_format
 
 
 # Event-reading utils
@@ -128,7 +128,11 @@ def interpolate_steps(timestamp_value_tuples, timestamp_step_tuples):
 
 def find_training_start(run_dir):
     # The auto train script exits once training has started properly
-    return os.path.getmtime(os.path.join(run_dir, 'auto_train.log'))
+    train_log_path = os.path.join(run_dir, 'auto_train.log')
+    if os.path.exists(train_log_path):
+        return os.path.getmtime(train_log_path)
+    else:
+        raise Exception()
 
 
 M = namedtuple('M', 'tag name window_size fill_window_size')
@@ -137,12 +141,12 @@ M = namedtuple('M', 'tag name window_size fill_window_size')
 def detect_metrics(env_name, train_env_key):
     metrics = []
     if env_name == 'Lunar Lander':
-        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/crash_rate', 'Crash rate', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/successful_landing_rate', 'Successful landing rate', 0.95, 0.95))
+        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
+        metrics.append(M(f'{train_env_key}/crashes', 'Crash rate', 100, 100))
+        metrics.append(M(f'{train_env_key}/successful_landing_rate', 'Successful landing rate', 100, 100))
     if env_name == 'Seaquest':
-        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 0.9, 0.95))
-        metrics.append(M(f'{train_env_key}/n_diver_pickups', 'Diver pickups per episode', 0.99, None))
+        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
+        metrics.append(M(f'{train_env_key}/n_diver_pickups', 'Diver pickups per episode', 500, 500))
     if env_name == 'Fetch':
         metrics.append(M(f'{train_env_key}/reward_sum_post_wrappers', 'Episode reward', 100, 100))
         metrics.append(M(f'{train_env_key}/gripper_to_block_cumulative_distance', 'Cumulative distance from gripper to block', 100, 100))
@@ -258,7 +262,7 @@ def plot_averaged(xs_list, ys_list, window_size, fill_window_size, color, label)
 
 
 def parse_run_name(run_dir):
-    match = re.search(r'([^-]*)-([\d])-([^_]*)_', run_dir)  # e.g. fetch-0-drlhp_foobar
+    match = re.search(r'([^-]*)-([\d]*)-([^_]*)_', run_dir)  # e.g. fetch-0-drlhp_foobar
     if match is None:
         raise Exception(f"Couldn't parse run name '{run_dir}'")
     env_shortname = match.group(1)
@@ -278,7 +282,11 @@ def parse_run_name(run_dir):
 
 
 def filter_pretraining_events(run_dir, events):
-    training_start_timestamp = find_training_start(run_dir)
+    try:
+        training_start_timestamp = find_training_start(run_dir)
+    except:
+        # For runs where we didn't pretrain
+        return
     for tag in events:
         events[tag] = [(t, v) for t, v in events[tag] if t >= training_start_timestamp]
         if not events[tag]:
@@ -400,6 +408,7 @@ def main():
             (step_values_fn, 'step', 'Total environment steps', args.max_steps)]:
             for metric_n, metric in enumerate(metrics):
                 figure(metric_n)
+                ticklabel_format(axis='x', style='scientific', scilimits=(0, 0))
                 all_min_y = float('inf')
                 all_max_y = -float('inf')
                 for run_type_n, (run_type, events_by_seed) in enumerate(events_by_run_type_by_seed.items()):
