@@ -188,6 +188,10 @@ class FetchStatsWrapper(SaveEpisodeStats):
         self.aligned_proportion = None
         self.gripping_proportion = None
         self.successes = deque(maxlen=25)  # for 5 initial positions, 5 samples of each position
+        self.partial_success = False
+        self.partial_successes = deque(maxlen=25)
+        self.block_to_target_dict_list = deque(maxlen=10)
+        self.successes_near_end = deque(maxlen=25)
         self.last_obs = None
 
     def reset(self):
@@ -204,6 +208,19 @@ class FetchStatsWrapper(SaveEpisodeStats):
             if len(self.successes) == self.successes.maxlen:
                 self.stats['success_rate'] = self.successes.count(True) / len(self.successes)
 
+            self.stats['success_partial'] = float(self.partial_success)
+            self.partial_successes.append(self.partial_success)
+            if len(self.partial_successes) == self.partial_successes.maxlen:
+                self.stats['success_partial_rate'] = self.partial_successes.count(True) / len(self.partial_successes)
+
+            if any([d < 0.05 for d in self.block_to_target_dict_list]):
+                self.successes_near_end.append(True)
+            else:
+                self.successes_near_end.append(False)
+            self.stats['success_near_end'] = float(self.successes_near_end[-1])
+            if len(self.successes_near_end) == self.successes_near_end.maxlen:
+                self.stats['success_near_end_rate'] = self.successes_near_end.count(True) / len(self.successes_near_end)
+
         self.last_stats = dict(self.stats)
         self.stats['gripper_to_block_cumulative_distance'] = 0
         self.stats['block_to_target_cumulative_distance'] = 0
@@ -212,6 +229,7 @@ class FetchStatsWrapper(SaveEpisodeStats):
         self.stats['block_to_target_min_distance'] = float('inf')
         self.aligned_proportion = RunningProportion()
         self.gripping_proportion = RunningProportion()
+        self.partial_success = False
 
         return self.env.reset()
 
@@ -234,6 +252,10 @@ class FetchStatsWrapper(SaveEpisodeStats):
         gripping_block = aligned_with_block and grippers_closed
         self.gripping_proportion.update(float(gripping_block))
         self.stats['ep_frac_gripping_block']  = self.gripping_proportion.v
+
+        self.block_to_target_dict_list.append(b2t_dist)
+        if b2t_dist < 0.05:
+            self.partial_success = True
 
         return obs, reward, done, info
 
