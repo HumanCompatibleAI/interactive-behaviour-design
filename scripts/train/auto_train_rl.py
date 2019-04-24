@@ -23,7 +23,9 @@ def get_args():
 
 
 def start_app(base_url, env, port, seed, run_name, log_dir, policy_args):
-    cmd = f'python -u run.py {env} --n_envs 16 --port {port} --log_dir {log_dir} --seed {seed} --policy_args {policy_args}'
+    cmd = f'python -u run.py {env} --n_envs 16 --port {port} --log_dir {log_dir} --seed {seed}'
+    if policy_args:
+        cmd += f' --policy_args {policy_args}'
     cmd += f' 2>&1 | tee {log_dir}/output.log'
     start_tmux_sess_with_cmd(run_name, cmd)
     while True:
