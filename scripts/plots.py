@@ -92,12 +92,10 @@ class TestInterpolateValues(unittest.TestCase):
 
 # Plotting helper functions
 
-def smooth_values(values, smoothing):
-    smoothed_values = []
-    last = values[0]
-    for v in values:
-        smoothed_values.append(smoothing * last + (1 - smoothing) * v)
-        last = smoothed_values[-1]
+def smooth_values(values, window_size):
+    window = np.ones(window_size)
+    actual_window_sizes = np.convolve(np.ones(len(values)), window, 'same')
+    smoothed_values = np.convolve(values, window, 'same') / actual_window_sizes
     return smoothed_values
 
 
@@ -133,7 +131,7 @@ def find_training_start(run_dir):
     return os.path.getmtime(os.path.join(run_dir, 'auto_train.log'))
 
 
-M = namedtuple('M', 'tag name smoothing fillsmoothing')
+M = namedtuple('M', 'tag name window_size fill_window_size')
 
 
 def detect_metrics(env_name, train_env_key):
@@ -146,13 +144,13 @@ def detect_metrics(env_name, train_env_key):
         metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 0.9, 0.95))
         metrics.append(M(f'{train_env_key}/n_diver_pickups', 'Diver pickups per episode', 0.99, None))
     if env_name == 'Fetch':
-        metrics.append(M(f'{train_env_key}/reward_sum_post_wrappers', 'Episode reward', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/gripper_to_block_cumulative_distance', 'Distance from gripper to block', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/block_to_target_cumulative_distance', 'Distance from block to target', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/block_to_target_min_distance', 'Minimum distance from block to target', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/ep_frac_aligned_with_block', 'Fraction of episode aligned with block', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/ep_frac_gripping_block', 'Fraction of episode gripping block', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/success_rate', 'Success rate', 0.95, 0.95))
+        metrics.append(M(f'{train_env_key}/reward_sum_post_wrappers', 'Episode reward', 100, 100))
+        metrics.append(M(f'{train_env_key}/gripper_to_block_cumulative_distance', 'Cumulative distance from gripper to block', 100, 100))
+        metrics.append(M(f'{train_env_key}/block_to_target_cumulative_distance', 'Cumulative distance from block to target', 100, 100))
+        metrics.append(M(f'{train_env_key}/block_to_target_min_distance', 'Minimum distance from block to target', 100, 100))
+        metrics.append(M(f'{train_env_key}/ep_frac_aligned_with_block', 'Fraction of episode aligned with block', 100, 100))
+        metrics.append(M(f'{train_env_key}/ep_frac_gripping_block', 'Fraction of episode gripping block', 100, 100))
+        metrics.append(M(f'{train_env_key}/success_rate', 'Success rate', 100, 100))
     return metrics
 
 
@@ -211,7 +209,7 @@ class TestDownsample(unittest.TestCase):
         np.testing.assert_array_equal(ys_downsampled, [3, 11.5, 20])
 
 
-def plot_averaged(xs_list, ys_list, smoothing, fillsmoothing, color, label):
+def plot_averaged(xs_list, ys_list, window_size, fill_window_size, color, label):
     # Interpolate all data to have common x values
     all_xs = set([x for xs in xs_list for x in xs])
     all_xs = sorted(list(all_xs))
@@ -231,23 +229,25 @@ def plot_averaged(xs_list, ys_list, smoothing, fillsmoothing, color, label):
     assert all([len(ys) == len(all_xs) for ys in ys_list])
 
     # Downsample /before/ smoothing so that we get the same level of smoothness no matter how dense the data
-    plot_width_pixels = 1500  # determined by manually checking the figure
-    xs_downsampled = None
-    ys_downsampled_list = []
-    for ys in ys_list:
-        xs_downsampled, ys_downsampled = downsample(all_xs, ys, plot_width_pixels)
-        assert len(ys_downsampled) == len(xs_downsampled)
-        ys_downsampled_list.append(ys_downsampled)
+    # plot_width_pixels = 1500  # determined by manually checking the figure
+    # xs_downsampled = None
+    # ys_downsampled_list = []
+    # for ys in ys_list:
+    #     xs_downsampled, ys_downsampled = downsample(all_xs, ys, plot_width_pixels)
+    #     xs_downsampled, ys_downsampled = all_xs, ys
+    #     assert len(ys_downsampled) == len(xs_downsampled)
+    #     ys_downsampled_list.append(ys_downsampled)
 
-    mean_ys = np.mean(ys_downsampled_list, axis=0)  # Average across seeds
-    smoothed_mean_ys = smooth_values(mean_ys, smoothing=smoothing)
-    plot(xs_downsampled, smoothed_mean_ys, color=color, label=label, alpha=0.9)
+    mean_ys = np.mean(ys_list, axis=0)  # Average across seeds
+    smoothed_mean_ys = smooth_values(mean_ys, window_size)
+    plot(all_xs, smoothed_mean_ys, color=color, label=label, alpha=0.9)
 
-    if fillsmoothing is not None:
-        std = np.std(ys_downsampled_list, axis=0)
-        lower = smooth_values(smoothed_mean_ys - std, fillsmoothing)
-        upper = smooth_values(smoothed_mean_ys + std, fillsmoothing)
-        fill_between(xs_downsampled, lower, upper, color=color, alpha=0.2)
+    if fill_window_size is not None:
+        std = np.std(ys_list, axis=0)
+        smoothed_std = np.array(smooth_values(std, fill_window_size))
+        lower = smoothed_mean_ys - smoothed_std
+        upper = smoothed_mean_ys + smoothed_std
+        fill_between(all_xs, lower, upper, color=color, alpha=0.2)
         min_val, max_val = np.min(lower), np.max(upper)
     else:
         min_val, max_val = np.min(smoothed_mean_ys), np.max(smoothed_mean_ys)
@@ -346,6 +346,14 @@ def add_steps_to_bc_run(events_by_env_name_by_run_type_by_seed, max_steps):
             events['policy_master/n_total_steps'] = fake_steps
 
 
+def drop_first_event(events):
+    """
+    Not sure why, but the first value is sometimes 0 or inf. Let's drop it.
+    """
+    for key in events:
+        events[key] = events[key][1:]
+
+
 def main():
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group()
@@ -374,6 +382,7 @@ def main():
             continue
         if run_type in ['DRLHP', 'SDRLHP', 'SDRLHP-BC']:
             filter_pretraining_events(run_dir.path, events)
+        drop_first_event(events)
         make_timestamps_relative_hours(events)
         events_by_env_name_by_run_type_by_seed[env_name][run_type][seed] = (events, run_dir.name)
 
@@ -405,8 +414,9 @@ def main():
                             xs, ys = value_fn(events, metric)
                             xs_list.append(xs)
                             ys_list.append(ys)
-                        min_y, max_y = plot_averaged(xs_list, ys_list, metric.smoothing, metric.fillsmoothing, color,
-                                                     run_type)
+                        min_y, max_y = plot_averaged(xs_list, ys_list,
+                                                     metric.window_size, metric.fill_window_size,
+                                                     color, run_type)
                         all_max_y = max_y if max_y > all_max_y else all_max_y
                         all_min_y = min_y if min_y < all_min_y else all_min_y
                     except KeyError:
