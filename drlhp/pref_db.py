@@ -219,6 +219,7 @@ class PrefDBTestTrain:
     def load(self, path):
         with open(path, 'rb') as f:
             self.test, self.train = pickle.load(f)
+            print(f"\tLoaded {len(self.test)}/{len(self.train)} test/train prefs")
 
     def save(self, path):
         with open(path, 'wb') as f:
