@@ -1,6 +1,7 @@
 import argparse
 import multiprocessing
 import os
+import pickle
 import sys
 
 import gym
@@ -13,6 +14,7 @@ from keras.engine.saving import load_model
 from keras.layers import Dense
 from keras.optimizers import Adam
 
+from lunarlander_manual import Demonstration
 from wrappers.lunar_lander_reward import register
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -75,9 +77,9 @@ class SaveModel(Callback):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('log_dir')
+    parser.add_argument('--demonstrations_pkl')
     args = parser.parse_args()
-
-    print(args.log_dir)
+    os.makedirs(args.log_dir)
 
     env_id = 'LunarLanderStatefulStats-v0'
 
@@ -87,7 +89,16 @@ def main():
     model.add(Dense(units=4, activation='softmax'))
     model.compile(loss='sparse_categorical_crossentropy', optimizer=Adam(lr=1e-4))
 
-    obses, actions = gen_demonstrations(env_id, os.path.join(args.log_dir, 'demos'), 100)
+    if args.demonstrations_pkl:
+        with open(args.demonstrations_pkl, 'rb') as f:
+            demonstrations = pickle.load(f)
+        obses, actions = [], []
+        demonstration: Demonstration
+        for demonstration in demonstrations:
+            obses.extend(demonstration.observations)
+            actions.extend(demonstration.actions)
+    else:
+        obses, actions = gen_demonstrations(env_id, os.path.join(args.log_dir, 'demos'), 100)
     obses = np.array(obses)
     actions = np.array(actions)
 
