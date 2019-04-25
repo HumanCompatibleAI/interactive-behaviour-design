@@ -6,6 +6,7 @@ import sys
 
 import gym
 import numpy as np
+import tensorflow as tf
 from gym.envs.box2d.lunar_lander import heuristic
 from gym.wrappers import Monitor
 from keras import Sequential
@@ -20,6 +21,13 @@ from wrappers.lunar_lander_reward import register
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from wrappers.util_wrappers import LogEpisodeStats
+
+from keras.backend.tensorflow_backend import set_session
+
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+sess = tf.Session(config=config)
+set_session(sess)
 
 
 def gen_demonstrations(env_id, log_dir, n_demonstrations):
