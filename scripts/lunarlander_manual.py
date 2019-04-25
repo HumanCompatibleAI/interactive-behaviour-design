@@ -36,21 +36,25 @@ def main():
     env = LunarLanderStatsWrapper(env)
     env = LogEpisodeStats(env, stdout=True, log_dir=args.log_dir)
 
+    ACTIONS = env.action_space.n
+    human_agent_action = 0
+    human_wants_pause = False
+
     def key_press(key, mod):
-        global human_agent_action
+        nonlocal human_agent_action, human_wants_pause
+        if key == 32:
+            human_wants_pause = not human_wants_pause
+            return
         a = int(key - ord('0'))
         if a <= 0 or a >= ACTIONS: return
         human_agent_action = a
 
     def key_release(key, mod):
-        global human_agent_action
+        nonlocal human_agent_action
         a = int(key - ord('0'))
         if a <= 0 or a >= ACTIONS: return
         if human_agent_action == a:
             human_agent_action = 0
-
-    ACTIONS = env.action_space.n
-    human_agent_action = 0
 
     env.render()
     env.unwrapped.viewer.window.on_key_press = key_press
@@ -67,6 +71,9 @@ def main():
             obs, r, done, info = env.step(human_agent_action)
             t2 = time.time()
             print("{:.1f} frames/second".format(1 / (t2 - t1)))
+            while human_wants_pause:
+                env.render()
+                time.sleep(0.1)
         demonstrations.append(demonstration)
         with atomic_write.atomic_write(os.path.join(args.log_dir, 'demonstrations.pkl'), binary=True) as f:
             pickle.dump(demonstrations, f)
