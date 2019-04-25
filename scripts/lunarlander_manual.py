@@ -71,14 +71,22 @@ def main():
             t1 = time.time()
             demonstration.append(obs, human_agent_action, None)
             obs, r, done, info = env.step(human_agent_action)
+
+            interval = time.time() - t1
+            if interval < 1 / 20:
+                time.sleep(1 / 20 - interval)
+
             t2 = time.time()
-            print("{:.1f} frames/second".format(1 / (t2 - t1)))
+            interval = (t2 - t1)
+            print("{:.1f} frames/second".format(1 / interval))
+
             while human_wants_pause:
                 env.render()
                 time.sleep(0.1)
         demonstrations.append(demonstration)
         with TimerContext("write"):
-            with atomic_write.atomic_write(os.path.join(args.log_dir, 'demonstrations.pkl'), binary=True, fsync=True) as f:
+            with atomic_write.atomic_write(os.path.join(args.log_dir, 'demonstrations.pkl'), binary=True,
+                                           fsync=True) as f:
                 f.write(lzma.compress(pickle.dumps(demonstrations), preset=0))
 
 
