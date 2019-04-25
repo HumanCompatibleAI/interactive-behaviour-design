@@ -2,7 +2,6 @@
 from __future__ import print_function
 
 import argparse
-import lzma
 import os
 import pickle
 import time
@@ -11,7 +10,6 @@ import gym
 from gym.utils import atomic_write
 from gym.wrappers import Monitor
 
-from utils import TimerContext
 from wrappers.lunar_lander_reward import LunarLanderStatsWrapper
 from wrappers.util_wrappers import LogEpisodeStats
 
@@ -84,10 +82,9 @@ def main():
                 env.render()
                 time.sleep(0.1)
         demonstrations.append(demonstration)
-        with TimerContext("write"):
-            with atomic_write.atomic_write(os.path.join(args.log_dir, 'demonstrations.pkl'), binary=True,
-                                           fsync=True) as f:
-                f.write(lzma.compress(pickle.dumps(demonstrations), preset=0))
+        with atomic_write.atomic_write(os.path.join(args.log_dir, 'demonstrations.pkl'),
+                                       binary=True, fsync=True) as f:
+            pickle.dump(demonstrations, f)
 
 
 if __name__ == '__main__':
