@@ -10,11 +10,11 @@ import easy_tf_log
 import gym
 import numpy as np
 import tensorflow as tf
+from gym import Wrapper
 from gym.envs.box2d.lunar_lander import heuristic
 from gym.wrappers import Monitor
 from keras import Sequential
 from keras.backend.tensorflow_backend import set_session
-from keras.callbacks import TensorBoard, Callback
 from keras.engine.saving import load_model
 from keras.layers import Dense
 from keras.optimizers import Adam
@@ -69,86 +69,68 @@ def gen_demonstrations(env_id, log_dir, n_demonstrations):
     return obses, actions
 
 
-def run_test_env(env_id, log_dir, model_path, model_lock, dagger, dagger_queue: multiprocessing.Queue):
+
+def run_test_env(env_id, log_dir, model_path, model_lock):
     global human_agent_action
     global human_wants_pause
 
     register()
     test_env = gym.make(env_id)
     test_env = LogEpisodeStats(test_env, log_dir, '_test')
-    render_every_n_episodes = 1 if dagger else 7
-    test_env = Monitor(test_env, video_callable=lambda n: n % render_every_n_episodes == 0, directory=log_dir, uid=999)
+    test_env = Monitor(test_env, video_callable=lambda n: n % 10 == 0, directory=log_dir, uid=999)
 
-    test_env.render()
-    test_env.unwrapped.viewer.window.on_key_press = key_press
-    test_env.unwrapped.viewer.window.on_key_release = key_release
-
-    n = 0
     while True:
         model_lock.acquire()
         model = load_model(model_path)
         model_lock.release()
         obs, done = test_env.reset(), False
-        dagger_obses, dagger_actions = [], []
         while not done:
-            while human_wants_pause:
-                test_env.render()
-                time.sleep(0.1)
-            dagger_obses.append(obs)
-            dagger_actions.append(human_agent_action)
             a = np.argmax(model.predict(np.array([obs]))[0])
             obs, reward, done, info = test_env.step(a)
         sys.stdout.flush()
         sys.stderr.flush()
-        if dagger:
-            try:
-                dagger_queue.put((dagger_obses, dagger_actions), block=False)
-            except queue.Full:
-                print("WARNING: queue was full")
-        print(f"Test episode {n} done!")
-        n += 1
 
+class SetLanderWhite(Wrapper):
+    def reset(self, **kwargs):
+        obs = self.env.reset()
+        self.env.unwrapped.lander.color1 = (1.0, 1.0, 1.0)
+        self.env.unwrapped.lander.color2 = (1.0, 1.0, 1.0)
+        return obs
 
-class SaveModel(Callback):
-    def __init__(self, model_path, model_lock):
-        super().__init__()
-        self.model_path = model_path
-        self.model_lock = model_lock
+def run_dagger_env(env_id, log_dir, model_path, model_lock, dagger_queue):
+    global human_agent_action
+    global human_wants_pause
 
-    def on_epoch_end(self, epoch, logs=None):
-        self.model_lock.acquire()
-        self.model.save(self.model_path)
-        self.model_lock.release()
+    register()
+    dagger_env = gym.make(env_id)
+    dagger_env = SetLanderWhite(dagger_env)
+    dagger_env = LogEpisodeStats(dagger_env, log_dir, '_dagger')
+    dagger_env = Monitor(dagger_env, video_callable=lambda n: True, directory=log_dir, uid=100)
 
+    dagger_env.render()
+    dagger_env.unwrapped.viewer.window.on_key_press = key_press
+    dagger_env.unwrapped.viewer.window.on_key_release = key_release
 
-class LogDatasetSize(Callback):
-    def __init__(self, obses, actions, log_dir):
-        super().__init__()
-        self.obses = obses
-        self.actions = actions
-        self.logger = easy_tf_log.Logger(os.path.join(log_dir, 'dataset_size'))
-
-    def on_epoch_end(self, epoch, logs=None):
-        self.logger.logkv('n_demonstration_obses', len(self.obses))
-        self.logger.logkv('n_demonstration_actions', len(self.actions))
-
-
-class UpdateDataset(Callback):
-    def __init__(self, obses, actions, dagger_queue: multiprocessing.Queue):
-        super().__init__()
-        self.obses = obses
-        self.actions = actions
-        self.queue = dagger_queue
-
-    def on_epoch_end(self, epoch, logs=None):
-        while True:
-            try:
-                obses, actions = self.queue.get(timeout=0.5)
-            except queue.Empty:
-                break
-            else:
-                self.obses.extend(obses)
-                self.actions.extend(actions)
+    while True:
+        model_lock.acquire()
+        model = load_model(model_path)
+        model_lock.release()
+        obs, done = dagger_env.reset(), False
+        dagger_obses, dagger_actions = [], []
+        while not done:
+            while human_wants_pause:
+                dagger_env.render()
+                time.sleep(0.1)
+            dagger_obses.append(obs)
+            dagger_actions.append(human_agent_action)
+            a = np.argmax(model.predict(np.array([obs]))[0])
+            obs, reward, done, info = dagger_env.step(a)
+        sys.stdout.flush()
+        sys.stderr.flush()
+        try:
+            dagger_queue.put((dagger_obses, dagger_actions), block=False)
+        except queue.Full:
+            print("WARNING: queue was full")
 
 
 def main():
@@ -193,11 +175,15 @@ def main():
     model_lock = ctx.Lock()
     model_path = os.path.join(args.log_dir, 'model.h5')
     test_log_dir = os.path.join(args.log_dir, 'test_env')
+    dagger_log_dir = os.path.join(args.log_dir, 'dagger_env')
     dagger_queue = ctx.Queue(maxsize=10)
     test_eps_proc = ctx.Process(target=run_test_env,
-                                args=(env_id, test_log_dir, model_path, model_lock, args.dagger, dagger_queue))
+                                args=(env_id, test_log_dir, model_path, model_lock))
+    dagger_eps_proc = ctx.Process(target=run_dagger_env,
+                                  args=(env_id, dagger_log_dir, model_path, model_lock, dagger_queue))
     model.save(model_path)
     test_eps_proc.start()
+    dagger_eps_proc.start()
 
     epoch_n = 0
     logger = easy_tf_log.Logger(os.path.join(args.log_dir, 'dataset_size'))
