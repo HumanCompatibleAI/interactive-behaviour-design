@@ -155,17 +155,27 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('log_dir')
     parser.add_argument('--demonstrations_pkl')
+    parser.add_argument('--n_expert_demonstrations', type=int)
     parser.add_argument('--dagger', action='store_true')
     args = parser.parse_args()
     os.makedirs(args.log_dir)
 
+    if not args.demonstrations_pkl and not args.n_expert_demonstrations and not args.dagger:
+        raise argparse.ArgumentError("No demonstrations source")
+
     env_id = 'LunarLanderStatefulStats-v0'
 
     model = Sequential()
-    model.add(Dense(units=64, activation='relu'))
+    model.add(Dense(units=64, activation='relu', input_shape=(8,)))
     model.add(Dense(units=64, activation='relu'))
     model.add(Dense(units=4, activation='softmax'))
     model.compile(loss='sparse_categorical_crossentropy', optimizer=Adam(lr=1e-4))
+
+    obses = np.zeros((0, 8))
+    actions = np.zeros((0,))
+
+    if args.n_expert_demonstrations:
+        obses, actions = gen_demonstrations(env_id, os.path.join(args.log_dir, 'demos'), args.n_expert_demonstrations)
 
     if args.demonstrations_pkl:
         with open(args.demonstrations_pkl, 'rb') as f:
@@ -175,8 +185,7 @@ def main():
         for demonstration in demonstrations:
             obses.extend(demonstration.observations)
             actions.extend(demonstration.actions)
-    else:
-        obses, actions = gen_demonstrations(env_id, os.path.join(args.log_dir, 'demos'), 100)
+
     obses = np.array(obses)
     actions = np.array(actions)
 
@@ -187,15 +196,17 @@ def main():
     dagger_queue = ctx.Queue(maxsize=10)
     test_eps_proc = ctx.Process(target=run_test_env,
                                 args=(env_id, test_log_dir, model_path, model_lock, args.dagger, dagger_queue))
-    model.fit(obses, actions, epochs=1)
     model.save(model_path)
     test_eps_proc.start()
 
     epoch_n = 0
     logger = easy_tf_log.Logger(os.path.join(args.log_dir, 'dataset_size'))
     while True:
-        history = model.fit(obses, actions, epochs=(epoch_n + 10), initial_epoch=epoch_n)
-        epoch_n += 10
+        if len(obses) > 0:
+            history = model.fit(obses, actions, epochs=(epoch_n + 10), initial_epoch=epoch_n)
+            for l in history.history['loss']:
+                logger.logkv('loss', l)
+            epoch_n += 10
 
         model_lock.acquire()
         model.save(model_path)
@@ -218,8 +229,6 @@ def main():
 
         logger.logkv('n_demonstration_obses', len(obses))
         logger.logkv('n_demonstration_actions', len(actions))
-        for l in history.history['loss']:
-            logger.logkv('loss', l)
 
 
 if __name__ == '__main__':
