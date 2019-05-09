@@ -14,6 +14,7 @@ from gym.utils import atomic_write
 from tensorflow.python.framework.errors_impl import NotFoundError
 
 import global_variables
+from global_variables import RolloutMode, RolloutRandomness
 from global_constants import ROLLOUT_FPS
 from rollouts import CompressedRollout
 from utils import EnvState, get_noop_action, save_video, make_small_change, \
@@ -203,15 +204,33 @@ class PolicyRollouter:
         n_rollouts = 0
         rollout_len_frames = int(self.rollout_len_seconds * ROLLOUT_FPS)
         show_frames = int(self.show_from_end_seconds * ROLLOUT_FPS)
-        for policy_name in policy_names:
-            noise = (last_policy_name == 'redo')
-            if 'LunarLander' in str(self.env):
-                deterministic = False  # Lunar Lander primitives don't work well if deterministic
+
+        if global_variables.rollout_mode == RolloutMode.primitives:
+            for policy_name in policy_names:
+                noise = (last_policy_name == 'redo')
+                if 'LunarLander' in str(self.env):
+                    deterministic = False  # Lunar Lander primitives don't work well if deterministic
+                else:
+                    deterministic = (policy_name != 'random')
+                self.env_state_queue.put((policy_name, env_state, noise,
+                                          rollout_len_frames, show_frames, group_serial, deterministic))
+                n_rollouts += 1
+        elif global_variables.rollout_mode == RolloutMode.cur_policy:
+            if global_variables.rollout_randomness == RolloutRandomness.sample:
+                deterministic = False
+                noise = False
+            elif global_variables.rollout_randomness == RolloutRandomness.noise:
+                deterministic = True
+                noise = True
             else:
-                deterministic = (policy_name != 'random')
-            self.env_state_queue.put((policy_name, env_state, noise,
-                                      rollout_len_frames, show_frames, group_serial, deterministic))
-            n_rollouts += 1
+                raise Exception('Invalid rollout randomness', global_variables.rollout_randomness)
+            for _ in range(global_variables.n_cur_policy):
+                self.env_state_queue.put((policy_names[0], env_state, noise,
+                                          rollout_len_frames, show_frames, group_serial, deterministic))
+                n_rollouts += 1
+        else:
+            raise Exception("Invalid rollout mode", global_variables.rollout_mode)
+
         if self.redo_policy:
             self.env_state_queue.put(('redo', env_state, None, None, None, group_serial))
             n_rollouts += 1
