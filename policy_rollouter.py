@@ -23,14 +23,16 @@ from wrappers.util_wrappers import ResetMode
 
 
 class RolloutWorker:
-    def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue):
+    def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n):
         # Workers shouldn't take up precious GPU memory
         os.environ["CUDA_VISIBLE_DEVICES"] = ''
         # Since we're in our own process, this lock isn't actually needed,
         # but other stuff expects this to be initialised
         global_variables.env_creation_lock = multiprocessing.Lock()
         make_policy_fn = cloudpickle.loads(make_policy_fn_pickle)
-        self.policy = make_policy_fn(name='rolloutworker')
+        # Each worker should seed its policy differently so that when we're doing multiple rollouts from one policy
+        # with rollout_randomness=sample, we really do get different rollouts from each worker
+        self.policy = make_policy_fn(name='rolloutworker', seed=worker_n)
         self.env_state_queue = env_state_queue
         self.rollout_queue = rollout_queue
         self.checkpoint_dir = os.path.join(log_dir, 'checkpoints')
@@ -184,11 +186,12 @@ class PolicyRollouter:
         self.ctx = multiprocessing.get_context('spawn')
         self.env_state_queue = self.ctx.Queue()
         self.rollout_queue = self.ctx.Queue()
-        for _ in range(16):
+        for n in range(16):
             self.ctx.Process(target=RolloutWorker, args=(cloudpickle.dumps(make_policy_fn),
                                                          log_dir,
                                                          self.env_state_queue,
-                                                         self.rollout_queue)).start()
+                                                         self.rollout_queue,
+                                                         n)).start()
 
     def generate_rollouts_from_reset(self, policies, softmax_temp):
         env_state = self.get_reset_state()
