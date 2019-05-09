@@ -37,7 +37,7 @@ class RolloutWorker:
         env = None
 
         while True:
-            policy_name, env_state, noise, rollout_len_frames, show_frames, group_serial = env_state_queue.get()
+            policy_name, env_state, noise, rollout_len_frames, show_frames, group_serial, deterministic = env_state_queue.get()
 
             if env is not None:
                 if hasattr(env.unwrapped, 'close'):
@@ -51,7 +51,7 @@ class RolloutWorker:
             else:
                 self.load_policy_checkpoint(policy_name)
                 self.rollout(policy_name, env, env_state.obs, group_serial,
-                             noise, rollout_len_frames, show_frames)
+                             noise, rollout_len_frames, show_frames, deterministic)
             # is sometimes slow to flush in processes; be more proactive so output is less confusing
             sys.stdout.flush()
 
@@ -90,7 +90,7 @@ class RolloutWorker:
 
         self.rollout_queue.put((group_serial, rollout_hash))
 
-    def rollout(self, policy_name, env, obs, group_serial, noise, rollout_len_frames, show_frames):
+    def rollout(self, policy_name, env, obs, group_serial, noise, rollout_len_frames, show_frames, deterministic):
         obses = []
         frames = []
         actions = []
@@ -99,11 +99,6 @@ class RolloutWorker:
         for _ in range(rollout_len_frames):
             obses.append(np.copy(obs))
             frames.append(env.render(mode='rgb_array'))
-
-            if 'LunarLander' in str(env):
-                deterministic = False  # Lunar Lander primitives don't work well if deterministic?
-            else:
-                deterministic = (policy_name != 'random')
             action = self.policy.step(obs, deterministic=deterministic)
             if noise:
                 assert env.action_space.dtype in [np.int64, np.float32]
@@ -210,8 +205,12 @@ class PolicyRollouter:
         show_frames = int(self.show_from_end_seconds * ROLLOUT_FPS)
         for policy_name in policy_names:
             noise = (last_policy_name == 'redo')
+            if 'LunarLander' in str(self.env):
+                deterministic = False  # Lunar Lander primitives don't work well if deterministic
+            else:
+                deterministic = (policy_name != 'random')
             self.env_state_queue.put((policy_name, env_state, noise,
-                                      rollout_len_frames, show_frames, group_serial))
+                                      rollout_len_frames, show_frames, group_serial, deterministic))
             n_rollouts += 1
         if self.redo_policy:
             self.env_state_queue.put(('redo', env_state, None, None, None, group_serial))
