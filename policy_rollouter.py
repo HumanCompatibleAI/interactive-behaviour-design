@@ -5,6 +5,7 @@ import sys
 import os
 import pickle
 import queue
+import threading
 import time
 from typing import Dict
 
@@ -22,8 +23,28 @@ from utils import EnvState, get_noop_action, save_video, make_small_change, \
 from wrappers.util_wrappers import ResetMode
 
 
+def save_global_variables():
+    d = {}
+    k: str
+    for k, v in global_variables.__dict__.items():
+        if k.startswith('_'):
+            continue
+        if k[0].isupper():
+            continue
+        if 'lock' in str(v).lower():
+            continue
+        d[k] = v
+    return d
+
+
+def restore_global_variables(d):
+    for k, v in d.items():
+        setattr(global_variables, k, v)
+
+
 class RolloutWorker:
-    def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n):
+    def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n, gv_dict):
+        restore_global_variables(gv_dict)
         # Workers shouldn't take up precious GPU memory
         os.environ["CUDA_VISIBLE_DEVICES"] = ''
         # Since we're in our own process, this lock isn't actually needed,
@@ -162,6 +183,7 @@ class RolloutWorker:
 
         self.rollout_queue.put((group_serial, rollout_hash))
 
+
 class PolicyRollouter:
     cur_rollouts: Dict[str, CompressedRollout]
 
@@ -186,12 +208,14 @@ class PolicyRollouter:
         self.ctx = multiprocessing.get_context('spawn')
         self.env_state_queue = self.ctx.Queue()
         self.rollout_queue = self.ctx.Queue()
+        gv = save_global_variables()
         for n in range(16):
             self.ctx.Process(target=RolloutWorker, args=(cloudpickle.dumps(make_policy_fn),
                                                          log_dir,
                                                          self.env_state_queue,
                                                          self.rollout_queue,
-                                                         n)).start()
+                                                         n,
+                                                         gv)).start()
 
     def generate_rollouts_from_reset(self, policies, softmax_temp):
         env_state = self.get_reset_state()
