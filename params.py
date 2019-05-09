@@ -44,11 +44,13 @@ def parse_args():
     parser.add_argument('--demonstrations_buffer_len', type=int, default=3000)
     parser.add_argument('--rstd', type=float)
     parser.add_argument('--max_segs', type=int, default=1000)
+    parser.add_argument('--rollout_action_noise', type=float, default=0.5)
     args = parser.parse_args()
 
     global_variables.segment_save_mode = args.segment_save_mode
     global_variables.max_segs = args.max_segs
     global_variables.render_segments = args.render_segments
+    global_variables.rollout_action_noise = args.rollout_action_noise
 
     if args.render_every_nth_episode is None:
         if 'Fetch' in args.env:

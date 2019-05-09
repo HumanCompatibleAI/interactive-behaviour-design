@@ -109,7 +109,7 @@ class RolloutWorker:
                 assert env.action_space.dtype in [np.int64, np.float32]
                 if env.action_space.dtype == np.float32:
                     action += 0.3 * env.action_space.sample()
-                elif env.action_space.dtype == np.int64 and np.random.rand() < 0.5:
+                elif env.action_space.dtype == np.int64 and np.random.rand() < global_variables.rollout_action_noise:
                     action = env.action_space.sample()
             actions.append(action)
             obs, reward, done, info = env.step(action)
