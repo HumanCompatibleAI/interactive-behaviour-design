@@ -24,7 +24,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('env_id')
     parser.add_argument('training_mode', choices=['reward_only', 'bc_only', 'reward_plus_bc'])
-    parser.add_argument('segment_generation', choices=['demonstrations', 'drlhp', 'both'])
+    parser.add_argument('segment_generation', choices=['demonstrations', 'drlhp', 'both', 'sdrlhp'])
     parser.add_argument('run_name')
     parser.add_argument('--n_envs', type=int, default=16)
     parser.add_argument('--n_initial_prefs', type=int, default=500)
@@ -74,7 +74,7 @@ def main():
     base_url = f'http://localhost:{port}'
 
     start_app(base_url, args.env_id, args.n_envs, port, args.seed, args.log_dir, args.tmux_sess, args.disable_redo,
-              args.extra_args)
+              args.extra_args, args.segment_generation)
     if args.segment_generation == 'drlhp':
         # In DRLHP mode, the master policy itself generates segments, so it needs to be added right at the beginning
         add_master_policy(base_url)
@@ -104,6 +104,18 @@ def main():
         start_oracle(base_url, 'demonstrations', args.tmux_sess, args.log_dir, args.min_label_interval_seconds)
         wait_for_initial_demonstrations(base_url, args.n_initial_demos)
         start_reward_predictor_training(base_url, args.pretrain_reward_predictor_seconds)
+    elif args.segment_generation == 'sdrlhp':
+        # The master policy itself also generates segments here
+        add_master_policy(base_url)
+        wait_for_demonstration_rollouts(base_url)
+        oracle_window_name = start_oracle(base_url, args.segment_generation, args.tmux_sess, args.log_dir,
+                                          args.min_label_interval_seconds)
+        start_kill_oracle_after_n_interactions_thread(args.max_interactions, args.log_dir, oracle_window_name)
+        wait_for_initial_demonstrations(base_url, args.n_initial_demos)
+        if args.training_mode in ['reward_only', 'reward_plus_bc']:
+            # We assume we already have sufficient initial preferences
+            # from initial demonstrations
+            start_reward_predictor_training(base_url, args.pretrain_reward_predictor_seconds)
     else:
         raise Exception()
     if args.segment_generation == 'demonstrations':
@@ -124,16 +136,19 @@ def start_kill_oracle_after_n_interactions_thread(n, log_dir, oracle_window_name
     Thread(target=f).start()
 
 
-def start_app(base_url, env_id, n_envs, port, seed, log_dir, tmux_sess, disable_redo, extra_args):
+def start_app(base_url, env_id, n_envs, port, seed, log_dir, tmux_sess, disable_redo, extra_args, segment_generation):
     cmd = f'python -u run.py {env_id} --n_envs {n_envs} --port {port} --log_dir {log_dir} --seed {seed}'
-    if not disable_redo:
-        cmd += ' --redo_policy'
-    if 'Seaquest' in env_id:
-        cmd += ' --load_policy_ckpt_dir subpolicies/seaquest'
-    elif 'LunarLander' in env_id:
-        cmd += ' --load_policy_ckpt_dir subpolicies/lunarlander'
-    elif 'Fetch' in env_id:
-        cmd += ' --add_manual_fetch_policies'
+    if segment_generation == 'sdrlhp':
+        cmd += ' --rollout_mode cur_policy'
+    else:
+        if not disable_redo:
+            cmd += ' --redo_policy'
+        if 'Seaquest' in env_id:
+            cmd += ' --load_policy_ckpt_dir subpolicies/seaquest'
+        elif 'LunarLander' in env_id:
+            cmd += ' --load_policy_ckpt_dir subpolicies/lunarlander'
+        elif 'Fetch' in env_id:
+            cmd += ' --add_manual_fetch_policies'
     if extra_args is not None:
         cmd += ' ' + extra_args
     cmd += f' 2>&1 | tee {log_dir}/output.log'
@@ -184,6 +199,8 @@ def wait_for_drlhp_segments(base_url):
 
 
 def start_oracle(base_url, segment_generation, tmux_sess, log_dir, min_label_interval_seconds):
+    if segment_generation == 'sdrlhp':
+        segment_generation = 'demonstrations'
     cmd = (f'python -u oracle.py {base_url} {segment_generation} {min_label_interval_seconds}'
            f' 2>&1 | tee {log_dir}/oracle.log')
     oracle_window_name = run_in_tmux_sess(tmux_sess, cmd, "oracle")
