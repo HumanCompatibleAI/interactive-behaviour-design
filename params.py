@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument('--redo_policy', action='store_true')
     parser.add_argument('--noisy_policies', action='store_true')
     parser.add_argument('--max_demonstration_length', type=int)
-    parser.add_argument('--segment_save_mode', choices=['single_env', 'multi_env'], default='single_env')
+    parser.add_argument('--segment_save_mode', choices=['single_env', 'multi_env'], default='multi_env')
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--log_dir')
     seconds_since_epoch = str(int(time.time()))
