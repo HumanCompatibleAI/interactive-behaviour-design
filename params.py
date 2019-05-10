@@ -51,7 +51,7 @@ def parse_args():
     parser.add_argument('--max_segs', type=int, default=1000)
     parser.add_argument('--rollout_action_noise', type=float, default=0.5)
     parser.add_argument('--rollout_mode', choices=['primitives', 'cur_policy'], default='primitives')
-    parser.add_argument('--cur_policy_randomness', choices=['sample', 'noise'])
+    parser.add_argument('--cur_policy_randomness', choices=['sample', 'noise'], default='noise')
     parser.add_argument('--n_cur_policy', type=int, default=3)
     args = parser.parse_args()
 
