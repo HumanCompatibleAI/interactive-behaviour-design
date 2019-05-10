@@ -44,6 +44,10 @@ def parse_args():
     group.add_argument('--run_name', default='test-run_{}'.format(seconds_since_epoch))
     parser.add_argument('--demonstrations_buffer_len', type=int, default=3000)
     parser.add_argument('--rstd', type=float)
+    # Dylan reckons the original DRLHP selected segments from the last RL batch.
+    # We use nsteps=2048 for Atari. With 16 environments, that's an RL batch of 2048 * 16 = 32768 steps.
+    # Assuming 1.5-second segments (45 steps), that's about 728 segments per batch.
+    # 1000 is close enough.
     parser.add_argument('--max_segs', type=int, default=1000)
     parser.add_argument('--rollout_action_noise', type=float, default=0.5)
     parser.add_argument('--rollout_mode', choices=['primitives', 'cur_policy'], default='primitives')
