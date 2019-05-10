@@ -21,6 +21,7 @@ rl_envs = [
 
 prefs_envs = [
     ('seaquest', 'SeaquestDeepMindDense-v0'),
+    ('breakout', 'BreakoutDeepMindDense-v0'),
     ('fetchpp', 'FetchPickAndPlace-Repeat1-BinaryGripper-5InitialBlockPos-FixedGoal-GripperBonus-NoET-SlowGripper-NoVanillaRL-PartialObs-NonDelta-WithGripObs-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
@@ -41,6 +42,9 @@ for seed in seeds:
             # The speed of the Fetch subpolicies is set assuming Repeat1
             assert 'Repeat1' in env_id
             rollout_length_seconds = 0.15
+        elif 'Breakout' in env_id:
+            # Long enough to stretch from hitting the ball to the ball bouncing off a block
+            rollout_length_seconds = 1.5
         else:
             rollout_length_seconds = 1.0
 
