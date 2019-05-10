@@ -112,11 +112,15 @@ class FlattenObs(ObservationWrapper):
 
 
 def make_env(dense, clipped=False):
+    # The following is equivalent to how Baselines creates an Atari environment.
+    # Baselines uses make_atari, which applies NoopResetEnv and MaxAndSkipEnv,
+    # then called wrap_deepmind.
     env = gym.make('SeaquestNoFrameskip-v4').unwrapped  # unwrap past TimeLimit
     env = NoopResetEnv(env, noop_max=30)
     env = MaxAndSkipEnv(env, skip=4)
     # NB we don't specify scale=True, so observations are not normalized
     env = wrap_deepmind(env, frame_stack=True)
+
     env = SeaquestStatsWrapper(env)
     if dense:
         env = SeaquestRewardWrapper(env)
