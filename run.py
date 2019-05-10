@@ -52,7 +52,7 @@ from params import parse_args
 from rollouts import RolloutsByHash
 from utils import find_latest_checkpoint, MemoryProfiler
 from segments import monitor_segments_dir_loop, write_segments_loop
-from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward
+from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward
 from wrappers.util_wrappers import VecRewardSwitcherWrapper, ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
     VecSaveSegments
 from policy_rollouter import PolicyRollouter
@@ -64,6 +64,7 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 
 lunar_lander_reward.register()
 seaquest_reward.register()
+breakout_reward.register()
 fetch_pick_and_place_register.register()
 basicfetch.register()
 faulthandler.enable()
