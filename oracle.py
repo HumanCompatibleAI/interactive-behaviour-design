@@ -12,6 +12,8 @@ import requests
 
 
 # TODO: should we be more careful about resolving ties between e.g. 5 segments?
+from utils import Timer
+
 
 class RateLimiter:
     def __init__(self, interval_seconds):
@@ -113,7 +115,17 @@ def main():
     parser.add_argument('url')
     parser.add_argument('segment_generation', choices=['demonstrations', 'drlhp'])
     parser.add_argument('min_label_interval_seconds', type=int)
+    # '15/45' means 'Alternating periods of 15 minutes giving preferences and 45 minutes of rest'
+    parser.add_argument('--schedule')
     args = parser.parse_args()
+
+    if args.schedule:
+        work_period_mins, rest_period_mins = map(int, args.schedule.split('/'))
+        work_timer = Timer(work_period_mins * 60)
+        work_timer.reset()
+    else:
+        work_period_mins, rest_period_mins = None, None
+        work_timer = None
 
     rate_limiter = RateLimiter(interval_seconds=args.min_label_interval_seconds)
 
@@ -134,6 +146,11 @@ def main():
         else:
             print(f"Simulated {n} interactions")
         rate_limiter.sleep()
+
+        if work_timer and work_timer.done():
+            print("Resting for {} minutes".format(rest_period_mins))
+            time.sleep(rest_period_mins * 60)
+            work_timer.reset()
 
 
 if __name__ == '__main__':
