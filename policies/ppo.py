@@ -80,7 +80,8 @@ class PPOPolicy(Policy):
     def __init__(self, name, env_id, obs_space, ac_space, n_envs, seed=None):
         Policy.__init__(self, name, env_id, obs_space, ac_space, n_envs)
 
-        if 'Seaquest' in env_id or 'Pong' in env_id or 'Breakout' in env_id or 'SpaceInvaders' in env_id:
+        atari_envs = ['Seaquest', 'Breakout', 'SpaceInvaders', 'BeamRider', 'Qbert', 'Enduro', 'Pong']
+        if any([e in env_id for e in atari_envs]):
             hyperparams = PPOPolicy.get_hyperparams('atari')
         elif 'Fetch' in env_id:
             hyperparams = PPOPolicy.get_hyperparams('fetch')

@@ -11,6 +11,7 @@ from a2c.common import gym
 from a2c.common.vec_env.subproc_vec_env import SubprocVecEnv
 from global_constants import ROLLOUT_FPS
 from utils import unwrap_to
+from wrappers.atari_generic import make_atari_env_with_preprocessing
 from wrappers.lunar_lander_stateful import LunarLanderStateful
 from wrappers.util_wrappers import StoredResetsWrapper, SaveMidStateWrapper, \
     SaveEpisodeObs, SaveSegments, \
@@ -59,6 +60,8 @@ def make_env(env_id, num_env, seed, experience_dir,
             random.seed(seed + rank)
 
             env = gym.make(env_id)
+            if isinstance(env.env, AtariEnv):
+                env = make_atari_env_with_preprocessing(env_id)
             env.seed(seed + rank)
             set_timeouts(env)
 
