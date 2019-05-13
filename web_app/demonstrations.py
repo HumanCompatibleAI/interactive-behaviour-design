@@ -94,11 +94,11 @@ def get_rollouts():
 
 
 def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollout],
-                                             chosen_rollout_hash_str, trajectory_serial, policy_names, softmax_temp):
+                                             rollout_choice, trajectory_serial, policy_names, softmax_temp):
     global episode_stats_logger
 
-    if chosen_rollout_hash_str != 'equal' and rollouts[chosen_rollout_hash_str].generating_policy == 'redo':
-        continue_with_rollout = rollouts[chosen_rollout_hash_str]
+    if rollout_choice != 'equal' and rollouts[rollout_choice].generating_policy == 'redo':
+        continue_with_rollout = rollouts[rollout_choice]
         force_reset = False
     else:
         for h, r in rollouts.items():
@@ -106,16 +106,16 @@ def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollo
                 del rollouts[h]
                 break
 
-        if chosen_rollout_hash_str == 'none':
+        if rollout_choice == 'none':
             continue_with_rollout = random.sample(list(rollouts.values()), 1)[0]  # type: CompressedRollout
-        elif chosen_rollout_hash_str == 'equal':
+        elif rollout_choice == 'equal':
             for r1, r2 in itertools.combinations(rollouts.values(), 2):
                 add_pref(r1, r2, (0.5, 0.5))
             continue_with_rollout = random.sample(list(rollouts.values()), 1)[0]  # type: CompressedRollout
-        elif rollouts[chosen_rollout_hash_str].generating_policy == 'redo':
+        elif rollouts[rollout_choice].generating_policy == 'redo':
             continue_with_rollout = rollouts['redo']
         else:
-            chosen_rollout = rollouts[chosen_rollout_hash_str]
+            chosen_rollout = rollouts[rollout_choice]
             add_demonstration_rollout(chosen_rollout)
             add_reset_state_from_end_of_rollout(chosen_rollout)
             rollouts_except_chosen = set(rollouts.values()) - {chosen_rollout}
