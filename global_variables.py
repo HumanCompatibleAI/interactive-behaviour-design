@@ -6,14 +6,16 @@ class RolloutMode(Enum):
     cur_policy = 1
 
 class RolloutRandomness(Enum):
-    sample = 0
-    noise = 1
+    sample_action = 0
+    random_action = 1
+    correlated_random_action = 2
 
 
 segment_save_mode = None
 max_segs = None
 render_segments = None
-rollout_action_noise = None  # type: float
+rollout_random_action_prob = None  # type: float
+rollout_random_correlation = None  # type: float
 rollout_mode = None  # type: RolloutMode
 rollout_randomness = None  # type: RolloutRandomness
 n_cur_policy = None  # type: int
