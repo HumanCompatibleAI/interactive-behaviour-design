@@ -255,6 +255,12 @@ class PolicyRollouter:
                 self.env_state_queue.put((policy_names[0], env_state, noise,
                                           rollout_len_frames, show_frames, group_serial, deterministic))
                 n_rollouts += 1
+            # Also add a trajectory sampled directly from the policy
+            noise = False
+            deterministic = True
+            self.env_state_queue.put((policy_names[0], env_state, noise,
+                                      rollout_len_frames, show_frames, group_serial, deterministic))
+            n_rollouts += 1
         else:
             raise Exception("Invalid rollout mode", global_variables.rollout_mode)
 
