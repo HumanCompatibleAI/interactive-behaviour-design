@@ -49,16 +49,20 @@ def parse_args():
     # Assuming 1.5-second segments (45 steps), that's about 728 segments per batch.
     # 1000 is close enough.
     parser.add_argument('--max_segs', type=int, default=1000)
-    parser.add_argument('--rollout_action_noise', type=float, default=0.5)
+    parser.add_argument('--rollout_random_action_prob', type=float, default=0.6)
+    parser.add_argument('--rollout_random_correlation', type=float, default=0.7)
     parser.add_argument('--rollout_mode', choices=['primitives', 'cur_policy'], default='primitives')
-    parser.add_argument('--cur_policy_randomness', choices=['sample', 'noise'], default='noise')
+    parser.add_argument('--cur_policy_randomness',
+                        choices=['sample_action', 'random_action', 'correlated_random_action'],
+                        default='sample_action')
     parser.add_argument('--n_cur_policy', type=int, default=3)
     args = parser.parse_args()
 
     global_variables.segment_save_mode = args.segment_save_mode
     global_variables.max_segs = args.max_segs
     global_variables.render_segments = args.render_segments
-    global_variables.rollout_action_noise = args.rollout_action_noise
+    global_variables.rollout_random_action_prob = args.rollout_random_action_prob
+    global_variables.rollout_random_correlation = args.rollout_random_correlation
     global_variables.rollout_mode = RolloutMode[args.rollout_mode]
     global_variables.rollout_randomness = RolloutRandomness[args.cur_policy_randomness]
     global_variables.n_cur_policy = args.n_cur_policy

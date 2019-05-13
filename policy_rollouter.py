@@ -1,25 +1,25 @@
 import json
 import multiprocessing
-import sys
-
 import os
 import pickle
 import queue
-import threading
+import sys
 import time
 from typing import Dict
 
+import gym
 import numpy as np
 from cloudpickle import cloudpickle
+from gym.spaces import seed
 from gym.utils import atomic_write
 from tensorflow.python.framework.errors_impl import NotFoundError
 
 import global_variables
-from global_variables import RolloutMode, RolloutRandomness
 from global_constants import ROLLOUT_FPS
+from global_variables import RolloutMode, RolloutRandomness
 from rollouts import CompressedRollout
 from utils import EnvState, get_noop_action, save_video, make_small_change, \
-    find_latest_checkpoint, set_env_state
+    find_latest_checkpoint
 from wrappers.util_wrappers import ResetMode
 
 
@@ -44,6 +44,10 @@ def restore_global_variables(d):
 
 class RolloutWorker:
     def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n, gv_dict):
+        np.random.seed(worker_n)
+        # Important so that different workers get different actions from env.action_space.sample()
+        gym.spaces.seed(worker_n)
+
         restore_global_variables(gv_dict)
         # Workers shouldn't take up precious GPU memory
         os.environ["CUDA_VISIBLE_DEVICES"] = ''
@@ -54,10 +58,12 @@ class RolloutWorker:
         # Each worker should seed its policy differently so that when we're doing multiple rollouts from one policy
         # with rollout_randomness=sample, we really do get different rollouts from each worker
         self.policy = make_policy_fn(name='rolloutworker', seed=worker_n)
+        self.worker_n = worker_n
         self.env_state_queue = env_state_queue
         self.rollout_queue = rollout_queue
         self.checkpoint_dir = os.path.join(log_dir, 'checkpoints')
         self.rollouts_dir = os.path.join(log_dir, 'demonstrations')
+        self.last_action = None
         env = None
 
         while True:
@@ -120,16 +126,13 @@ class RolloutWorker:
         actions = []
         rewards = []
         done = False
+        self.last_action = None
         for _ in range(rollout_len_frames):
             obses.append(np.copy(obs))
             frames.append(env.render(mode='rgb_array'))
             action = self.policy.step(obs, deterministic=deterministic)
             if noise:
-                assert env.action_space.dtype in [np.int64, np.float32]
-                if env.action_space.dtype == np.float32:
-                    action += 0.3 * env.action_space.sample()
-                elif env.action_space.dtype == np.int64 and np.random.rand() < global_variables.rollout_action_noise:
-                    action = env.action_space.sample()
+                action = self.get_noisy_action(action, env)
             actions.append(action)
             obs, reward, done, info = env.step(action)
             # Fetch environments return numpy float reward which is not serializable
@@ -182,6 +185,24 @@ class RolloutWorker:
             pickle.dump(rollout, f)
 
         self.rollout_queue.put((group_serial, rollout_hash))
+
+    def get_noisy_action(self, action, env):
+        assert env.action_space.dtype in [np.int64, np.float32]
+        if env.action_space.dtype == np.float32:
+            action += 0.3 * env.action_space.sample()
+        elif env.action_space.dtype == np.int64:
+            if np.random.rand() < global_variables.rollout_random_action_prob:
+                if global_variables.rollout_randomness == RolloutRandomness.random_action:
+                    action = env.action_space.sample()
+                elif global_variables.rollout_randomness == RolloutRandomness.correlated_random_action:
+                    if self.last_action and np.random.rand() < global_variables.rollout_random_correlation:
+                        action = self.last_action
+                    else:
+                        action = env.action_space.sample()
+                else:
+                    raise Exception("Invalid noise mode " + str(global_variables.rollout_randomness))
+        self.last_action = action
+        return action
 
 
 class PolicyRollouter:
@@ -243,10 +264,10 @@ class PolicyRollouter:
                                           rollout_len_frames, show_frames, group_serial, deterministic))
                 n_rollouts += 1
         elif global_variables.rollout_mode == RolloutMode.cur_policy:
-            if global_variables.rollout_randomness == RolloutRandomness.sample:
+            if global_variables.rollout_randomness == RolloutRandomness.sample_action:
                 deterministic = False
                 noise = False
-            elif global_variables.rollout_randomness == RolloutRandomness.noise:
+            elif global_variables.rollout_randomness == RolloutRandomness.random_action or global_variables.rollout_randomness == RolloutRandomness.correlated_random_action:
                 deterministic = True
                 noise = True
             else:
