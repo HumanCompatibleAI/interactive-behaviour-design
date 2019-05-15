@@ -112,7 +112,7 @@ def main():
         oracle_window_name = start_oracle(base_url, args.segment_generation, args.tmux_sess, args.log_dir,
                                           args.min_label_interval_seconds, args.oracle_args)
         start_kill_oracle_after_n_interactions_thread(args.max_interactions, args.log_dir, oracle_window_name)
-        wait_for_initial_demonstrations(base_url, args.n_initial_demos)
+        wait_for_initial_preferences(base_url, args.n_initial_prefs)
         if args.training_mode in ['reward_only', 'reward_plus_bc']:
             # We assume we already have sufficient initial preferences
             # from initial demonstrations
