@@ -12,19 +12,27 @@ class BreakoutRewardWrapper(Wrapper):
 
     def __init__(self, env):
         super().__init__(env)
-        self.last_lives = None
+        self.last_ball_lost = None
 
     def reset(self):
         obs = self.env.reset()
-        self.last_lives = self.env.unwrapped.ale.lives()
+        self.last_ball_lost = False
         return obs
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
 
-        cur_lives = self.env.unwrapped.ale.lives()
-        if cur_lives < self.last_lives:
+        line_just_below_paddle_sum = np.sum(obs[194, :, :])
+        if line_just_below_paddle_sum > 5800:
+            ball_lost = True
+        else:
+            ball_lost = False
+        if ball_lost and not self.last_ball_lost:
             reward += LIFE_LOST_REWARD
+        self.last_ball_lost = ball_lost
+
+        # print(line_just_below_paddle_sum, ball_lost)
+        # print(reward)
 
         return obs, reward, done, info
 
@@ -47,13 +55,13 @@ def make_env(dense):
     # Baselines uses make_atari, which applies NoopResetEnv and MaxAndSkipEnv,
     # then called wrap_deepmind.
     env = gym.make('BreakoutNoFrameskip-v4').unwrapped  # unwrap past TimeLimit
+    if dense:
+        env = BreakoutRewardWrapper(env)
     env = NoopResetEnv(env, noop_max=30)
     env = MaxAndSkipEnv(env, skip=4)
     # NB we don't specify scale=True, so observations are not normalized
     env = wrap_deepmind(env, frame_stack=True)
 
-    if dense:
-        env = BreakoutRewardWrapper(env)
     return env
 
 
