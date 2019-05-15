@@ -247,8 +247,8 @@ def get_chosen_rollout_videos_for_trajectory(trajectory_serial):
 
     chosen_rollout_vid_paths = []
     for line in lines:
-        group_serial, chosen_rollout_hash, timestamp = line.split(',')
-        chosen_rollout_vid_path = os.path.join(trajectory_dir, chosen_rollout_hash + '.mp4')
+        group_serial, continue_rollout_hash, timestamp, _ = line.split(',')
+        chosen_rollout_vid_path = os.path.join(trajectory_dir, continue_rollout_hash + '.mp4')
         chosen_rollout_vid_paths.append(chosen_rollout_vid_path)
 
     return chosen_rollout_vid_paths
