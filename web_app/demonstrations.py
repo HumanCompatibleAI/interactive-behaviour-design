@@ -130,7 +130,7 @@ def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollo
         trajectory_filename = os.path.join(trajectory_dir, "trajectory_{}".format(trajectory_serial))
         timestamp = str(time.time())
         with open(trajectory_filename, 'a') as f:
-            f.write(group_name + "," + continue_with_rollout_hash + "," + timestamp + "\n")
+            f.write(group_name + "," + continue_with_rollout_hash + "," + timestamp + "," + rollout_choice + "\n")
 
         trajectory_dir = get_trajectory_dir(trajectory_serial)
         trajectory_filename = os.path.join(trajectory_dir, "trajectory_{}".format(trajectory_serial))
