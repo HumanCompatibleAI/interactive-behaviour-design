@@ -52,15 +52,21 @@ for seed in seeds:
             rollout_length_seconds = 1.0
 
         extra_args = f"--rollout_length_seconds {rollout_length_seconds}"
-        if 'Breakout' in env_id:
-            extra_args += ' --cur_policy_randomness correlated_random_action --rollout_random_action_correlation 0.9'
 
         # DRLHP
         print("python3 scripts/train/auto_train_prefs.py "
               f"{env_id} reward_only drlhp {run_name}-drlhp --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args}")
+
         # SDRLHP
         print("python3 scripts/train/auto_train_prefs.py "
               f"{env_id} reward_only demonstrations {run_name}-sdrlhp --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args}")
+
+        # SDRLHP-NP
+        sdrlhp_np_extra_args = extra_args
+        if 'Breakout' in env_id:
+            sdrlhp_np_extra_args += ' --cur_policy_randomness correlated_random_action --rollout_random_correlation 0.9'
+        print("python3 scripts/train/auto_train_prefs.py "
+              f"{env_id} reward_only sdrlhp {run_name}-sdrlhpnp --seed {seed} --disable_redo --extra_args ' {sdrlhp_np_extra_args}' {test_args}")
 
         if 'lunarlander' in env_shortname or 'fetch' in env_shortname:
             redo = '--disable_redo'
@@ -69,6 +75,7 @@ for seed in seeds:
         # Behavioral cloning
         print("python3 scripts/train/auto_train_prefs.py "
               f"{env_id} bc_only demonstrations {run_name}-bc --seed {seed} {redo} --extra_args ' {extra_args}' {test_args}")
+
         # SDRLHP + behavioral cloning
         print("python3 scripts/train/auto_train_prefs.py "
               f"{env_id} reward_plus_bc demonstrations {run_name}-sdrlhp-bc --seed {seed} {redo} --extra_args ' {extra_args}' {test_args}")
