@@ -30,6 +30,7 @@ class NumberFrames(Wrapper):
         return o, r, d, i
 
     def observation(self, obs):
+        obs = np.array(obs)  # in case of LazyFrames
         cv2.putText(obs,
                     str(self.frames_since_reset),
                     org=(0, 70),
