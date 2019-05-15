@@ -201,7 +201,9 @@ class RolloutWorker:
                         action = env.action_space.sample()
                 else:
                     raise Exception("Invalid noise mode " + str(global_variables.rollout_randomness))
-        self.last_action = action
+                self.last_action = action
+            else:
+                self.last_action = None
         return action
 
 
