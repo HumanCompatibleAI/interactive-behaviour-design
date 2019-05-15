@@ -52,6 +52,8 @@ for seed in seeds:
             rollout_length_seconds = 1.0
 
         extra_args = f"--rollout_length_seconds {rollout_length_seconds}"
+        if 'Breakout' in env_id:
+            extra_args += ' --cur_policy_randomness correlated_random_action --rollout_random_action_correlation 0.9'
 
         # DRLHP
         print("python3 scripts/train/auto_train_prefs.py "
