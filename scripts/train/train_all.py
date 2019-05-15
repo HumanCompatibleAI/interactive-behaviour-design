@@ -64,7 +64,7 @@ for seed in seeds:
         # SDRLHP-NP
         sdrlhp_np_extra_args = extra_args
         if 'Breakout' in env_id:
-            sdrlhp_np_extra_args += ' --cur_policy_randomness correlated_random_action --rollout_random_correlation 0.9'
+            sdrlhp_np_extra_args += ' --cur_policy_randomness correlated_random_action --rollout_random_correlation 0.7'
         print("python3 scripts/train/auto_train_prefs.py "
               f"{env_id} reward_only sdrlhp {run_name}-sdrlhpnp --seed {seed} --disable_redo --extra_args ' {sdrlhp_np_extra_args}' {test_args}")
 
