@@ -1,11 +1,15 @@
+import os
+import sys
 from collections import deque
 
 import gym
 import numpy as np
-from baselines.common.atari_wrappers import wrap_deepmind, NoopResetEnv, MaxAndSkipEnv, ClipRewardEnv
-from gym import Wrapper, ObservationWrapper, spaces, Env
+from gym import Wrapper, ObservationWrapper, spaces
 from gym.envs import register as gym_register
 
+from baselines.common.atari_wrappers import wrap_deepmind, NoopResetEnv, MaxAndSkipEnv, ClipRewardEnv
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from wrappers.util_wrappers import SeaquestStatsWrapper
 
 DEATH_BRIGHTNESS_THRESHOLD = 220
@@ -19,6 +23,18 @@ DIVER_REWARD = 2
 GO_UP_WHEN_LOW_OXYGEN_REWARD = 3
 DEATH_REWARD = -50
 UP_EARLY_REWARD = -51  # To differentiate from DEATH_REWARD
+
+
+class RemoveSeaquestScore(ObservationWrapper):
+    def observation(self, observation):
+        observation = np.array(observation)
+        val = observation[7, 8]
+        y = 7
+        h = 25
+        x = 8
+        w = 160 - 8
+        observation[y:y + h, x:x + w, :] = val
+        return observation
 
 
 class SeaquestRewardWrapper(Wrapper):
@@ -116,6 +132,7 @@ def make_env(dense, clipped=False):
     # Baselines uses make_atari, which applies NoopResetEnv and MaxAndSkipEnv,
     # then called wrap_deepmind.
     env = gym.make('SeaquestNoFrameskip-v4').unwrapped  # unwrap past TimeLimit
+    env = RemoveSeaquestScore(env)
     env = NoopResetEnv(env, noop_max=30)
     env = MaxAndSkipEnv(env, skip=4)
     # NB we don't specify scale=True, so observations are not normalized

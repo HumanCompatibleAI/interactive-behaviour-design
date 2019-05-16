@@ -8,6 +8,17 @@ from baselines.common.atari_wrappers import wrap_deepmind, NoopResetEnv, MaxAndS
 LIFE_LOST_REWARD = -5
 
 
+class RemoveBreakoutScore(ObservationWrapper):
+    def observation(self, observation):
+        observation = np.array(observation)
+        y = 0
+        h = 15
+        x = 0
+        w = 160
+        observation[y:y + h, x:x + w, :] = 0
+        return observation
+
+
 class BreakoutRewardWrapper(Wrapper):
 
     def __init__(self, env):
@@ -55,6 +66,7 @@ def make_env(dense):
     # Baselines uses make_atari, which applies NoopResetEnv and MaxAndSkipEnv,
     # then called wrap_deepmind.
     env = gym.make('BreakoutNoFrameskip-v4').unwrapped  # unwrap past TimeLimit
+    env = RemoveBreakoutScore(env)
     if dense:
         env = BreakoutRewardWrapper(env)
     env = NoopResetEnv(env, noop_max=30)
