@@ -147,6 +147,10 @@ def detect_metrics(env_name, train_env_key):
     if env_name == 'Seaquest':
         metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
         metrics.append(M(f'{train_env_key}/n_diver_pickups', 'Diver pickups per episode', 500, 500))
+    if env_name == 'Breakout':
+        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
+    if env_name == 'Enduro':
+        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
     if env_name == 'Fetch':
         metrics.append(M(f'{train_env_key}/reward_sum_post_wrappers', 'Episode reward', 100, 100))
         metrics.append(M(f'{train_env_key}/gripper_to_block_cumulative_distance', 'Cumulative distance from gripper to block', 100, 100))
@@ -273,6 +277,8 @@ def parse_run_name(run_dir):
         'fetchpp': 'Fetch',
         'fetch': 'Fetch',
         'lunarlander': 'Lunar Lander',
+        'enduro': 'Enduro',
+        'breakout': 'Breakout',
         'seaquest': 'Seaquest'
     }
     env_name = env_shortname_to_env_name[env_shortname]
@@ -330,7 +336,7 @@ def add_steps_to_bc_run(events_by_env_name_by_run_type_by_seed, max_steps):
         # Find non-BC run that we keep the least of
         min_frac = float('inf')
         events_with_min_frac = None
-        for run_type in ['DRLHP', 'SDRLHP', 'SDRLHP-BC', 'RL']:
+        for run_type in ['DRLHP', 'SDRLHP', 'SDRLHPNP', 'SDRLHP-BC', 'RL']:
             if run_type not in events_by_env_name_by_run_type_by_seed[env_name]:
                 continue
             for seed in events_by_env_name_by_run_type_by_seed[env_name][run_type].keys():
@@ -380,7 +386,7 @@ def main():
         os.remove(f)
 
     events_by_env_name_by_run_type_by_seed = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-    for run_dir in os.scandir(args.runs_dir):
+    for run_dir in [path for path in os.scandir(args.runs_dir) if os.path.isdir(path.path)]:
         print(f"Reading events for {run_dir.name}...")
         events = read_all_events(run_dir.path)
         try:
@@ -388,7 +394,7 @@ def main():
         except Exception as e:
             print(e)
             continue
-        if run_type in ['DRLHP', 'SDRLHP', 'SDRLHP-BC']:
+        if run_type in ['DRLHP', 'SDRLHP', 'SDRLHP-BC', 'SDRLHPNP']:
             filter_pretraining_events(run_dir.path, events)
         drop_first_event(events)
         make_timestamps_relative_hours(events)
