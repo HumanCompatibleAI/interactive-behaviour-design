@@ -9,7 +9,9 @@ from multiprocessing import Process, Queue
 import gym
 import gym.spaces
 import numpy as np
+from gym import Wrapper
 from gym.envs.classic_control import rendering
+from gym.spaces import Box
 from gym.wrappers.monitoring.video_recorder import VideoRecorder, ImageEncoder
 
 import global_variables
@@ -56,6 +58,19 @@ class Oracle():
         self.last_action = action
         return action
 
+class ObsRender(Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.observation_space = Box(low=0, high=255, shape=(84, 84))
+        self.last_obs = np.zeros((84, 84, 3))
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        self.last_obs = np.tile(obs[:, :, 0][:, :, np.newaxis], [1, 1, 3])
+        return obs, reward, done, info
+
+    def render(self, mode='human', **kwargs):
+        return self.last_obs
 
 def f(env_n, frame_queue, state_queue, best_state_queue):
     global_variables.env_creation_lock = multiprocessing.Lock()
@@ -68,7 +83,7 @@ def f(env_n, frame_queue, state_queue, best_state_queue):
     oracle = Oracle(env)
     actions = []
     while True:
-        # frame_queue.put((env_n, env.render(mode='rgb_array')))
+        frame_queue.put((env_n, env.render(mode='rgb_array')))
         if args.action_selection == 'sample':
             action = env.action_space.sample()
         elif args.action_selection == 'correlated':
@@ -142,4 +157,4 @@ frame_queue, state_queue, best_state_queue = Queue(maxsize=n_envs * 3), Queue(),
 for n in range(n_envs):
     Process(target=f, args=(n, frame_queue, state_queue, best_state_queue)).start()
 Process(target=state_loop, args=(state_queue, best_state_queue, n_envs)).start()
-# render_loop(frame_queue, n_envs)
+render_loop(frame_queue, n_envs)
