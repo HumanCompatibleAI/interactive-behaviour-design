@@ -3,17 +3,8 @@
 import os
 import random
 
-
-if  'CUDA_VISIBLE_DEVICES' not in os.environ:
-    if random.random() < 0.5:
-        d = '0'
-    else:
-        d = '1'
-    os.environ['CUDA_VISIBLE_DEVICES'] = d
-
 os.environ['OMPI_MCA_btl_base_warn_component_unused'] = '0'
 os.environ['OPENAI_LOG_FORMAT'] = ''
-
 
 import numpy as np
 import psutil
@@ -92,6 +83,8 @@ def check_env(env_id):
 def main():
     args, log_dir = parse_args()
     # check_env(args.env)
+
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0,' + str(args.drlhp_train_gpu_n)
 
     np.random.seed(args.seed)
     random.seed(args.seed)
