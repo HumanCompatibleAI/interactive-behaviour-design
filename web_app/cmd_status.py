@@ -8,15 +8,16 @@ import sys
 from flask import request, render_template, Blueprint
 
 from policies.base_policy import PolicyTrainMode
+from reward_switcher import RewardSource
 from web_app.utils import check_bc_losses
 from web_app.view_trajectories import get_trajectories
 from web_app.web_globals import _classifiers, _cur_label, _demonstration_rollouts, _log_dir, \
     _max_episode_steps_value, _policies, _pref_db, _reset_mode_value, _reset_state_cache, \
-    _reward_switcher_wrapper, \
+    _reward_selector, \
     global_experience_buffer, _save_state_from_proportion_through_episode_value, \
     _demonstrations_reset_mode_value, \
     _run_drlhp_training, _checkpointer
-from wrappers.util_wrappers import RewardSource, ResetMode, QueueEndpoint
+from wrappers.util_wrappers import ResetMode, QueueEndpoint
 
 cmd_status_app = Blueprint('cmd_status', __name__)
 
@@ -31,11 +32,11 @@ def run_cmd():
 
     if cmd == 'train':
         n_epochs = int(request.args['n_epochs'])
-        if _reward_switcher_wrapper.cur_classifier_name is None:
+        if _reward_selector.cur_classifier_name is None:
             return "Error: no classifier selected"
         for _ in range(n_epochs):
-            _classifiers.train(_reward_switcher_wrapper.cur_classifier_name)
-            _classifiers.test(_reward_switcher_wrapper.cur_classifier_name)
+            _classifiers.train(_reward_selector.cur_classifier_name)
+            _classifiers.test(_reward_selector.cur_classifier_name)
     elif cmd == 'reset_classifier':
         _classifiers.reset(_cur_label)
     elif cmd == 'reset_experience':
@@ -46,7 +47,7 @@ def run_cmd():
             src = RewardSource.ENV
         elif src_str == 'classifier':
             src = RewardSource.CLASSIFIER
-            if _reward_switcher_wrapper.cur_classifier_name is None:
+            if _reward_selector.cur_classifier_name is None:
                 return "cur_classifier is None"
         elif src_str == 'drlhp':
             src = RewardSource.DRLHP
@@ -54,15 +55,15 @@ def run_cmd():
             src = RewardSource.NONE
         else:
             return "Unknown reward source '{}'".format(src_str)
-        _reward_switcher_wrapper.set_reward_source(src)
+        _reward_selector.set_reward_source(src)
     elif cmd == 'add_classifier':
         label_name = request.args['name']
         _classifiers.add_classifier(label_name)
     elif cmd == 'use_classifier':
         label_name = request.args['name']
-        if label_name not in _reward_switcher_wrapper.classifiers.classifiers:
+        if label_name not in _reward_selector.classifiers.classifiers:
             return "Unknown classifier: '{}'".format(label_name)
-        _reward_switcher_wrapper.cur_classifier_name = label_name
+        _reward_selector.cur_classifier_name = label_name
     elif cmd == 'add_policy':
         policy_name = request.args['name']
         if policy_name in _policies.policies:
@@ -122,7 +123,7 @@ def run_cmd():
             return "ckpt_n not specific"
         ckpt_path = possible_ckpts[0].replace('.meta', '')
 
-        _reward_switcher_wrapper.reward_predictor.load(ckpt_path)
+        _reward_selector.reward_predictor.load(ckpt_path)
     elif cmd == 'load_policy_ckpt':
         policy = request.args['policy']
         ckpt_n = request.args['n']
@@ -140,7 +141,7 @@ def run_cmd():
 
         _policies[_policies.cur_policy].load_checkpoint(ckpt_path)
     elif cmd == 'reset_drlhp_normalisation':
-        _reward_switcher_wrapper.reward_predictor.reset_normalisation()
+        _reward_selector.reward_predictor.reset_normalisation()
     elif cmd == 'check_bc_losses':
         losses_dict = check_bc_losses()
         return str(losses_dict)
@@ -208,7 +209,7 @@ def run_cmd():
             _policies[_policies.cur_policy].train_bc_epoch()
     elif cmd == 'set_drlhp_l2_loss_coef':
         coef = float(request.args['coef'])
-        _reward_switcher_wrapper.reward_predictor.l2_loss_coef = coef
+        _reward_selector.reward_predictor.l2_loss_coef = coef
     elif cmd == 'eval':
         eval_str = request.args['str']
         orig_stdout = sys.stdout
@@ -261,8 +262,8 @@ def get_status():
         'Policies': ','.join(_policies.policies.keys()),
         'Current policy': _policies.cur_policy,
         'Classifiers': ','.join(_classifiers.classifiers.keys()),
-        'Current classifier': _reward_switcher_wrapper.cur_classifier_name,
-        'Reward source': str(_reward_switcher_wrapper.cur_reward_source),
+        'Current classifier': _reward_selector.cur_classifier_name,
+        'Reward source': str(_reward_selector.cur_reward_source),
         'Policy training mode': str(training_mode),
         'Training reset mode': str(ResetMode(_reset_mode_value.value)),
         'Demonstrations reset mode': str(ResetMode(_demonstrations_reset_mode_value.value)),

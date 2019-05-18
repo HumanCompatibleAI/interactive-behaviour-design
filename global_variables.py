@@ -5,6 +5,7 @@ class RolloutMode(Enum):
     primitives = 0
     cur_policy = 1
 
+
 class RolloutRandomness(Enum):
     sample_action = 0
     random_action = 1
@@ -25,3 +26,4 @@ n_cur_policy = None  # type: int
 # Any thread which creates environments (which includes restoring from a reset state)
 # should acquire this lock before attempting the creation.
 env_creation_lock = None
+reward_selector = None
