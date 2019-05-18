@@ -16,7 +16,7 @@ from utils import save_video
 from web_app.utils import nocache
 from web_app.web_globals import _classifiers
 from web_app.web_globals import _cur_label, FPS
-from web_app.web_globals import _reward_switcher_wrapper
+from web_app.web_globals import _reward_selector
 from web_app.web_globals import experience_dir
 from web_app.web_globals import global_experience_buffer
 from web_app.web_globals import save_dir
@@ -259,7 +259,7 @@ def render_probs(obses, images):
 
 
 def render_drlhp_reward(obses, images):
-    rews = _reward_switcher_wrapper.reward_predictor.reward(np.array(obses))
+    rews = _reward_selector.reward_predictor.reward(np.array(obses))
     im_width = images[0].shape[1]
     graph = deque(maxlen=(im_width - 10))
     for image_n, image in enumerate(images):

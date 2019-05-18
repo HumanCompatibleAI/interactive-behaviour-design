@@ -60,13 +60,6 @@ class DrawClassifierPredictionWrapper(ObservationWrapper):
         return obs
 
 
-class RewardSource(Enum):
-    CLASSIFIER = 0
-    DRLHP = 1
-    ENV = 2
-    NONE = 3
-
-
 class VecLogRewards(VecEnvWrapper):
     def __init__(self, venv, log_dir, postfix=None):
         VecEnvWrapper.__init__(self, venv)
@@ -84,57 +77,6 @@ class VecLogRewards(VecEnvWrapper):
             self.logger.logkv(self.log_key, self.episode_reward_sum)
             self.episode_reward_sum = 0
         return obses, rewards, dones, infos
-
-    def reset(self):
-        return self.venv.reset()
-
-
-class VecRewardSwitcherWrapper(VecEnvWrapper):
-
-    def __init__(self, venv, classifiers: ClassifierCollection,
-                 network, network_args, reward_predictor_std, log_dir):
-        VecEnvWrapper.__init__(self, venv)
-
-        drlhp_log_dir = os.path.join(log_dir, 'drlhp')
-        obs_shape = venv.observation_space.shape
-        self.reward_predictor = RewardPredictor(network=network, network_args=network_args,
-                                                log_dir=drlhp_log_dir, obs_shape=obs_shape,
-                                                r_std=reward_predictor_std)
-
-        self.classifiers = classifiers
-        self.cur_classifier_name = None
-        self.cur_reward_source = RewardSource.NONE
-
-    def set_reward_source(self, reward_source: RewardSource):
-        self.cur_reward_source = reward_source
-
-    def reward_drlhp(self, obs):
-        rewards = self.reward_predictor.reward(obs)
-        assert rewards.shape == (self.venv.num_envs,)
-        return rewards
-
-    def reward_classifier(self, obs):
-        if self.cur_classifier_name is None:
-            print("Warning: classifier not set")
-            return [0.0] * len(obs)
-
-        probs = self.classifiers.predict_positive_prob(self.cur_classifier_name, obs)
-        assert probs.shape == (self.venv.num_envs,)
-        rewards = (probs >= 0.5).astype(np.float32)
-        return rewards
-
-    def step_wait(self):
-        obs, rewards_env, dones, infos = self.venv.step_wait()
-        assert obs.shape[0] == self.venv.num_envs
-        if self.cur_reward_source == RewardSource.ENV:
-            rewards = rewards_env
-        elif self.cur_reward_source == RewardSource.CLASSIFIER:
-            rewards = self.reward_classifier(obs)
-        elif self.cur_reward_source == RewardSource.DRLHP:
-            rewards = self.reward_drlhp(obs)
-        elif self.cur_reward_source == RewardSource.NONE:
-            rewards = [0.0] * self.venv.num_envs
-        return obs, rewards, dones, infos
 
     def reset(self):
         return self.venv.reset()

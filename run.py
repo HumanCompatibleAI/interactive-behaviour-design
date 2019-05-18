@@ -53,12 +53,14 @@ from rollouts import RolloutsByHash
 from utils import find_latest_checkpoint, MemoryProfiler
 from segments import monitor_segments_dir_loop, write_segments_loop
 from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro
-from wrappers.util_wrappers import VecRewardSwitcherWrapper, ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
+from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
     VecSaveSegments
 from policy_rollouter import PolicyRollouter
 from checkpointer import Checkpointer
 from web_app.app import run_web_app
 import tensorflow as tf
+from drlhp.reward_predictor import RewardPredictor
+from reward_switcher import RewardSelector
 
 tf.logging.set_verbosity(tf.logging.ERROR)
 
@@ -244,6 +246,13 @@ def main():
                                          if os.path.exists(ep.vid_path)])
         classifier_data_buffer.num_episodes_from_exp_dir = num_eps_in_experience_dir
 
+
+    reward_predictor_log_dir = os.path.join(log_dir, 'drlhp')
+    obs_shape = env.observation_space.shape
+    reward_predictor = RewardPredictor(network=reward_predictor_network, network_args=reward_predictor_network_args,
+                                       log_dir=reward_predictor_log_dir, obs_shape=obs_shape,
+                                       r_std=reward_predictor_std)
+
     run_drlhp_training = multiprocessing.Value('B', 0)
 
     def f():
@@ -258,9 +267,9 @@ def main():
                 continue
 
             try:
-                reward_switcher_wrapper.reward_predictor.train(pref_db.train.copy(),
-                                                               pref_db.test.copy(),
-                                                               val_interval=1)
+                reward_predictor.train(pref_db.train.copy(),
+                                       pref_db.test.copy(),
+                                       val_interval=1)
             except:
                 print("Exception while training reward predictor:")
                 traceback.print_exc()
@@ -290,24 +299,15 @@ def main():
     if global_variables.segment_save_mode == 'multi_env':
         env = VecSaveSegments(env, segments_queue)
     env = VecLogRewards(env, os.path.join(log_dir, 'vec_rewards'))
-    env = VecRewardSwitcherWrapper(env, classifier,
-                                   reward_predictor_network,
-                                   reward_predictor_network_args,
-                                   reward_predictor_std,
-                                   log_dir)
-    # We need to save a reference to this so that the web interface can call methods on it
-    reward_switcher_wrapper = env
-    env = VecLogRewards(env, os.path.join(log_dir, 'vec_rewards_post_switcher'), postfix='_post_switcher')
 
     policies.env = env
 
-    checkpointer = Checkpointer(log_dir,
-                                policies, reward_switcher_wrapper.reward_predictor, classifier)
+    checkpointer = Checkpointer(log_dir, policies, reward_predictor, classifier)
     checkpointer.checkpoint()
 
     if args.load_drlhp_ckpt_dir:
         last_ckpt_name = find_latest_checkpoint(args.load_drlhp_ckpt_dir, 'drlhp_reward_predictor')
-        reward_switcher_wrapper.reward_predictor.load(last_ckpt_name)
+        reward_predictor.load(last_ckpt_name)
 
     if args.load_classifier_ckpt:
         classifier_names_path = os.path.join(args.load_classifier_ckpt, 'classifier_names.txt')
@@ -322,6 +322,9 @@ def main():
                 print("Added classifier '{}'".format(classifier_name))
         last_ckpt_name = find_latest_checkpoint(args.load_classifier_ckpt, 'classifiers-')
         classifier.load_checkpoint(last_ckpt_name)
+
+    reward_selector = RewardSelector(classifier, reward_predictor)
+    global_variables.reward_selector = reward_selector
 
     env.reset()
 
@@ -341,7 +344,7 @@ def main():
 
     run_web_app(classifiers=classifier,
                 policies=policies,
-                reward_switcher_wrapper=reward_switcher_wrapper,
+                reward_selector=reward_selector,
                 experience_buffer=classifier_data_buffer,
                 log_dir=log_dir,
                 port=args.port,
