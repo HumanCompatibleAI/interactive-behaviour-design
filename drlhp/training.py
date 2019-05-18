@@ -38,7 +38,8 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
                      run_training: multiprocessing.Value,
                      pref_db_path,
                      save_ckpt_path,
-                     log_dir):
+                     log_dir,
+                     gpu_n):
     reward_predictor = cloudpickle.loads(make_reward_predictor_fn_cloudpickle)('training', gpu_n)  # type: RewardPredictor
     pref_db = PrefDBTestTrain()
     logger = easy_tf_log.Logger(os.path.join(log_dir, 'drlhp_train_loop'))
