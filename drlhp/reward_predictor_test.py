@@ -31,7 +31,8 @@ class TestRewardPredictor(unittest.TestCase):
                              network_args=net_args,
                              r_std=0.1,
                              log_dir=tmp_dir,
-                             seed=0)
+                             seed=0,
+                             name='test')
         with rp.sess.graph.as_default():
             manual_l2_loss = tf.add_n([tf.norm(v) for v in tf.trainable_variables()])
 

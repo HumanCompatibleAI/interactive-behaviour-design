@@ -63,6 +63,7 @@ for seed in seeds:
 
         # SDRLHP-NP
         sdrlhp_np_extra_args = extra_args
+        sdrlhp_np_extra_args += ' --no_save_states'
         if 'Breakout' in env_id:
             sdrlhp_np_extra_args += ' --cur_policy_randomness correlated_random_action --rollout_random_action_prob 0.8 --rollout_random_correlation 0.7'
 

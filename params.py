@@ -55,6 +55,7 @@ def parse_args():
                         choices=['sample_action', 'random_action', 'correlated_random_action'],
                         default='sample_action')
     parser.add_argument('--n_cur_policy', type=int, default=3)
+    parser.add_argument('--drlhp_train_gpu_n', type=int, default=7)
     args = parser.parse_args()
 
     global_variables.segment_save_mode = args.segment_save_mode
