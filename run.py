@@ -1,59 +1,55 @@
 #!/usr/bin/env python3
 
-import os
-import random
-
-os.environ['OMPI_MCA_btl_base_warn_component_unused'] = '0'
-os.environ['OPENAI_LOG_FORMAT'] = ''
-
-import numpy as np
-import psutil
-from gym.envs.robotics.robot_env import RobotEnv
-
-from basicfetch import basicfetch
-from policies.fetch import FetchAction, FetchPPOPolicy
-from policies.policy_collection import PolicyCollection
-from policies.ppo import PPOPolicy
-
 import faulthandler
 import glob
 import multiprocessing
+import os
 import os.path as osp
 import platform
+import random
 import re
 import threading
 import time
 from multiprocessing import Queue, Process
 
 import gym
+import numpy as np
+import psutil
+import tensorflow as tf
+from cloudpickle import cloudpickle
 from gym.envs.atari import AtariEnv
 from gym.envs.box2d import LunarLander
 from gym.envs.mujoco import MujocoEnv
 from gym.envs.robotics import FetchEnv
+from gym.envs.robotics.robot_env import RobotEnv
 
 import global_variables
 from a2c.policies import mlp, nature_cnn
+from basicfetch import basicfetch
+from checkpointer import Checkpointer
 from classifier_buffer import ClassifierDataBuffer
 from classifier_collection import ClassifierCollection
 from drlhp.pref_db import PrefDBTestTrain
+from drlhp.reward_predictor import RewardPredictor
 from drlhp.reward_predictor_core_network import net_mlp, net_cnn
+from drlhp.training import drlhp_train_loop, drlhp_load_loop
 from env import make_env
 from params import parse_args
+from policies.fetch import FetchAction, FetchPPOPolicy
+from policies.policy_collection import PolicyCollection
+from policies.ppo import PPOPolicy
+from policy_rollouter import PolicyRollouter
+from reward_switcher import RewardSelector
 from rollouts import RolloutsByHash
-from utils import find_latest_checkpoint, MemoryProfiler
 from segments import monitor_segments_dir_loop, write_segments_loop
+from utils import find_latest_checkpoint, MemoryProfiler
+from web_app.app import run_web_app
 from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro
 from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
     VecSaveSegments
-from policy_rollouter import PolicyRollouter
-from checkpointer import Checkpointer
-from web_app.app import run_web_app
-import tensorflow as tf
-from drlhp.reward_predictor import RewardPredictor
-from reward_switcher import RewardSelector
-from cloudpickle import cloudpickle
-from drlhp.training import drlhp_train_loop, drlhp_load_loop
 
+os.environ['OMPI_MCA_btl_base_warn_component_unused'] = '0'
+os.environ['OPENAI_LOG_FORMAT'] = ''
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 lunar_lander_reward.register()
@@ -257,7 +253,6 @@ def main():
         print("Adding classifier for label '{}'...".format(label_name))
         classifier.add_classifier(label_name)
 
-
     if global_variables.segment_save_mode == 'multi_env':
         env = VecSaveSegments(env, segments_queue)
     env = VecLogRewards(env, os.path.join(log_dir, 'vec_rewards'))
@@ -271,11 +266,13 @@ def main():
 
     reward_predictor_log_dir = os.path.join(log_dir, 'drlhp')
     obs_shape = env.observation_space.shape
+
     def make_reward_predictor_fn(name, gpu_n):
         return RewardPredictor(network=reward_predictor_network, network_args=reward_predictor_network_args,
                                log_dir=reward_predictor_log_dir, obs_shape=obs_shape,
                                r_std=reward_predictor_std,
                                name=name, gpu_n=gpu_n)
+
     reward_predictor = make_reward_predictor_fn('inference',
                                                 gpu_n=None)  # don't do anything special
 

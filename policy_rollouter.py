@@ -44,7 +44,6 @@ def restore_global_variables(d):
 
 class RolloutWorker:
     def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n, gv_dict):
-        os.sched_setaffinity(0, [worker_n])
         np.random.seed(worker_n)
         # Important so that different workers get different actions from env.action_space.sample()
         gym.spaces.seed(worker_n)
