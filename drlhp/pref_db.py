@@ -12,6 +12,7 @@ from threading import Lock, Thread
 
 import easy_tf_log
 import numpy as np
+from gym.utils import atomic_write
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from global_constants import MAX_PREFS
@@ -222,7 +223,8 @@ class PrefDBTestTrain:
             print(f"\tLoaded {len(self.test)}/{len(self.train)} test/train prefs")
 
     def save(self, path):
-        with open(path, 'wb') as f:
+        # Important to write atomically because this is loaded by the reward predictor training process
+        with atomic_write.atomic_write(path, binary=True) as f:
             pickle.dump((self.test, self.train), f)
 
     def append(self, s1, s2, pref):

@@ -53,6 +53,5 @@ def add_pref(rollout1: CompressedRollout, rollout2: CompressedRollout, pref):
     add_pref.added_prefs += 1
     logger.logkv('pref_db/n_prefs', len(_pref_db.train))
     logger.logkv('pref_db/added_prefs', add_pref.added_prefs)
-    _pref_db.save(os.path.join(experience_dir, 'pref_db.pkl'))
 
 add_pref.added_prefs = 0
