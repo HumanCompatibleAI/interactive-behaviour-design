@@ -267,14 +267,13 @@ def main():
     reward_predictor_log_dir = os.path.join(log_dir, 'drlhp')
     obs_shape = env.observation_space.shape
 
-    def make_reward_predictor_fn(name, gpu_n):
+    def make_reward_predictor_fn(name):
         return RewardPredictor(network=reward_predictor_network, network_args=reward_predictor_network_args,
                                log_dir=reward_predictor_log_dir, obs_shape=obs_shape,
                                r_std=reward_predictor_std,
-                               name=name, gpu_n=gpu_n)
+                               name=name)
 
-    reward_predictor = make_reward_predictor_fn('inference',
-                                                gpu_n=None)  # don't do anything special
+    reward_predictor = make_reward_predictor_fn('inference')
 
     # Reward predictor training loop
     # Loads preferences, trains, saved checkpoint
@@ -287,7 +286,6 @@ def main():
               run_drlhp_training,
               os.path.join(ckpt_dir, pref_db_ckpt_name),
               os.path.join(ckpt_dir, reward_predictor_ckpt_name),
-              args.drlhp_train_gpu_n,
               log_dir))
     drlhp_train_process.start()
 
