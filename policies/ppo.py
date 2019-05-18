@@ -184,14 +184,15 @@ class PPOPolicy(Policy):
         else:
             return actions[0]
 
-    def set_training_env(self, env):
+    def set_training_env(self, env, log_dir):
         self.env = env
         if self.runner is None:
             self.runner = PPORunner(env=env,
                                     model=self.model,
                                     nsteps=self.nsteps,
                                     gamma=self.gamma,
-                                    lam=self.lam)
+                                    lam=self.lam,
+                                    log_dir=log_dir)
             self.last_obs = self.runner.obs
 
     def train(self):
