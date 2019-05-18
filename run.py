@@ -81,6 +81,10 @@ def main():
     args, log_dir = parse_args()
     # check_env(args.env)
 
+    # Prevent list_local_devices taking up all GPU memory
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    sess = tf.Session(config=config)
     gpu_ns = [x.name.split(':')[2] for x in device_lib.list_local_devices() if x.device_type == 'GPU']
 
     np.random.seed(args.seed)
