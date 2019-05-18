@@ -18,17 +18,17 @@ MIN_L2_REG_COEF = 0.1
 
 class RewardPredictor:
 
-    def __init__(self, obs_shape, network, network_args, r_std, name, gpu_n, lr=1e-4, log_dir=None, seed=None):
+    def __init__(self, obs_shape, network, network_args, r_std, name, lr=1e-4, log_dir=None, seed=None, gpu_n=None):
         self.obs_shape = obs_shape
         graph = tf.Graph()
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(graph=graph, config=config)
 
-        if gpu_n is not None:
-            device_context = graph.device(f'/gpu:{gpu_n}')
-        else:
+        if gpu_n is None:
             device_context = contextlib.suppress()
+        else:
+            device_context = graph.device(f'/gpu:{gpu_n}')
 
         with graph.as_default():
             if seed is not None:
