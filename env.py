@@ -15,7 +15,7 @@ from wrappers.atari_generic import make_atari_env_with_preprocessing
 from wrappers.lunar_lander_stateful import LunarLanderStateful
 from wrappers.util_wrappers import StoredResetsWrapper, SaveMidStateWrapper, \
     SaveEpisodeObs, SaveSegments, \
-    EpisodeLengthLimitWrapper, SaveEpisodeStats, LogEpisodeStats, DummyRender, LogDoneInfo
+    EpisodeLengthLimitWrapper, SaveEpisodeStats, LogEpisodeStats, DummyRender, LogDoneInfo, Profile
 from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 from wrappers.wrappers_debug import DrawEnvN
 
@@ -53,7 +53,8 @@ def make_env(env_id, num_env, seed, experience_dir,
              episode_obs_queue: multiprocessing.Queue,
              segments_queue: multiprocessing.Queue,
              segments_dir, render_segments,
-             render_every_nth_episode):
+             render_every_nth_episode,
+             save_states):
     def make_env_fn(rank):
         def _thunk():
             np.random.seed(seed + rank)
@@ -77,8 +78,6 @@ def make_env(env_id, num_env, seed, experience_dir,
             env = StoredResetsWrapper(env, reset_mode_value, reset_state_server_queue)
             env = EpisodeLengthLimitWrapper(env, max_episode_steps_value)
 
-            env = DrawEnvN(env, rank)
-
             if rank == 0:
                 env = LogEpisodeStats(env, suffix='_train', log_dir=experience_dir)
                 env = Monitor(env, experience_dir,
@@ -88,7 +87,9 @@ def make_env(env_id, num_env, seed, experience_dir,
                     env = DummyRender(env)
                 if global_variables.segment_save_mode == 'single_env':
                     env = SaveSegments(env, segments_queue)
-                env = SaveMidStateWrapper(env, reset_state_receiver_queue)
+                if save_states:
+                    # This is slow, so we disable it sometimes
+                    env = SaveMidStateWrapper(env, reset_state_receiver_queue)
 
             return env
 

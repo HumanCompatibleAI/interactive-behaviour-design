@@ -122,7 +122,9 @@ def main():
                    segments_queue=segments_queue,
                    segments_dir=segments_dir,
                    render_segments=args.render_segments,
-                   render_every_nth_episode=args.render_every_nth_episode)
+                   render_every_nth_episode=args.render_every_nth_episode,
+                   save_states=(not args.no_save_states))
+
     reset_state_cache.start_saver_receiver()
 
     global_variables.env_creation_lock = threading.Lock()
