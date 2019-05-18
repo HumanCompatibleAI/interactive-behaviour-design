@@ -84,8 +84,6 @@ def main():
     args, log_dir = parse_args()
     # check_env(args.env)
 
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0,' + str(args.drlhp_train_gpu_n)
-
     np.random.seed(args.seed)
     random.seed(args.seed)
 
