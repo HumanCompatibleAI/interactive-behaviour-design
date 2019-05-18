@@ -23,7 +23,6 @@ def parse_args():
     parser.add_argument('--load_experience_dir') #runs/[run_dir]/experience/ for classifier/reset_states
     parser.add_argument('--load_classifier_ckpt')
     parser.add_argument('--load_policy_ckpt_dir')
-    parser.add_argument('--load_drlhp_ckpt_dir')
     parser.add_argument('--load_drlhp_prefs')
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--port', type=int, default=5000)
