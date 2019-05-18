@@ -27,7 +27,7 @@ class PolicyCollection:
             policy.stop_training()
         if name is not None:
             self.policies[name].init_logger(self.log_dir)
-            self.policies[name].set_training_env(self.env)
+            self.policies[name].set_training_env(self.env, self.log_dir)
             self.policies[name].use_demonstrations(self.demonstrations)
             self.policies[name].start_training()
         self.cur_policy = name
