@@ -43,6 +43,7 @@ def get_args():
     parser.add_argument('--min_label_interval_seconds', type=int, default=3)
     parser.add_argument('--max_interactions', type=int, default=None)
     parser.add_argument('--oracle_args', default='')
+    parser.add_argument('--gpus', default='')
     args = parser.parse_args()
 
     args.run_name += "_" + args.time
@@ -65,9 +66,9 @@ def main():
     if not args.tmux_sess:
         script_name = sys.argv[0]
         script_args = '"' + '" "'.join(sys.argv[1:]) + '"'
-        cmd = f'python -u {script_name} {script_args} --tmux_sess {args.run_name} --time {args.time}'
+        cmd = f"python -u {script_name} {script_args} --tmux_sess {args.run_name} --time {args.time}"
         cmd += f' 2>&1 | tee {args.log_dir}/auto_train.log'
-        start_tmux_sess_with_cmd(sess_name=args.run_name, cmd=cmd)
+        start_tmux_sess_with_cmd(sess_name=args.run_name, cmd=cmd, gpus=args.gpus)
         return
 
     save_args(args, args.log_dir, 'auto_train_args.txt')
@@ -75,7 +76,7 @@ def main():
     base_url = f'http://localhost:{port}'
 
     start_app(base_url, args.env_id, args.n_envs, port, args.seed, args.log_dir, args.tmux_sess, args.disable_redo,
-              args.extra_args, args.segment_generation)
+              args.extra_args, args.segment_generation, args.gpus)
     if args.segment_generation == 'drlhp':
         # In DRLHP mode, the master policy itself generates segments, so it needs to be added right at the beginning
         add_master_policy(base_url)
@@ -137,7 +138,7 @@ def start_kill_oracle_after_n_interactions_thread(n, log_dir, oracle_window_name
     Thread(target=f).start()
 
 
-def start_app(base_url, env_id, n_envs, port, seed, log_dir, tmux_sess, disable_redo, extra_args, segment_generation):
+def start_app(base_url, env_id, n_envs, port, seed, log_dir, tmux_sess, disable_redo, extra_args, segment_generation, gpus):
     cmd = f'python -u run.py {env_id} --n_envs {n_envs} --port {port} --log_dir {log_dir} --seed {seed}'
     if segment_generation == 'sdrlhp':
         cmd += ' --rollout_mode cur_policy'
@@ -153,7 +154,7 @@ def start_app(base_url, env_id, n_envs, port, seed, log_dir, tmux_sess, disable_
     if extra_args is not None:
         cmd += ' ' + extra_args
     cmd += f' 2>&1 | tee {log_dir}/output.log'
-    run_in_tmux_sess(tmux_sess, cmd, "app")
+    run_in_tmux_sess(tmux_sess, cmd, "app", gpus=gpus)
     print("Waiting for app to start...")
     while True:
         try:
@@ -204,7 +205,7 @@ def start_oracle(base_url, segment_generation, tmux_sess, log_dir, min_label_int
         segment_generation = 'demonstrations'
     cmd = (f'python -u oracle.py {base_url} {segment_generation} {min_label_interval_seconds} {oracle_args}'
            f' 2>&1 | tee {log_dir}/oracle.log')
-    oracle_window_name = run_in_tmux_sess(tmux_sess, cmd, "oracle")
+    oracle_window_name = run_in_tmux_sess(tmux_sess, cmd, "oracle", gpus='')
     return oracle_window_name
 
 
@@ -268,14 +269,16 @@ def get_n_demos(base_url):
     return int(requests.get(base_url + '/get_status').json()['No. demonstrated episodes'])
 
 
-def start_tmux_sess_with_cmd(sess_name, cmd):
+def start_tmux_sess_with_cmd(sess_name, cmd, gpus):
+    cmd = f'CUDA_VISIBLE_DEVICES="{gpus}" ' + cmd
     cmd += '; echo; read -p "Press enter to exit..."'
     cmd = ['tmux', 'new-sess', '-d', '-s', sess_name, '-n', f'{sess_name}-main', cmd]
     subprocess.run(cmd)
 
 
-def run_in_tmux_sess(sess_name, cmd, window_name):
+def run_in_tmux_sess(sess_name, cmd, window_name, gpus):
     window_name += '_' + str(uuid.uuid4())[:4]
+    cmd = f'CUDA_VISIBLE_DEVICES="{gpus}" ' + cmd
     cmd += '; echo; read -p "Press enter to exit..."'
     tmux_cmd = ['tmux', 'new-window', '-ad', '-t', f'{sess_name}-main', '-n', window_name, cmd]
     subprocess.run(tmux_cmd)
