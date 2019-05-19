@@ -292,7 +292,10 @@ def main():
     context = multiprocessing.get_context('spawn')
     run_drlhp_training = context.Value('B', 0)
     if gpu_ns:
-        n = gpu_ns[1]
+        if len(gpu_ns) > 1:
+            n = gpu_ns[1]
+        else:
+            n = gpu_ns[0]
     else:
         n = None
     drlhp_train_process = context.Process(
