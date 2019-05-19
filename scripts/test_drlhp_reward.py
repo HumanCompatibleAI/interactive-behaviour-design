@@ -17,7 +17,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from drlhp.reward_predictor import RewardPredictor
 from drlhp.reward_predictor_core_network import net_cnn
 from wrappers.seaquest_reward import register as seaquest_register
-from wrappers.breakout_reward import register as seaquest_register
+from wrappers.breakout_reward import register as breakout_register
 
 
 class DrawPredictedReward(Wrapper):
@@ -74,12 +74,14 @@ parser.add_argument('drlhp_ckpt')
 args = parser.parse_args()
 
 seaquest_register()
+breakout_register()
 env = gym.make(args.env_id)
 reward_predictor = RewardPredictor(network=net_cnn,
                                    network_args={'batchnorm': False, 'dropout': 0.5},
                                    log_dir=tempfile.mkdtemp(),
                                    obs_shape=env.observation_space.shape,
-                                   r_std=999)  # should be ignored
+                                   r_std=999,  # should be ignored
+                                   name='test')
 reward_predictor.load(args.drlhp_ckpt)
 env = DrawPredictedReward(env, reward_predictor)
 env = RenderObs(env)
