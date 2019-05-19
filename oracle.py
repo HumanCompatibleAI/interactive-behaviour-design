@@ -54,7 +54,7 @@ def get_n_training_timesteps(log_dir):
     if not event_files:
         raise NoMasterPolicyError
 
-    assert len(event_files) == 0
+    assert len(event_files) == 1
     events_file = event_files[0]
 
     with tempfile.TemporaryDirectory() as temp_dir:
