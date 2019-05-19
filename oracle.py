@@ -1,31 +1,76 @@
 #!/usr/bin/env python
 
 import argparse
+import glob
 import json
-from collections import deque, namedtuple
-
-import random
+import os
+import shutil
+import tempfile
 import time
 import traceback
+from collections import deque, namedtuple
 
 import requests
+import tensorflow as tf
 
-
-# TODO: should we be more careful about resolving ties between e.g. 5 segments?
 from utils import Timer
 
 
+class NoMasterPolicyError(Exception):
+    pass
+
+
 class RateLimiter:
-    def __init__(self, interval_seconds):
-        self.interval = interval_seconds
+    def __init__(self, interval_seconds, decay_rate, get_timesteps_fn):
+        self.initial_rate = 1 / interval_seconds
+        self.decay_rate = decay_rate
+        self.get_timesteps_fn = get_timesteps_fn
         self.t = time.time()
 
     def sleep(self):
+        if self.decay_rate:
+            try:
+                n_steps = self.get_timesteps_fn()
+            except NoMasterPolicyError:
+                # We're pretraining
+                rate = self.initial_rate
+            else:
+                # From DRLHP paper
+                rate = self.initial_rate * 5e6 / (n_steps + 5e6)
+                print("At timestep {:.1e}, label rate is {:.2f}".format(n_steps, rate))
+        else:
+            rate = self.initial_rate
+        interval = 1 / rate
+
         delta = time.time() - self.t
-        if delta < self.interval:
-            time.sleep(self.interval - delta)
-        print("Since last: {:.1f} seconds".format(time.time() - self.t))
+        if delta < interval:
+            time.sleep(interval - delta)
+        print("{:.1f} seconds since last".format(time.time() - self.t))
         self.t = time.time()
+
+
+def get_n_training_timesteps(log_dir):
+    event_files = glob.glob(os.path.join(log_dir, 'policy_master', 'events*'))
+    if not event_files:
+        raise NoMasterPolicyError
+
+    assert len(event_files) == 1
+    events_file = event_files[0]
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Is it going to be a problem if we're reading while the training process is writing?
+        # I'm not sure, but let's be careful
+        shutil.copy(events_file, temp_dir)
+        n_steps = 0
+        try:
+            for event in tf.train.summary_iterator(os.path.join(temp_dir, os.path.basename(events_file))):
+                for value in event.summary.value:
+                    if value.tag == 'policy_master/n_total_steps':
+                        n_steps = max(n_steps, value.simple_value)
+        except Exception as e:
+            raise Exception(f"While reading '{events_file}':" + str(e))
+
+    return n_steps
 
 
 def choose_best_segment(segment_dict):
@@ -114,43 +159,44 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('url')
     parser.add_argument('segment_generation', choices=['demonstrations', 'drlhp'])
-    parser.add_argument('min_label_interval_seconds', type=int)
-    # '15/45' means 'Alternating periods of 15 minutes giving preferences and 45 minutes of rest'
-    parser.add_argument('--schedule')
+    parser.add_argument('--seconds_per_label', type=int)
+    parser.add_argument('--decay_label_rate', action='store_true')
+    parser.add_argument('--schedule')  # '15/45' -> 'Alternating 15 minutes giving preferences/45 minutes of rest'
+    parser.add_argument('--log_dir')
     args = parser.parse_args()
 
-    if args.schedule:
-        work_period_mins, rest_period_mins = map(int, args.schedule.split('/'))
-        work_timer = Timer(work_period_mins * 60)
-        work_timer.reset()
-    else:
-        work_period_mins, rest_period_mins = None, None
-        work_timer = None
+    if args.decay_label_rate and not args.log_dir:
+        raise argparse.ArgumentError("For --decay_label_rate, you must specify --log_dir")
 
-    rate_limiter = RateLimiter(interval_seconds=args.min_label_interval_seconds)
+    if args.schedule:
+        work_mins, rest_mins = map(int, args.schedule.split('/'))
+    else:
+        work_mins, rest_mins = float('inf'), None
+    work_timer = Timer(work_mins * 60)
+    work_timer.reset()
+
+    rate_limiter = RateLimiter(interval_seconds=args.seconds_per_label, decay_rate=args.decay_label_rate,
+                               get_timesteps_fn=lambda: get_n_training_timesteps(args.log_dir))
 
     n = 0
     while True:
-        try:
-            if args.segment_generation == 'demonstrations':
-                demonstrate(args.url)
-                n += 1
-            elif args.segment_generation == 'drlhp':
-                compare(args.url)
-                n += 1
+        while not work_timer.done():
+            try:
+                if args.segment_generation == 'demonstrations':
+                    demonstrate(args.url)
+                elif args.segment_generation == 'drlhp':
+                    compare(args.url)
+            except:
+                traceback.print_exc()
+                time.sleep(1.0)
             else:
-                raise Exception()
-        except:
-            traceback.print_exc()
-            time.sleep(1.0)
-        else:
-            print(f"Simulated {n} interactions")
-        rate_limiter.sleep()
+                n += 1
+                print(f"Simulated {n} interactions")
+                rate_limiter.sleep()
 
-        if work_timer and work_timer.done():
-            print("Resting for {} minutes".format(rest_period_mins))
-            time.sleep(rest_period_mins * 60)
-            work_timer.reset()
+        print("Resting for {} minutes".format(rest_mins))
+        time.sleep(rest_mins * 60)
+        work_timer.reset()
 
 
 if __name__ == '__main__':

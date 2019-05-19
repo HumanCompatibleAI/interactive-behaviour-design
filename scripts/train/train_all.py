@@ -10,7 +10,7 @@ args = parser.parse_args()
 
 seeds = list(map(int, args.seeds.split(',')))
 if args.test:
-    test_args = '--n_initial_prefs 0 --n_initial_demos 0 --pretrain_reward_predictor_seconds 0 --min_label_interval_seconds 0'
+    test_args = '--n_initial_prefs 0 --n_initial_demos 0 --pretrain_reward_predictor_seconds 0 --min_label_interval_seconds 1'
 else:
     test_args = ''
 
@@ -57,6 +57,10 @@ for seed in seeds:
         # DRLHP
         print("python3 scripts/train/auto_train_prefs.py "
               f"{env_id} reward_only drlhp {run_name}-drlhp --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}'")
+
+        # DRLHP with label rate decay
+        print("python3 scripts/train/auto_train_prefs.py "
+              f"{env_id} reward_only drlhp {run_name}-drlhpd --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' --decay_label_rate")
 
         # SDRLHP
         print("python3 scripts/train/auto_train_prefs.py "
