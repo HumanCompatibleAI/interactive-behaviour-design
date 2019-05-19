@@ -10,6 +10,7 @@ import time
 import traceback
 from collections import deque, namedtuple
 
+import easy_tf_log
 import requests
 import tensorflow as tf
 
@@ -45,7 +46,6 @@ class RateLimiter:
         delta = time.time() - self.t
         if delta < interval:
             time.sleep(interval - delta)
-        print("{:.1f} seconds since last".format(time.time() - self.t))
         self.t = time.time()
 
 
@@ -178,9 +178,18 @@ def main():
     rate_limiter = RateLimiter(interval_seconds=args.seconds_per_label, decay_rate=args.decay_label_rate,
                                get_timesteps_fn=lambda: get_n_training_timesteps(args.log_dir))
 
+    logger = easy_tf_log.Logger(os.path.join(args.log_dir, 'oracle'))
+
     n = 0
+    last_interaction_time = None
     while True:
         while not work_timer.done():
+            if last_interaction_time:
+                t_since_last = time.time() - last_interaction_time
+                print("{:.1f} seconds since last interaction".format(t_since_last))
+                logger.logkv('oracle/label_interval', t_since_last)
+                logger.logkv('oracle/label_rate', 1 / t_since_last)
+            last_interaction_time = time.time()
             try:
                 if args.segment_generation == 'demonstrations':
                     demonstrate(args.url)
