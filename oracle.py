@@ -181,13 +181,15 @@ def main():
     logger = easy_tf_log.Logger(os.path.join(args.log_dir, 'oracle'))
 
     n = 0
-    last_interaction_time = time.time()
+    last_interaction_time = None
     while True:
         while not work_timer.done():
-            t_since_last = time.time() - last_interaction_time
-            print("{:.1f} seconds since last interaction".format(t_since_last))
-            logger.logkv('oracle/label_interval', t_since_last)
-            logger.logkv('oracle/label_rate', 1 / t_since_last)
+            if last_interaction_time:
+                t_since_last = time.time() - last_interaction_time
+                print("{:.1f} seconds since last interaction".format(t_since_last))
+                logger.logkv('oracle/label_interval', t_since_last)
+                logger.logkv('oracle/label_rate', 1 / t_since_last)
+            last_interaction_time = time.time()
             try:
                 if args.segment_generation == 'demonstrations':
                     demonstrate(args.url)
@@ -197,7 +199,6 @@ def main():
                 traceback.print_exc()
                 time.sleep(1.0)
             else:
-                last_interaction_time = time.time()
                 n += 1
                 print(f"Simulated {n} interactions")
                 rate_limiter.sleep()
