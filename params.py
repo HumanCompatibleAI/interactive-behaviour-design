@@ -53,7 +53,7 @@ def parse_args():
     parser.add_argument('--rollout_mode', choices=['primitives', 'cur_policy'], default='primitives')
     parser.add_argument('--cur_policy_randomness',
                         choices=['sample_action', 'random_action', 'correlated_random_action'],
-                        default='sample_action')
+                        default='random_action')
     parser.add_argument('--n_cur_policy', type=int, default=3)
     parser.add_argument('--no_save_states', action='store_true')
     args = parser.parse_args()
