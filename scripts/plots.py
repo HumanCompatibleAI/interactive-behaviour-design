@@ -293,7 +293,8 @@ def filter_pretraining_events(run_dir, events):
     except:
         # For runs where we didn't pretrain
         return
-    for tag in events:
+    tags = list(events.keys())
+    for tag in tags:
         events[tag] = [(t, v) for t, v in events[tag] if t >= training_start_timestamp]
         if not events[tag]:
             del events[tag]
