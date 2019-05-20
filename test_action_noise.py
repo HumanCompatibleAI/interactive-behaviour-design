@@ -2,8 +2,7 @@ import argparse
 import multiprocessing
 import queue
 import random
-import time
-from collections import Counter, defaultdict
+from collections import defaultdict
 from multiprocessing import Process, Queue
 
 import gym
@@ -16,9 +15,8 @@ from gym.wrappers.monitoring.video_recorder import VideoRecorder, ImageEncoder
 
 import global_variables
 from utils import EnvState
+from wrappers.breakout_reward import register as breakout_register
 from wrappers.seaquest_reward import register as seaquest_register
-from wrappers.breakout_reward import register as breakout_register, BreakoutRewardWrapper
-from wrappers.wrappers_debug import NumberFrames
 
 seaquest_register()
 breakout_register()
@@ -28,6 +26,9 @@ barrier = multiprocessing.Barrier(n_envs)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('action_selection', choices=['sample', 'correlated'])
+parser.add_argument('--correlation', type=float, default=0.99)
+parser.add_argument('--render', action='store_true')
+parser.add_argument('--seg_len', type=int, default=60)
 args = parser.parse_args()
 
 
@@ -44,6 +45,20 @@ class VideoRecorder(object):
             self.encoder = ImageEncoder(self.path, frame.shape, 60)
         self.encoder.capture_frame(frame)
 
+def compress(l):
+    l2 = []
+    prev = l[0]
+    count = 1
+    for x in l[1:]:
+        if x != prev:
+            l2.append((prev, count))
+            prev = x
+            count = 1
+        else:
+            count += 1
+    l2.append((prev, count))
+    return l2
+
 
 class Oracle():
     def __init__(self, env):
@@ -51,7 +66,7 @@ class Oracle():
         self.env = env
 
     def get_action(self):
-        if self.last_action is not None and random.random() < 0.8:
+        if self.last_action is not None and random.random() < args.correlation:
             action = self.last_action
         else:
             action = self.env.action_space.sample()
@@ -74,16 +89,17 @@ class ObsRender(Wrapper):
 
 def f(env_n, frame_queue, state_queue, best_state_queue):
     global_variables.env_creation_lock = multiprocessing.Lock()
-    env = gym.make('BreakoutNoFrameskip-v4')
-    env = BreakoutRewardWrapper(env)
-    env = NumberFrames(env)
+    env = gym.make('EnduroNoFrameskip-v4')
+    # env = BreakoutRewardWrapper(env)
+    # env = NumberFrames(env)
     gym.spaces.seed(env_n)
     env.reset()
     rewards = []
     oracle = Oracle(env)
     actions = []
     while True:
-        frame_queue.put((env_n, env.render(mode='rgb_array')))
+        if args.render:
+            frame_queue.put((env_n, env.render(mode='rgb_array')))
         if args.action_selection == 'sample':
             action = env.action_space.sample()
         elif args.action_selection == 'correlated':
@@ -94,7 +110,8 @@ def f(env_n, frame_queue, state_queue, best_state_queue):
         obs, reward, done, info = env.step(action)
         # time.sleep(1/20)
         rewards.append(reward)
-        if done or len(rewards) == 25:
+        if done or len(rewards) == args.seg_len:
+            # print(env_n, compress([env.unwrapped.get_action_meanings()[a] for a in actions]))
             if done:
                 env.reset()
             barrier.wait()
@@ -132,24 +149,23 @@ def render_loop(frame_queue, n_envs):
 
 
 def state_loop(state_queue, best_state_queue, n_envs):
-    states = {}
+    reward_state_tuples = {}
     d = defaultdict(lambda: 0)
     r = 0
     n = 0
     while True:
         env_n, reward, state = state_queue.get()
-        states[env_n] = (reward, state)
-        if len(states) == n_envs:
-            # for k, v in states.items():
-            #     print(k, v)
-            d[len(set([t[0] for t in states.values()]))] += 1
-            best_reward_state = sorted(states.values(), key=lambda tup: tup[0])[-1]
+        reward_state_tuples[env_n] = (reward, state)
+        if len(reward_state_tuples) == n_envs:
+            rewards = [tup[0] for tup in reward_state_tuples.values()]
+            if len(set(rewards)) > 1:
+                print(rewards)
+            d[len(set([t[0] for t in reward_state_tuples.values()]))] += 1
+            best_reward_state = sorted(reward_state_tuples.values(), key=lambda tup: tup[0])[-1]
             r += best_reward_state[0]
-            print(n, r)
             for _ in range(n_envs):
                 best_state_queue.put(best_reward_state[1])
-            states = {}
-            # print()
+            reward_state_tuples = {}
             n += 1
 
 
