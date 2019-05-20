@@ -44,6 +44,8 @@ def restore_global_variables(d):
 
 class RolloutWorker:
     def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n, gv_dict):
+        # Workers shouldn't take up precious GPU memory
+        os.environ["CUDA_VISIBLE_DEVICES"] = ''
         load_cpu_config(log_dir, 'rollouters')
 
         np.random.seed(worker_n)
@@ -51,8 +53,6 @@ class RolloutWorker:
         gym.spaces.seed(worker_n)
 
         restore_global_variables(gv_dict)
-        # Workers shouldn't take up precious GPU memory
-        os.environ["CUDA_VISIBLE_DEVICES"] = ''
         # Since we're in our own process, this lock isn't actually needed,
         # but other stuff expects this to be initialised
         global_variables.env_creation_lock = multiprocessing.Lock()
