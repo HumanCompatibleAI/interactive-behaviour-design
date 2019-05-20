@@ -11,6 +11,7 @@ from cloudpickle import cloudpickle
 from drlhp.pref_db import PrefDBTestTrain
 from drlhp.reward_predictor import RewardPredictor
 from global_constants import SYNC_REWARD_PREDICTOR_EVERY_N_SECONDS
+from utils import load_cpu_config
 
 
 def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
@@ -40,6 +41,8 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
                      save_ckpt_path,
                      log_dir,
                      gpu_n):
+    load_cpu_config(log_dir, 'drlhp_training')
+
     reward_predictor = cloudpickle.loads(make_reward_predictor_fn_cloudpickle)('training', gpu_n)  # type: RewardPredictor
     pref_db = PrefDBTestTrain()
     logger = easy_tf_log.Logger(os.path.join(log_dir, 'drlhp_train_loop'))

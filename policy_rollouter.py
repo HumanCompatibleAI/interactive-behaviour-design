@@ -19,7 +19,7 @@ from global_constants import ROLLOUT_FPS
 from global_variables import RolloutMode, RolloutRandomness
 from rollouts import CompressedRollout
 from utils import EnvState, get_noop_action, save_video, make_small_change, \
-    find_latest_checkpoint
+    find_latest_checkpoint, load_cpu_config
 from wrappers.util_wrappers import ResetMode
 
 
@@ -44,6 +44,8 @@ def restore_global_variables(d):
 
 class RolloutWorker:
     def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n, gv_dict):
+        load_cpu_config(log_dir, 'rollouters')
+
         np.random.seed(worker_n)
         # Important so that different workers get different actions from env.action_space.sample()
         gym.spaces.seed(worker_n)

@@ -43,7 +43,8 @@ from policy_rollouter import PolicyRollouter
 from reward_switcher import RewardSelector
 from rollouts import RolloutsByHash
 from segments import monitor_segments_dir_loop, write_segments_loop
-from utils import find_latest_checkpoint, MemoryProfiler
+from utils import find_latest_checkpoint, MemoryProfiler, configure_cpus, \
+    load_cpu_config
 from web_app.app import run_web_app
 from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro
 from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
@@ -81,11 +82,15 @@ def main():
     args, log_dir = parse_args()
     # check_env(args.env)
 
+    assert args.n_envs == 16
+    configure_cpus(args.log_dir, args.cpus)
+    load_cpu_config(args.log_dir, 'main')
+
     # Prevent list_local_devices taking up all GPU memory
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
-    sess = tf.Session(config=config)
-    gpu_ns = [x.name.split(':')[2] for x in device_lib.list_local_devices() if x.device_type == 'GPU']
+    gpu_ns = [x.name.split(':')[2] for x in device_lib.list_local_devices(session_config=config) if x.device_type == 'GPU']
+
 
     np.random.seed(args.seed)
     random.seed(args.seed)
