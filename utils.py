@@ -494,14 +494,7 @@ def configure_cpus(log_dir, cpus):
     else:
         a, b = map(int, cpus.split('-'))
         all_cpus = list(range(a, b))
-    if len(all_cpus) == 24:
-        main_cpus = all_cpus[:18]  # 18; 16 for RL and envs, 2 spare
-        rollouter_cpus = all_cpus[18:22]  # 4
-        drlhp_training_cpus = all_cpus[22:24]  # 2
-    elif len(all_cpus) == 32:
-        main_cpus = all_cpus[:24]  # 24; 22 for RL and envs, 2 spare
-        rollouter_cpus = all_cpus[24:28]  # 4
-        drlhp_training_cpus = all_cpus[28:32]  # 4
-    else:
-        raise Exception("Not sure how to use {} CPUs".format(len(all_cpus)))
+    rollouter_cpus = [all_cpus.pop() for _ in range(4)]
+    drlhp_training_cpus = [all_cpus.pop() for _ in range(4)]
+    main_cpus = all_cpus
     save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus)
