@@ -312,6 +312,15 @@ def get_values_by_step(events, metric, max_steps):
     return steps, values
 
 
+def get_values_by_prefs(events, metric):
+    steps, values = interpolate_steps(events[metric.tag], events['pref_db/added_prefs'])
+    return steps, values
+
+def get_values_by_demos(events, metric):
+    steps, values = interpolate_steps(events[metric.tag], events['demonstrations/added_demonstrations'])
+    return steps, values
+
+
 def get_values_by_time(events, metric, max_hours):
     timestamps, values = zip(*events[metric.tag])
     if max_hours:
@@ -337,7 +346,7 @@ def add_steps_to_bc_run(events_by_env_name_by_run_type_by_seed, max_steps):
         # Find non-BC run that we keep the least of
         min_frac = float('inf')
         events_with_min_frac = None
-        for run_type in ['DRLHP', 'SDRLHP', 'SDRLHPNP', 'SDRLHP-BC', 'RL']:
+        for run_type in ['DRLHP', 'DRLHPD', 'SDRLHP', 'SDRLHPNP', 'SDRLHP-BC', 'RL']:
             if run_type not in events_by_env_name_by_run_type_by_seed[env_name]:
                 continue
             for seed in events_by_env_name_by_run_type_by_seed[env_name][run_type].keys():
@@ -395,7 +404,7 @@ def main():
         except Exception as e:
             print(e)
             continue
-        if run_type in ['DRLHP', 'SDRLHP', 'SDRLHP-BC', 'SDRLHPNP']:
+        if run_type in ['DRLHP', 'DRLHPD', 'SDRLHP', 'SDRLHP-BC', 'SDRLHPNP']:
             filter_pretraining_events(run_dir.path, events)
         drop_first_event(events)
         make_timestamps_relative_hours(events)
@@ -406,13 +415,17 @@ def main():
 
     time_values_fn = partial(get_values_by_time, max_hours=args.max_hours)
     step_values_fn = partial(get_values_by_step, max_steps=args.max_steps)
+    prefs_values_fn = get_values_by_prefs
+    demos_values_fn = get_values_by_demos
 
     for env_name, events_by_run_type_by_seed in events_by_env_name_by_run_type_by_seed.items():
         print(f"Plotting {env_name}...")
         metrics = detect_metrics(env_name, args.train_env_key)
         for value_fn, x_type, x_label, x_lim in [
             (time_values_fn, 'time', 'Hours', args.max_hours),
-            (step_values_fn, 'step', 'Total environment steps', args.max_steps)]:
+            (step_values_fn, 'step', 'Total environment steps', args.max_steps),
+            (prefs_values_fn, 'prefs', 'Prefs', None),
+            (demos_values_fn, 'demos', 'Demos', None)]:
             for metric_n, metric in enumerate(metrics):
                 figure(metric_n)
                 ticklabel_format(axis='x', style='scientific', scilimits=(0, 0))
