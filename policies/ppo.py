@@ -235,6 +235,7 @@ class PPOPolicy(Policy):
                 fetches = self.model.train_rl_bc(lrnow, cliprangenow, *slices, **train_kwargs)
                 stats_keys = list(fetches.keys())
                 stats.append(list(fetches.values()))
+        self.n_updates += 1
 
         assert stats_keys is not None
         stats = np.array(stats)
@@ -244,11 +245,11 @@ class PPOPolicy(Policy):
         if self.n_updates and self.n_updates % self.log_interval == 0:
             n_serial_steps = self.n_updates * self.runner.nsteps
             n_total_steps = n_serial_steps * self.n_envs
+            steps_per_second = self.step_measure.measure(n_total_steps)
+            self.logger.logkv('policy_{}/n_updates'.format(self.name), self.n_updates)
             self.logger.logkv('policy_{}/n_serial_steps'.format(self.name), n_serial_steps)
             self.logger.logkv('policy_{}/n_total_steps'.format(self.name), n_total_steps)
-            steps_per_second = self.step_measure.measure(n_total_steps)
-            self.logger.logkv('policy_{}/n_total_steps_per_second'.format(self.name),
-                              steps_per_second)
+            self.logger.logkv('policy_{}/n_total_steps_per_second'.format(self.name), steps_per_second)
             for n, stat_key in enumerate(stats_keys):
                 self.logger.logkv('policy_{}/{}'.format(self.name, stat_key), stats[n])
 
