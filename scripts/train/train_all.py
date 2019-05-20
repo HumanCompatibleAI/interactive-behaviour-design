@@ -71,6 +71,8 @@ for seed in seeds:
         sdrlhp_np_extra_args += ' --no_save_states'
         if 'Breakout' in env_id:
             sdrlhp_np_extra_args += ' --cur_policy_randomness correlated_random_action --rollout_random_action_prob 0.8 --rollout_random_correlation 0.7'
+        if 'Enduro' in env_id:
+            sdrlhp_np_extra_args += ' --cur_policy_randomness correlated_random_action --rollout_random_action_prob 1.0 --rollout_random_correlation 0.99'
 
         print("python3 scripts/train/auto_train_prefs.py "
               f"{env_id} reward_only sdrlhp {run_name}-sdrlhpnp --seed {seed} --disable_redo --extra_args ' {sdrlhp_np_extra_args}' {test_args} --gpus '{args.gpus}'")
