@@ -34,7 +34,7 @@ prefs_envs = [
 for seed in seeds:
     for env_shortname, env_id in rl_envs:
         run_name = f"{env_shortname}-{seed}-rl"
-        print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} --gpus {args.gpus}")
+        print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} --gpus '{args.gpus}'")
 
 for seed in seeds:
     for env_shortname, env_id in prefs_envs:
