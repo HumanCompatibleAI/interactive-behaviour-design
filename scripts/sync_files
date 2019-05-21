@@ -1,0 +1,13 @@
+function s {
+    host=$1
+    filter=$2
+    ssh $host find "interactive-behaviour-design/runs/$filter" -name 'events*' | sed 's,runs/,runs/./,g' > files
+    rsync --relative -av --files-from=files "$host": .
+}
+
+s p2-8xlarge-0 'breakout*sdrlhpnp*'
+s p2-16xlarge-0 'seaquest*drlhpd*'
+s p2-16xlarge-0 'breakout*drlhpd*'
+s p3-8xlarge-0 'seaquest*sdrlhpnp*'
+s svm 'enduro*drlhpd*'
+s perceptron 'enduro*sdrlhpnp*'
