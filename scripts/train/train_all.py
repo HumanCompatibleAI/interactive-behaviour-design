@@ -66,6 +66,10 @@ for seed in seeds:
         print("python3 scripts/train/auto_train_prefs.py "
               f"{env_id} reward_only demonstrations {run_name}-sdrlhp --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}'")
 
+        # SDRLHP with label rate decay
+        print("python3 scripts/train/auto_train_prefs.py "
+              f"{env_id} reward_only demonstrations {run_name}-sdrlhpd --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' --decay_label_rate")
+
         # SDRLHP-NP
         sdrlhp_np_extra_args = extra_args
         sdrlhp_np_extra_args += ' --no_save_states'
