@@ -83,8 +83,8 @@ def main():
     # check_env(args.env)
 
     assert args.n_envs == 16
-    configure_cpus(args.log_dir, args.cpus)
-    load_cpu_config(args.log_dir, 'main')
+    configure_cpus(log_dir, args.cpus)
+    load_cpu_config(log_dir, 'main')
 
     # Prevent list_local_devices taking up all GPU memory
     config = tf.ConfigProto()
