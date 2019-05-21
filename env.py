@@ -83,13 +83,17 @@ def make_env(env_id, num_env, seed, experience_dir,
                 env = Monitor(env, experience_dir,
                               lambda n: n and n % render_every_nth_episode == 0)  # save videos
                 env = SaveEpisodeObs(env, episode_obs_queue)
-                if not render_segments:
-                    env = DummyRender(env)
                 if global_variables.segment_save_mode == 'single_env':
+                    if not render_segments:
+                        env = DummyRender(env)
                     env = SaveSegments(env, segments_queue)
                 if save_states:
                     # This is slow, so we disable it sometimes
                     env = SaveMidStateWrapper(env, reset_state_receiver_queue)
+
+            if global_variables.segment_save_mode == 'multi_env' and not render_segments:
+                # Segments are saved by VecSaveSegments after SubprocVecEnv
+                env = DummyRender(env)
 
             return env
 
