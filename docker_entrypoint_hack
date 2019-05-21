@@ -1,0 +1,9 @@
+#!/bin/bash
+
+set -e
+
+# Set up display; otherwise rendering will fail
+Xvfb -screen 0 1024x768x24 &
+export DISPLAY=:0
+
+exec "$@"

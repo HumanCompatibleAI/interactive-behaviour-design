@@ -35,3 +35,5 @@ RUN cd interactive-behaviour-design && pipenv run pip uninstall -y gym && cd gym
 # We download code from S3; remove current code to avoid any confusion
 # (Keep Pipfile so we can still activate the virtualenv)
 RUN find interactive-behaviour-design -maxdepth 1 -mindepth 1 -not -name 'Pipfile' -exec rm -rf {} \;
+
+COPY docker_entrypoint_hack /entrypoint
