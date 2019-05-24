@@ -44,9 +44,10 @@ from reward_switcher import RewardSelector
 from rollouts import RolloutsByHash
 from segments import monitor_segments_dir_loop, write_segments_loop
 from utils import find_latest_checkpoint, MemoryProfiler, configure_cpus, \
-    load_cpu_config
+    load_cpu_config, unwrap_to
 from web_app.app import run_web_app
 from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro
+from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
     VecSaveSegments
 
@@ -128,7 +129,7 @@ def main():
 
     global_variables.env_creation_lock = threading.Lock()
 
-    demonstrations_env = env.demonstrations_env
+    demonstrations_env = unwrap_to(env.env_fn_0, StateBoundaryWrapper).env
     if args.no_render_demonstrations:
         demonstrations_env = DummyRender(demonstrations_env)
     demonstrations_env.reset()

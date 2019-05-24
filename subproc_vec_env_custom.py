@@ -66,8 +66,7 @@ class CustomSubprocVecEnv(VecEnv):
         observation_space, action_space = self.remotes[0].recv()
         self.viewer = None
 
-        self.demonstrations_env = unwrap_to(env_fns[0](), StateBoundaryWrapper).env
-        self.spec = self.demonstrations_env.spec
+        self.env_fn_0 = env_fns[0]
 
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
