@@ -3,6 +3,8 @@ from multiprocessing import Process, Pipe
 import numpy as np
 
 from baselines.common.vec_env import VecEnv, CloudpickleWrapper, VecEnvWrapper
+from utils import unwrap_to
+from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 
 """
 SubprocVencEnv which doesn't automatically reset the environment, so that we actually get the 'done' observation
@@ -63,6 +65,10 @@ class CustomSubprocVecEnv(VecEnv):
         self.remotes[0].send(('get_spaces', None))
         observation_space, action_space = self.remotes[0].recv()
         self.viewer = None
+
+        self.demonstrations_env = unwrap_to(env_fns[0](), StateBoundaryWrapper).env
+        self.spec = self.demonstrations_env.spec
+
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
     def step_async(self, actions):
