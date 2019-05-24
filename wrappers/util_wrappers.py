@@ -482,13 +482,11 @@ class VecSaveSegments(CustomVecEnvWrapper):
                 self._reset_segment(n)
         return obses, rewards, dones, infos
 
-    def reset(self):
-        # We assume we're wrapping a SubprocVecEnv, which normally doesn't need to be reset, so that if we
-        # receive an explicit reset, we're doing something unusual. We might be part-way through an episode and only
-        # have a couple of frames in the segment so far, so let's play it safe by dropping the current segment.
-        for n in range(self.num_envs):
-            self._reset_segment(n)
-        return self.venv.reset()
+    def reset_one_env(self, env_n):
+        if self.segment_frames[env_n]:
+            # We should have seen 'done' during 'step'
+            raise RuntimeError("segment_frames[{0}] not empty on env[{0}] reset".format(env_n))
+        return super().reset_one_env(env_n)
 
 
 class SaveSegments(Wrapper):
