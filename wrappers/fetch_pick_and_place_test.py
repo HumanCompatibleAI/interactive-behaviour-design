@@ -3,7 +3,9 @@ import numpy as np
 from gym import Wrapper, ObservationWrapper
 from gym.spaces import Discrete, Box
 
+from wrappers.fetch_pick_and_place import RandomInitialPosition
 from wrappers.fetch_pick_and_place_register import register as pp_register
+from wrappers.wrappers_debug import DrawRewards
 
 
 class RenderObs(ObservationWrapper):
@@ -49,21 +51,21 @@ class FetchPickAndPlaceDiscreteActions(Wrapper):
         if action == self.get_action_meanings().index('NOOP'):
             caction = [0.0, 0.0, 0.0, 0.0]
         elif action == self.get_action_meanings().index('BACKWARD'):
-            caction = [1.0, 0.0, 0.0, 0.0]
+            caction = [0.1, 0.0, 0.0, 0.0]
         elif action == self.get_action_meanings().index('FORWARD'):
-            caction = [-1.0, 0.0, 0.0, 0.0]
+            caction = [-0.1, 0.0, 0.0, 0.0]
         elif action == self.get_action_meanings().index('RIGHT'):
-            caction = [0.0, 1.0, 0.0, 0.0]
+            caction = [0.0, 0.1, 0.0, 0.0]
         elif action == self.get_action_meanings().index('LEFT'):
-            caction = [0.0, -1.0, 0.0, 0.0]
+            caction = [0.0, -0.1, 0.0, 0.0]
         elif action == self.get_action_meanings().index('UP'):
-            caction = [0.0, 0.0, 1.0, 0.0]
+            caction = [0.0, 0.0, 0.1, 0.0]
         elif action == self.get_action_meanings().index('DOWN'):
-            caction = [0.0, 0.0, -1.0, 0.0]
+            caction = [0.0, 0.0, -0.1, 0.0]
         elif action == self.get_action_meanings().index('OPEN'):
-            caction = [0.0, 0.0, 0.0, 1.0]
+            caction = [0.0, 0.0, 0.0, 0.1]
         elif action == self.get_action_meanings().index('CLOSE'):
-            caction = [0.0, 0.0, 0.0, -1.0]
+            caction = [0.0, 0.0, 0.0, -0.1]
         else:
             raise RuntimeError(action)
 
@@ -81,8 +83,10 @@ def test_play(env_id):
     print(f"Using env {env_id}")
     env = gym.make(env_id)
     env._max_episode_steps = None
-    env._max_episode_seconds = 5
+    env._max_episode_seconds = 1
+    env = RandomInitialPosition(env)
     env = SaveObs(env)
+    env = DrawRewards(env)
     env = RenderObs(env)
     env = FetchPickAndPlaceDiscreteActions(env)
 
@@ -95,5 +99,4 @@ def test_play(env_id):
 
 if __name__ == '__main__':
     pp_register()
-    test_play(
-        'FetchPickAndPlace-Repeat1-BinaryGripper-5InitialBlockPos-FixedGoal-NoGripperBonus-ET-FastGripper-VanillaRL-PartialObs-v0')
+    test_play('FetchPickAndPlace-Repeat1-ContGripper-NoGripObs-1InitialBlockPos-FixedGoal-Delta-GripperBonuses-v0')
