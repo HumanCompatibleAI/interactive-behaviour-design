@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import faulthandler # foo
+import faulthandler
 import glob
 import multiprocessing
 import os
