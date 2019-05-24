@@ -248,6 +248,24 @@ def main():
     if args.load_drlhp_prefs:
         pref_db.load(args.load_drlhp_prefs)
 
+    hasLoadedDemos = False
+    hasLoadedPrefs = False
+    if args.load_sdrlhp_demos:
+        rollouts_pkl_path = args.load_sdrlhp_demos
+        if os.path.exists(rollouts_pkl_path):
+            print("Loading demonstration rollouts...")
+            demonstration_rollouts.load(rollouts_pkl_path)
+            hasLoadedDemos = True
+        else:
+            print(f"Warning: {rollouts_pkl_path} not found")
+    if args.load_sdrlhp_prefs:
+        pref_pkl_path = args.load_sdrlhp_prefs
+        if os.path.exists(pref_pkl_path):
+            print("Loading preferences...")
+            pref_db.load(pref_pkl_path)
+            hasLoadedPrefs = True
+        else:
+            print(f"Warning: {pref_pkl_path} not found")
     if args.load_experience_dir:
         print("Loading classifier data...")
         try:
@@ -256,13 +274,13 @@ def main():
             print(e)
 
         pref_pkl_path = os.path.join(args.load_experience_dir, 'pref_db.pkl')
-        if os.path.exists(pref_pkl_path):
-            print("Loading preferences...")
+        if os.path.exists(pref_pkl_path) and not hasLoadedDemos:
+            print(f"Loading preferences from {args.load_experience_dir}...")
             pref_db.load(pref_pkl_path)
 
         rollouts_pkl_path = os.path.join(args.load_experience_dir, 'demonstration_rollouts.pkl')
-        if os.path.exists(rollouts_pkl_path):
-            print("Loading demonstration rollouts...")
+        if os.path.exists(rollouts_pkl_path) and not hasLoadedPrefs:
+            print(f"Loading demonstration rollouts from {args.load_experience_dir}...")
             demonstration_rollouts.load(rollouts_pkl_path)
 
         print("Loading reset states...")
