@@ -22,6 +22,8 @@ ENV LANG C.UTF-8
 
 COPY . /interactive-behaviour-design
 
+# This isn't a perfect solution: different branches could have their own versions of the submodules
+# which could have different requirements. But this is good enough for now.
 RUN cd interactive-behaviour-design && pipenv run pip install tensorflow==1.13.1 && pipenv sync
 # Fix "AttributeError: module '_Box2D' has no attribute 'RAND_LIMIT_swigconstant'"
 RUN cd interactive-behaviour-design && pipenv run pip uninstall -y box2d-py && pipenv run pip install box2d-py
