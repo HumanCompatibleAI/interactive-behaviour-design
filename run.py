@@ -1,69 +1,58 @@
 #!/usr/bin/env python3
 
-import os
-import psutil
-import queue
-import random
-
-from cloudpickle import cloudpickle
-from gym.wrappers import Monitor
-
-if 'CUDA_VISIBLE_DEVICES' not in os.environ:
-    if random.random() < 0.5:
-        d = '0'
-    else:
-        d = '1'
-    os.environ['CUDA_VISIBLE_DEVICES'] = d
-
-os.environ['OMPI_MCA_btl_base_warn_component_unused'] = '0'
-os.environ['OPENAI_LOG_FORMAT'] = ''
-
-import random
-
-import numpy as np
-from gym.envs.robotics.robot_env import RobotEnv
-
-from basicfetch import basicfetch
-from global_constants import MAX_SEGS
-from policies.fetch import FetchAction, FetchTD3Policy
-from policies.policy_collection import PolicyCollection
-from policies.ppo import PPOPolicy
-
 import faulthandler
 import glob
 import multiprocessing
+import os
 import os.path as osp
 import platform
+import queue
+import random
 import re
 import threading
 import time
-import traceback
 from multiprocessing import Queue, Process
 
+import numpy as np
+import psutil
+import tensorflow as tf
+from cloudpickle import cloudpickle
 from gym.envs.atari import AtariEnv
 from gym.envs.box2d import LunarLander
 from gym.envs.mujoco import MujocoEnv
 from gym.envs.robotics import FetchEnv
+from gym.envs.robotics.robot_env import RobotEnv
+from gym.wrappers import Monitor
+from tensorflow.python.client import device_lib
 
 import global_variables
 from a2c.policies import mlp, nature_cnn
+from basicfetch import basicfetch
+from checkpointer import Checkpointer
 from classifier_buffer import ClassifierDataBuffer
 from classifier_collection import ClassifierCollection
 from drlhp.pref_db import PrefDBTestTrain
 from drlhp.reward_predictor_core_network import net_mlp, net_cnn
 from env import make_env
+from global_constants import MAX_SEGS
 from params import parse_args
-from rollouts import RolloutsByHash
-from utils import find_latest_checkpoint, MemoryProfiler
-from segments import monitor_segments_dir_loop, write_segments_loop
-from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward
-from wrappers.util_wrappers import VecRewardSwitcherWrapper, ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
-    LogEpisodeStats, SaveMidStateWrapper, StateBoundaryWrapper
+from policies.fetch import FetchAction, FetchTD3Policy
+from policies.policy_collection import PolicyCollection
+from policies.ppo import PPOPolicy
 from policy_rollouter import PolicyRollouter
-from checkpointer import Checkpointer
+from reward_predictor import RewardPredictor
+from reward_switcher import RewardSelector
+from rollouts import RolloutsByHash
+from segments import monitor_segments_dir_loop, write_segments_loop
+from training import drlhp_load_loop, drlhp_train_loop
+from utils import find_latest_checkpoint, MemoryProfiler, load_cpu_config, configure_cpus
 from web_app.app import run_web_app
-import tensorflow as tf
+from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward
+from wrappers.util_wrappers import VecRewardSwitcherWrapper, ResetMode, ResetStateCache, VecLogRewards, LogEpisodeStats, \
+    SaveMidStateWrapper, StateBoundaryWrapper, VecSaveSegments
 
+os.environ['OMPI_MCA_btl_base_warn_component_unused'] = '0'
+os.environ['OPENAI_LOG_FORMAT'] = ''
 tf.logging.set_verbosity(tf.logging.ERROR)
 
 lunar_lander_reward.register()
@@ -120,6 +109,16 @@ def check_env(env_id):
 def main():
     args, log_dir = parse_args()
     # check_env(args.env)
+
+    assert args.n_envs == 16
+    configure_cpus(log_dir, args.cpus)
+    load_cpu_config(log_dir, 'main')
+
+    # Prevent list_local_devices taking up all GPU memory
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    gpu_ns = [x.name.split(':')[2] for x in device_lib.list_local_devices(session_config=config) if x.device_type == 'GPU']
+
 
     np.random.seed(args.seed)
     random.seed(args.seed)
@@ -230,7 +229,7 @@ def main():
                                        show_from_end_seconds=args.show_from_end,
                                        no_render_demonstrations=args.no_render_demonstrations)
 
-    Process(target=monitor_segments_dir_loop, args=(segments_dir, MAX_SEGS)).start()
+    Process(target=monitor_segments_dir_loop, args=(segments_dir, global_variables.max_segs)).start()
     Process(target=write_segments_loop, args=[segments_queue, segments_dir]).start()
 
     # Create initial stuff
@@ -271,31 +270,6 @@ def main():
                                          if os.path.exists(ep.vid_path)])
         classifier_data_buffer.num_episodes_from_exp_dir = num_eps_in_experience_dir
 
-    run_drlhp_training = multiprocessing.Value('B', 0)
-
-    def f():
-        while True:
-            if run_drlhp_training.value == 0:
-                time.sleep(1.0)
-                continue
-
-            if not pref_db.train:
-                print("No preferences yet; skipping DRLHP training")
-                time.sleep(1.0)
-                continue
-
-            try:
-                reward_switcher_wrapper.reward_predictor.train(pref_db.train.copy(),
-                                                               pref_db.test.copy(),
-                                                               val_interval=1)
-            except:
-                print("Exception while training reward predictor:")
-                traceback.print_exc()
-                time.sleep(1.0)
-
-    train_thread = threading.Thread(target=f)
-    train_thread.start()
-
     if args.load_policy_ckpt_dir:
         meta_paths = glob.glob(os.path.join(args.load_policy_ckpt_dir, 'policy*.meta'))
         policy_names = {re.search('policy-([^-]*)-', os.path.basename(p)).group(1)
@@ -313,25 +287,60 @@ def main():
         print("Adding classifier for label '{}'...".format(label_name))
         classifier.add_classifier(label_name)
 
+    if global_variables.segment_save_mode == 'multi_env':
+        env = VecSaveSegments(env, segments_queue)
     env = VecLogRewards(env, os.path.join(log_dir, 'vec_rewards'))
-    env = VecRewardSwitcherWrapper(env, classifier,
-                                   reward_predictor_network,
-                                   reward_predictor_network_args,
-                                   reward_predictor_std,
-                                   log_dir)
-    # We need to save a reference to this so that the web interface can call methods on it
-    reward_switcher_wrapper = env
-    env = VecLogRewards(env, os.path.join(log_dir, 'vec_rewards_post_switcher'), postfix='_post_switcher')
 
     policies.env = env
 
-    checkpointer = Checkpointer(ckpt_dir,
-                                policies, reward_switcher_wrapper.reward_predictor, classifier)
+    ckpt_dir = os.path.join(log_dir, 'checkpoints')
+    pref_db_ckpt_name = 'pref_dbs.pkl'
+    checkpointer = Checkpointer(ckpt_dir, policies, classifier, pref_db, pref_db_ckpt_name)
     checkpointer.checkpoint()
 
-    if args.load_drlhp_ckpt_dir:
-        last_ckpt_name = find_latest_checkpoint(args.load_drlhp_ckpt_dir, 'drlhp_reward_predictor')
-        reward_switcher_wrapper.reward_predictor.load(last_ckpt_name)
+    reward_predictor_log_dir = os.path.join(log_dir, 'drlhp')
+    obs_shape = env.observation_space.shape
+
+    def make_reward_predictor_fn(name, gpu_n):
+        return RewardPredictor(network=reward_predictor_network, network_args=reward_predictor_network_args,
+                               log_dir=reward_predictor_log_dir, obs_shape=obs_shape,
+                               r_std=reward_predictor_std,
+                               name=name, gpu_n=gpu_n)
+
+    if gpu_ns:
+        n = gpu_ns[0]
+    else:
+        n = None
+    reward_predictor = make_reward_predictor_fn('inference', gpu_n=n)
+
+    # Reward predictor training loop
+    # Loads preferences, trains, saved checkpoint
+    reward_predictor_ckpt_name = 'reward_predictor.ckpt'
+    context = multiprocessing.get_context('spawn')
+    run_drlhp_training = context.Value('B', 0)
+    if gpu_ns:
+        if len(gpu_ns) > 1:
+            n = gpu_ns[1]
+        else:
+            n = gpu_ns[0]
+    else:
+        n = None
+    drlhp_train_process = context.Process(
+        target=drlhp_train_loop,
+        args=(cloudpickle.dumps(make_reward_predictor_fn),
+              run_drlhp_training,
+              os.path.join(ckpt_dir, pref_db_ckpt_name),
+              os.path.join(ckpt_dir, reward_predictor_ckpt_name),
+              log_dir,
+              n))
+    drlhp_train_process.start()
+
+    # Loads checkpoint generated by train loop every so often
+    drlhp_sync_thread = threading.Thread(target=drlhp_load_loop,
+                                         args=(reward_predictor,
+                                               os.path.join(ckpt_dir, reward_predictor_ckpt_name),
+                                               log_dir))
+    drlhp_sync_thread.start()
 
     if args.load_classifier_ckpt:
         classifier_names_path = os.path.join(args.load_classifier_ckpt, 'classifier_names.txt')
@@ -346,6 +355,9 @@ def main():
                 print("Added classifier '{}'".format(classifier_name))
         last_ckpt_name = find_latest_checkpoint(args.load_classifier_ckpt, 'classifiers-')
         classifier.load_checkpoint(last_ckpt_name)
+
+    reward_selector = RewardSelector(classifier, reward_predictor)
+    global_variables.reward_selector = reward_selector
 
     env.reset()
 
@@ -365,7 +377,7 @@ def main():
 
     run_web_app(classifiers=classifier,
                 policies=policies,
-                reward_switcher_wrapper=reward_switcher_wrapper,
+                reward_selector=reward_selector,
                 experience_buffer=classifier_data_buffer,
                 log_dir=log_dir,
                 port=args.port,

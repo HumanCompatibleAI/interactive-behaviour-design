@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os.path as osp
 import time
@@ -17,22 +18,28 @@ MIN_L2_REG_COEF = 0.1
 
 class RewardPredictor:
 
-    def __init__(self, obs_shape, network, network_args, r_std, lr=1e-4, log_dir=None, seed=None):
+    def __init__(self, obs_shape, network, network_args, r_std, name, lr=1e-4, log_dir=None, seed=None, gpu_n=None):
         self.obs_shape = obs_shape
         graph = tf.Graph()
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(graph=graph, config=config)
 
+        if gpu_n is None:
+            device_context = contextlib.suppress()
+        else:
+            device_context = graph.device(f'/gpu:{gpu_n}')
+
         with graph.as_default():
             if seed is not None:
                 tf.set_random_seed(seed)
             self.l2_reg_coef = MIN_L2_REG_COEF
-            self.rps = [RewardPredictorNetwork(core_network=network,
-                                               network_args=network_args,
-                                               obs_shape=obs_shape,
-                                               lr=lr)]
-            self.init_op = tf.global_variables_initializer()
+            with device_context:
+                self.rps = [RewardPredictorNetwork(core_network=network,
+                                                   network_args=network_args,
+                                                   obs_shape=obs_shape,
+                                                   lr=lr)]
+                self.init_op = tf.global_variables_initializer()
             # Why save_relative_paths=True?
             # So that the plain-text 'checkpoint' file written uses relative paths,
             # which seems to be needed in order to avoid confusing saver.restore()
@@ -41,9 +48,9 @@ class RewardPredictor:
             self.summaries = self.add_summary_ops()
 
         self.train_writer = tf.summary.FileWriter(
-            osp.join(log_dir, 'reward_predictor', 'train'), flush_secs=5)
+            osp.join(log_dir, f'reward_predictor_{name}', 'train'), flush_secs=5)
         self.test_writer = tf.summary.FileWriter(
-            osp.join(log_dir, 'reward_predictor', 'test'), flush_secs=5)
+            osp.join(log_dir, f'reward_predictor_{name}', 'test'), flush_secs=5)
 
         self.n_steps = 0
         self.r_norm_limited = LimitedRunningStat()
@@ -51,7 +58,7 @@ class RewardPredictor:
         self.r_std = r_std
 
         self.logger = easy_tf_log.Logger()
-        self.logger.set_log_dir(osp.join(log_dir, 'reward_predictor', 'misc'))
+        self.logger.set_log_dir(osp.join(log_dir, f'reward_predictor_{name}', 'misc'))
         self.reward_call_n = 0
 
         self.log_interval = 20

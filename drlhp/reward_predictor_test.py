@@ -31,7 +31,8 @@ class TestRewardPredictor(unittest.TestCase):
                              network_args=net_args,
                              r_std=0.1,
                              log_dir=tmp_dir,
-                             seed=0)
+                             seed=0,
+                             name='test')
         with rp.sess.graph.as_default():
             manual_l2_loss = tf.add_n([tf.norm(v) for v in tf.trainable_variables()])
 
@@ -48,7 +49,7 @@ class TestRewardPredictor(unittest.TestCase):
                      val_interval=1000, verbose=False)
         l2_end = rp.sess.run(manual_l2_loss)
         # Threshold set empirically while writing test
-        self.assertGreater(l2_end, l2_start + 0.1)
+        self.assertTrue(l2_end > l2_start + 0.1)
 
         # Test 2: if we turn it back on, does it go down?
         rp.l2_reg_coef = MIN_L2_REG_COEF

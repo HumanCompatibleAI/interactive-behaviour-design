@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 import os
 from os import path as osp
 
+import global_variables
 from baselines import logger
 from utils import save_args, get_git_rev
 
@@ -33,14 +34,31 @@ def parse_args():
     parser.add_argument('--redo_policy', action='store_true')
     parser.add_argument('--noisy_policies', action='store_true')
     parser.add_argument('--max_demonstration_length', type=int)
+    parser.add_argument('--segment_save_mode', choices=['single_env', 'multi_env'], default='multi_env')
     group = parser.add_mutually_exclusive_group()
     group.add_argument('--log_dir')
     seconds_since_epoch = str(int(time.time()))
     group.add_argument('--run_name', default='test-run_{}'.format(seconds_since_epoch))
     parser.add_argument('--demonstrations_buffer_len', type=int, default=3000)
     parser.add_argument('--rstd', type=float)
+    # Dylan reckons the original DRLHP selected segments from the last RL batch.
+    # We use nsteps=2048 for Atari. With 16 environments, that's an RL batch of 2048 * 16 = 32768 steps.
+    # Assuming 1.5-second segments (45 steps), that's about 728 segments per batch.
+    # 1000 is close enough.
+    parser.add_argument('--max_segs', type=int, default=1000)
+    parser.add_argument('--rollout_random_action_prob', type=float, default=0.6)
+    parser.add_argument('--rollout_random_correlation', type=float, default=0.7)
+    parser.add_argument('--rollout_mode', choices=['primitives', 'cur_policy'], default='primitives')
+    parser.add_argument('--cur_policy_randomness',
+                        choices=['sample_action', 'random_action', 'correlated_random_action'],
+                        default='random_action')
+    parser.add_argument('--cpus')
     parser.add_argument('--policy_args')
     args = parser.parse_args()
+
+    global_variables.segment_save_mode = args.segment_save_mode
+    global_variables.max_segs = args.max_segs
+    global_variables.render_segments = args.render_segments
 
     if args.render_every_nth_episode is None:
         if 'Fetch' in args.env:

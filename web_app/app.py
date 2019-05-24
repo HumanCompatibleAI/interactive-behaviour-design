@@ -6,7 +6,7 @@ import web_app.web_globals as web_globals
 from flask import Flask
 
 
-def run_web_app(classifiers, policies, reward_switcher_wrapper, experience_buffer, log_dir, port,
+def run_web_app(classifiers, policies, reward_selector, experience_buffer, log_dir, port,
                 pref_db, demo_env, policy_rollouter, demonstration_rollouts,
                 reset_mode_value, reset_state_cache, max_episode_steps_value,
                 save_state_from_proportion_through_episode_value, demonstrations_reset_mode_value,
@@ -15,7 +15,7 @@ def run_web_app(classifiers, policies, reward_switcher_wrapper, experience_buffe
     web_globals._classifiers = classifiers
     web_globals._policies = policies
     web_globals._pref_db = pref_db
-    web_globals._reward_switcher_wrapper = reward_switcher_wrapper
+    web_globals._reward_selector = reward_selector
     web_globals.global_experience_buffer = experience_buffer
     web_globals.experience_dir = osp.join(log_dir, 'experience')
     web_globals.save_dir = osp.join(log_dir, 'web')

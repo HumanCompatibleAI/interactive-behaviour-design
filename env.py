@@ -6,6 +6,7 @@ from gym.envs.atari import AtariEnv
 from gym.envs.robotics import FetchEnv
 from gym.wrappers import Monitor, TimeLimit
 
+import global_variables
 from a2c.common import gym
 from global_constants import ROLLOUT_FPS
 from subproc_vec_env_custom import CustomSubprocVecEnv
@@ -73,9 +74,15 @@ def make_env(env_id, num_env, seed, experience_dir, episode_obs_queue: multiproc
                 # We save frames for classifier labelling and segments for DRLHP from the training environment
                 # rather than the eval environment because the training environment will be exploring more
                 env = SaveEpisodeObs(env, episode_obs_queue)
+                if global_variables.segment_save_mode == 'single_env':
+                    if not render_segments:
+                        env = DummyRender(env)
+                    env = SaveSegments(env, segments_queue)
                 if not render_segments:
                     env = DummyRender(env)
-                env = SaveSegments(env, segments_queue)
+                if global_variables.segment_save_mode == 'multi_env' and not render_segments:
+                    # Segments are saved by VecSaveSegments after SubprocVecEnv
+                    env = DummyRender(env)
 
             return env
 
