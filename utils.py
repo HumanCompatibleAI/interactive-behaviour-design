@@ -3,21 +3,23 @@ import gzip
 import json
 import lzma
 import multiprocessing
+import os
 import pickle
 import queue
+import random
 import subprocess
 import sys
+import tempfile
 import time
 from collections import deque
 from functools import partial
 from multiprocessing import Queue
+from os import path as osp
 from threading import Thread
 
 import cv2
 import numpy as np
-import os
-import random
-import tempfile
+import tensorflow as tf
 from gym import Wrapper, Env
 from gym.envs.atari import AtariEnv
 from gym.envs.box2d import LunarLander
@@ -26,8 +28,6 @@ from gym.envs.robotics import FetchEnv
 from gym.envs.robotics.robot_env import RobotEnv
 from gym.spaces import Box, Discrete
 from gym.wrappers.monitoring.video_recorder import ImageEncoder
-from os import path as osp
-import tensorflow as tf
 
 import global_variables
 from wrappers.dummy_env import DummyEnv
@@ -142,6 +142,8 @@ def find_latest_checkpoint(ckpt_dir, name):
         raise Exception(f"Couldn't find checkpoint matching '{name}'")
     meta_paths = sorted(meta_paths, key=lambda f: os.path.getmtime(f))
     ckpt_names = [path.replace('.meta', '') for path in meta_paths]
+    if not ckpt_names:
+        raise Exception(f"Couldn't find checkpoint matching '{name}'")
     last_ckpt_name = ckpt_names[-1]
     return last_ckpt_name
 
@@ -251,13 +253,14 @@ def set_env_state(env, state):
 
 
 class EnvState(CompressedAttributes):
-    def __init__(self, env: Env, obs: np.ndarray, done, step_n=None):
+    def __init__(self, env: Env, obs: np.ndarray, done, step_n=None, birthtime=None):
         CompressedAttributes.__init__(self, 'gzip')
         self.obs = obs
         self.done = done
-        self.step_n = step_n
         self.state = get_env_state(env)
         self._env_pickle = pickle.dumps(env)
+        self.step_n = step_n
+        self.birthtime = birthtime
 
     @property
     def env(self):
@@ -498,4 +501,3 @@ def configure_cpus(log_dir, cpus):
     drlhp_training_cpus = [all_cpus.pop() for _ in range(4)]
     main_cpus = all_cpus
     save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus)
-
