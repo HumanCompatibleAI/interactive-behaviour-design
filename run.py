@@ -48,8 +48,10 @@ from training import drlhp_load_loop, drlhp_train_loop
 from utils import find_latest_checkpoint, MemoryProfiler, load_cpu_config, configure_cpus
 from web_app.app import run_web_app
 from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward
+from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 from wrappers.util_wrappers import VecRewardSwitcherWrapper, ResetMode, ResetStateCache, VecLogRewards, LogEpisodeStats, \
-    SaveMidStateWrapper, StateBoundaryWrapper, VecSaveSegments
+    SaveMidStateWrapper, VecSaveSegments
+
 
 os.environ['OMPI_MCA_btl_base_warn_component_unused'] = '0'
 os.environ['OPENAI_LOG_FORMAT'] = ''

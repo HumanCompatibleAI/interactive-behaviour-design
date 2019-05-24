@@ -378,14 +378,6 @@ class SaveMidStateWrapper(Wrapper):
         return self.env.reset()
 
 
-class StateBoundaryWrapper(Wrapper):
-    def reset(self):
-        return self.env.reset()
-
-    def step(self, action):
-        return self.env.step(action)
-
-
 class OneLifeWrapper(Wrapper):
 
     def __init__(self, env):

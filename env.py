@@ -12,7 +12,8 @@ from global_constants import ROLLOUT_FPS
 from subproc_vec_env_custom import CustomSubprocVecEnv
 from utils import unwrap_to
 from wrappers.lunar_lander_stateful import LunarLanderStateful
-from wrappers.util_wrappers import StateBoundaryWrapper, SaveEpisodeObs, SaveSegments, \
+from wrappers.state_boundary_wrapper import StateBoundaryWrapper
+from wrappers.util_wrappers import SaveEpisodeObs, SaveSegments, \
     SaveEpisodeStats, LogEpisodeStats, DummyRender
 
 
