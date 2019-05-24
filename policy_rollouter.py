@@ -10,8 +10,8 @@ from typing import Dict
 import gym
 import numpy as np
 from cloudpickle import cloudpickle
+from gym.spaces import seed
 from gym.utils import atomic_write
-from gym.wrappers import TimeLimit
 from tensorflow.python.framework.errors_impl import NotFoundError
 
 import global_variables
@@ -19,7 +19,7 @@ from global_constants import ROLLOUT_FPS
 from global_variables import RolloutMode, RolloutRandomness
 from rollouts import CompressedRollout
 from utils import EnvState, get_noop_action, save_video, make_small_change, \
-    find_latest_checkpoint, unwrap_to, load_cpu_config
+    find_latest_checkpoint, load_cpu_config
 from wrappers.util_wrappers import ResetMode
 
 
@@ -256,6 +256,7 @@ class PolicyRollouter:
         n_rollouts = 0
         rollout_len_frames = int(self.rollout_len_seconds * ROLLOUT_FPS)
         show_frames = int(self.show_from_end_seconds * ROLLOUT_FPS)
+
         if global_variables.rollout_mode == RolloutMode.primitives:
             for policy_name in policy_names:
                 noise = (last_policy_name == 'redo')
@@ -335,10 +336,6 @@ class PolicyRollouter:
                     reset_state = self.reset_state_queue.get(block=True,
                                                              timeout=0.1)  # type: EnvState
                     print("Demonstrating from state", reset_state.step_n)
-                    env = reset_state.env
-                    timelimit = unwrap_to(env, TimeLimit)
-                    timelimit._elapsed_steps = 0
-                    reset_state = EnvState(env, reset_state.obs, reset_state.done, reset_state.step_n)
                     break
                 except queue.Empty:
                     print("Waiting for demonstrations reset state...")
