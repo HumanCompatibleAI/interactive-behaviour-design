@@ -51,9 +51,6 @@ class Policy:
     def train_loop(self):
         while self.training_enabled:
             self.train()
-            self.n_updates += 1
-            if self.n_updates % self.log_interval == 0:
-                self.logger.logkv('policy_{}/n_updates'.format(self.name), self.n_updates)
 
     @abstractmethod
     def train(self):
