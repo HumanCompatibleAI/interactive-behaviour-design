@@ -36,7 +36,7 @@ from drlhp.reward_predictor_core_network import net_mlp, net_cnn
 from drlhp.training import drlhp_train_loop, drlhp_load_loop
 from env import make_env
 from params import parse_args
-from policies.fetch import FetchAction, FetchPPOPolicy
+from policies.fetch import FetchAction, FetchTD3Policy
 from policies.policy_collection import PolicyCollection
 from policies.ppo import PPOPolicy
 from policy_rollouter import PolicyRollouter
@@ -145,7 +145,7 @@ def main():
         reward_predictor_network = net_mlp
         reward_predictor_network_args = {}
         reward_predictor_std = 1.0
-        policy_type = FetchPPOPolicy
+        policy_type = FetchTD3Policy
     elif isinstance(dummy_env.unwrapped, AtariEnv):
         classifier_network = nature_cnn
         reward_predictor_network = net_cnn
