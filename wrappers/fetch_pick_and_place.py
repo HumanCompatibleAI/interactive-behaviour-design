@@ -29,31 +29,37 @@ def decode_fetch_obs(obs):
 
 
 class FetchPickAndPlaceObsWrapper(ObservationWrapper):
-    def __init__(self, env, include_grip_obs):
+    def __init__(self, env, include_grip_obs, mode='minimal'):
         ObservationWrapper.__init__(self, env)
-        if include_grip_obs:
-            n = 7
-        else:
-            n = 6
-        self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=(n,), dtype='float32')
+        self.mode = mode
         self.include_grip_obs = include_grip_obs
+        obs = self.observation(np.zeros((self.env.observation_space.shape)))
+        self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=obs.shape, dtype='float32')
 
-    def observation(self, obs):
-        obs_dict = decode_fetch_obs(obs)
-        final_obs = np.concatenate([obs_dict['object_rel_pos'],
-                                    obs_dict['goal_rel_object']])
-        if self.include_grip_obs:
-            final_obs = np.concatenate([final_obs,
-                                        # The gripper is supposed to be symmetrical.
-                                        # But if the grippers are closed on the block and the arm is dragging the
-                                        # block across the table, both grippers can slightly translate in the
-                                        # MuJoCo simulation. So we need to look at both gripper positions to get the
-                                        # actual width.
-                                        [np.sum(obs_dict['gripper_state'])]])
-            assert final_obs.shape == (7,)
+    def observation(self, orig_obs):
+        obs_dict = decode_fetch_obs(orig_obs)
+
+        if self.mode == 'full':
+            obs = np.concatenate([obs_dict['grip_pos'],
+                                  obs_dict['object_pos'],
+                                  obs_dict['object_rel_pos'],
+                                  obs_dict['goal_pos'],
+                                  obs_dict['goal_rel_object']])
+        elif self.mode == 'minimal':
+            obs = np.concatenate([obs_dict['object_rel_pos'],
+                                  obs_dict['goal_rel_object']])
         else:
-            assert final_obs.shape == (6,)
-        return final_obs
+            raise Exception(f"Unknown Fetch observation filter mode '{self.mode}'")
+
+        if self.include_grip_obs:
+            obs = np.concatenate([obs,
+                                  # The gripper is supposed to be symmetrical.
+                                  # But if the grippers are closed on the block and the arm is dragging the
+                                  # block across the table, both grippers can slightly translate in the
+                                  # MuJoCo simulation. So we need to look at both gripper positions to get the
+                                  # actual width.
+                                  [np.sum(obs_dict['gripper_state'])]])
+        return obs
 
 
 class FetchPickAndPlaceRewardWrapper(Wrapper):
