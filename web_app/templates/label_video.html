@@ -117,6 +117,20 @@
         }));
     }
 
+    function tag_goal_state() {
+        var vid = document.getElementById("episodeVideo");
+        var epName = getEpisodeName();
+        var videoTime = vid.currentTime;
+
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "tag_goal_state", true);
+        xhr.setRequestHeader('Content-Type', 'application/json');
+        xhr.send(JSON.stringify({
+            epName: epName,
+            videoTime: videoTime
+        }));
+    }
+
     function resetSeekMultiplier() {
         seekMultiplier = 1.0;
     }
@@ -171,6 +185,8 @@
                 tag('no');
                 vid.currentTime += frameInterval;
             }
+        } else if (e.key === "g") {
+            tag_goal_state();
         } else if (e.key === " ") {
             if (vid.paused) {
                 vid.play();
@@ -247,6 +263,7 @@
 
 <br/>
 <p>1 = positive, 2 = negative</p>
+<p>g = goal state</p>
 <br/>
 <video width="500 px" controls id="episodeVideo" onseeked="setFrameText()">
     <source type="video/mp4">
