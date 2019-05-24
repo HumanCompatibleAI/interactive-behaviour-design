@@ -18,7 +18,7 @@ rl_envs = [
     ('seaquest', 'SeaquestDeepMind-v0'),
     ('enduro', 'EnduroDeepMindNoSpeedo-v0'),
     ('breakout', 'BreakoutDeepMind-v0'),
-    ('fetch', 'FetchPickAndPlace-Repeat1-BinaryGripper-5InitialBlockPos-FixedGoal-NoGripperBonus-NoET-FastGripper-VanillaRL-FullObs-Delta-WithGripObs-v0'),
+    ('fetch', 'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-Delta-GripperBonuses-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
