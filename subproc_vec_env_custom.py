@@ -129,5 +129,8 @@ class CustomDummyVecEnv(VecEnv):
 
 
 class CustomVecEnvWrapper(VecEnvWrapper):
+    def reset(self):
+        raise RuntimeError("CustomVecEnvWrapper should never receive reset()")
+
     def reset_one_env(self, env_n):
         return self.venv.reset_one_env(env_n)
