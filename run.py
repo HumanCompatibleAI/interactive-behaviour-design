@@ -64,15 +64,14 @@ basicfetch.register()
 faulthandler.enable()
 
 
-def eval_loop(env_fn_pkl, policy_fn_pkl,
-              log_dir,
-              ckpt_dir, policy_name_queue: multiprocessing.Queue,
-              state_queue):
+def eval_loop(env_fn_pkl, policy_fn_pkl, log_dir, ckpt_dir,
+              policy_name_queue: multiprocessing.Queue, state_queue, save_states):
     env = cloudpickle.loads(env_fn_pkl)()
     env = StateBoundaryWrapper(env)
     env = LogEpisodeStats(env, log_dir, '_eval')
     env = Monitor(env, directory=log_dir, video_callable=lambda n: n % 7 == 0)
-    env = SaveMidStateWrapper(env, state_queue)
+    if save_states:
+        env = SaveMidStateWrapper(env, state_queue)
 
     policy = cloudpickle.loads(policy_fn_pkl)('eval')
 
@@ -210,7 +209,8 @@ def main():
                                     os.path.join(log_dir, 'eval_env'),
                                     ckpt_dir,
                                     eval_policy_name_queue,
-                                    reset_state_cache.queue_from_training)).start()
+                                    reset_state_cache.queue_from_training,
+                                    not args.no_save_states)).start()
 
     demonstration_rollouts = RolloutsByHash(maxlen=args.demonstrations_buffer_len)
 

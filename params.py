@@ -55,6 +55,7 @@ def parse_args():
                         choices=['sample_action', 'random_action', 'correlated_random_action'],
                         default='random_action')
     parser.add_argument('--n_cur_policy', type=int, default=3)
+    parser.add_argument('--no_save_states', action='store_true')
     parser.add_argument('--cpus')
     parser.add_argument('--policy_args')
     args = parser.parse_args()
