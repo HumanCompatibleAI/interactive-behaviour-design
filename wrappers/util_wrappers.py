@@ -525,10 +525,9 @@ class SaveSegments(Wrapper):
         return obs, reward, done, info
 
     def reset(self):
-        # We assume we're operating in a SubprocVecEnv, which normally doesn't need to be reset, so that if we
-        # receive an explicit reset, we're doing something unusual. We might be part-way through an episode and only
-        # have a couple of frames in the segment so far, so let's play it safe by dropping the current segment.
-        self._reset_segment()
+        if self.segment_frames:
+            # We should have seen 'done' during 'step'
+            raise RuntimeError("segment_frames not empty on env reset")
         return self.env.reset()
 
 
