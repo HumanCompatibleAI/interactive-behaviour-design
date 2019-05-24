@@ -20,12 +20,10 @@ import numpy as np
 from gym.core import ObservationWrapper, Wrapper
 
 import global_constants
-from a2c.common.vec_env.subproc_vec_env import SubprocVecEnv as A2CSubprocVecEnv
 from baselines import logger
-from a2c.common.vec_env import VecEnvWrapper
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as BaselinesSubprocVecEnv
 from classifier_collection import ClassifierCollection
 from drlhp.reward_predictor import RewardPredictor
+from subproc_vec_env_custom import CustomSubprocVecEnv, CustomVecEnvWrapper
 from utils import unwrap_to, EnvState, TimerContext
 from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 
@@ -60,9 +58,9 @@ class DrawClassifierPredictionWrapper(ObservationWrapper):
         return obs
 
 
-class VecLogRewards(VecEnvWrapper):
+class VecLogRewards(CustomVecEnvWrapper):
     def __init__(self, venv, log_dir, postfix=None):
-        VecEnvWrapper.__init__(self, venv)
+        super().__init__(venv)
         self.episode_reward_sum = 0
         self.logger = easy_tf_log.Logger()
         self.logger.set_log_dir(log_dir)
@@ -437,14 +435,9 @@ class DummyRender(Wrapper):
         return self.env.reset()
 
 
-class VecSaveSegments(VecEnvWrapper):
+class VecSaveSegments(CustomVecEnvWrapper):
     def __init__(self, venv, segment_queue: multiprocessing.Queue):
-        assert isinstance(venv, A2CSubprocVecEnv)
-        # A2CSubprocVecEnv's render() tiles frames from all environments, which is not ideal for us.
-        # Why not switch to BaselinseSubprocVecEnv throughout?
-        # Because I haven't checked how different it is to A2CSubprocVecEnv.
-        A2CSubprocVecEnv.get_images = BaselinesSubprocVecEnv.get_images
-        A2CSubprocVecEnv._assert_not_closed = BaselinesSubprocVecEnv._assert_not_closed
+        assert isinstance(venv, CustomSubprocVecEnv)
         super().__init__(venv)
         self.queue = segment_queue
         self.segment_frames = [None] * self.num_envs
