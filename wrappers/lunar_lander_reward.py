@@ -27,12 +27,12 @@ def has_landed(env, observation):
 
 
 class LunarLanderStatsWrapper(SaveEpisodeStats):
-    def __init__(self, env):
+    def __init__(self, env, window_size=10):
         SaveEpisodeStats.__init__(self, env)
-        self.landings = deque(maxlen=10)
-        self.landings_between_flags = deque(maxlen=10)
-        self.crashes = deque(maxlen=10)
-        self.successful_landings = deque(maxlen=10)
+        self.landings = deque(maxlen=window_size)
+        self.landings_between_flags = deque(maxlen=window_size)
+        self.crashes = deque(maxlen=window_size)
+        self.successful_landings = deque(maxlen=window_size)
         self.last_obs = None
         self.debug = False
 
@@ -43,19 +43,25 @@ class LunarLanderStatsWrapper(SaveEpisodeStats):
             landed_between_flags = has_landed_between_flags(self.env, self.last_obs)
             # game_over => spacecraft body in contact with ground => we've crashed
             crashed = self.env.unwrapped.game_over
+            landed_successfully = landed_between_flags and not crashed
+
+            self.last_stats['landed'] = float(landed)
+            self.last_stats['landed_between_flags'] = float(landed_between_flags)
+            self.last_stats['landed_successfully'] = float(landed_successfully)
+            self.last_stats['crashed'] = float(crashed)
 
             self.landings.append(landed)
             self.landings_between_flags.append(landed_between_flags)
             self.crashes.append(crashed)
-            self.successful_landings.append(landed_between_flags and not crashed)
+            self.successful_landings.append(landed_successfully)
 
             if len(self.landings) == self.landings.maxlen:
                 self.last_stats['landing_rate'] = self.landings.count(True) / len(self.landings)
-                self.last_stats['landing_between_flags_rate'] = self.landings_between_flags.count(True) / len(
-                    self.landings_between_flags)
-                self.last_stats['crashes'] = self.crashes.count(True) / len(self.crashes)
-                self.last_stats['successful_landing_rate'] = self.successful_landings.count(True) / len(
-                    self.successful_landings)
+                self.last_stats['landing_between_flags_rate'] = \
+                    self.landings_between_flags.count(True) / len(self.landings_between_flags)
+                self.last_stats['crash_rate'] = self.crashes.count(True) / len(self.crashes)
+                self.last_stats['successful_landing_rate'] = \
+                    self.successful_landings.count(True) / len(self.successful_landings)
 
         return self.env.reset()
 
