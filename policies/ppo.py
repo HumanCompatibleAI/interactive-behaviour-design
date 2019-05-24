@@ -80,7 +80,8 @@ class PPOPolicy(Policy):
     def __init__(self, name, env_id, obs_space, ac_space, n_envs, seed=None):
         Policy.__init__(self, name, env_id, obs_space, ac_space, n_envs)
 
-        if 'Seaquest' in env_id or 'Pong' in env_id:
+        atari_envs = ['Seaquest', 'Breakout', 'SpaceInvaders', 'BeamRider', 'Qbert', 'Enduro', 'Pong']
+        if any([e in env_id for e in atari_envs]):
             hyperparams = PPOPolicy.get_hyperparams('atari')
         elif 'Fetch' in env_id:
             hyperparams = PPOPolicy.get_hyperparams('fetch')
@@ -90,7 +91,6 @@ class PPOPolicy(Policy):
             hyperparams = PPOPolicy.get_hyperparams('default')
         else:
             raise RuntimeError(f"Unsure of PPO hyperparameters for '{env_id}'")
-        print("PPO hyperparameters:", hyperparams)
 
         nbatch = n_envs * hyperparams['nsteps']
         nbatch_train = nbatch // hyperparams['nminibatches']
@@ -184,14 +184,15 @@ class PPOPolicy(Policy):
         else:
             return actions[0]
 
-    def set_training_env(self, env):
+    def set_training_env(self, env, log_dir):
         self.env = env
         if self.runner is None:
             self.runner = PPORunner(env=env,
                                     model=self.model,
                                     nsteps=self.nsteps,
                                     gamma=self.gamma,
-                                    lam=self.lam)
+                                    lam=self.lam,
+                                    log_dir=log_dir)
             self.last_obs = self.runner.obs
 
     def train(self):
@@ -234,6 +235,7 @@ class PPOPolicy(Policy):
                 fetches = self.model.train_rl_bc(lrnow, cliprangenow, *slices, **train_kwargs)
                 stats_keys = list(fetches.keys())
                 stats.append(list(fetches.values()))
+        self.n_updates += 1
 
         assert stats_keys is not None
         stats = np.array(stats)
@@ -243,11 +245,11 @@ class PPOPolicy(Policy):
         if self.n_updates and self.n_updates % self.log_interval == 0:
             n_serial_steps = self.n_updates * self.runner.nsteps
             n_total_steps = n_serial_steps * self.n_envs
+            steps_per_second = self.step_measure.measure(n_total_steps)
+            self.logger.logkv('policy_{}/n_updates'.format(self.name), self.n_updates)
             self.logger.logkv('policy_{}/n_serial_steps'.format(self.name), n_serial_steps)
             self.logger.logkv('policy_{}/n_total_steps'.format(self.name), n_total_steps)
-            steps_per_second = self.step_measure.measure(n_total_steps)
-            self.logger.logkv('policy_{}/n_total_steps_per_second'.format(self.name),
-                              steps_per_second)
+            self.logger.logkv('policy_{}/n_total_steps_per_second'.format(self.name), steps_per_second)
             for n, stat_key in enumerate(stats_keys):
                 self.logger.logkv('policy_{}/{}'.format(self.name, stat_key), stats[n])
 
