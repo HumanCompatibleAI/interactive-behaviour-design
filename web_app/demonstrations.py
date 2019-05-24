@@ -93,12 +93,13 @@ def get_rollouts():
     return json.dumps([rollout_group, rollout_dict])
 
 
-def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollout],
-                                             chosen_rollout_hash_str, trajectory_serial, policy_names, softmax_temp):
+def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollout], rollout_choice,
+                                             group_name, trajectory_dir, trajectory_serial,
+                                             policy_names, softmax_temp):
     global episode_stats_logger
 
-    if chosen_rollout_hash_str != 'equal' and rollouts[chosen_rollout_hash_str].generating_policy == 'redo':
-        continue_with_rollout = rollouts[chosen_rollout_hash_str]
+    if rollout_choice != 'equal' and rollouts[rollout_choice].generating_policy == 'redo':
+        continue_with_rollout = rollouts[rollout_choice]
         force_reset = False
     else:
         for h, r in rollouts.items():
@@ -106,23 +107,30 @@ def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollo
                 del rollouts[h]
                 break
 
-        if chosen_rollout_hash_str == 'none':
-            continue_with_rollout = random.sample(list(rollouts.values()), 1)[0]  # type: CompressedRollout
-        elif chosen_rollout_hash_str == 'equal':
+        if rollout_choice == 'none':
+            continue_with_rollout_hash = random.sample(list(rollouts.keys()), 1)[0]
+            continue_with_rollout = rollouts[continue_with_rollout_hash]
+        elif rollout_choice == 'equal':
             for r1, r2 in itertools.combinations(rollouts.values(), 2):
                 add_pref(r1, r2, (0.5, 0.5))
-            continue_with_rollout = random.sample(list(rollouts.values()), 1)[0]  # type: CompressedRollout
-        elif rollouts[chosen_rollout_hash_str].generating_policy == 'redo':
-            continue_with_rollout = rollouts['redo']
+            continue_with_rollout_hash = random.sample(list(rollouts.keys()), 1)[0]
+            continue_with_rollout = rollouts[continue_with_rollout_hash]
         else:
-            chosen_rollout = rollouts[chosen_rollout_hash_str]
+            chosen_rollout = rollouts[rollout_choice]
             add_demonstration_rollout(chosen_rollout)
             add_reset_state_from_end_of_rollout(chosen_rollout)
             rollouts_except_chosen = set(rollouts.values()) - {chosen_rollout}
             for other_rollout in rollouts_except_chosen:
                 add_pref(chosen_rollout, other_rollout, (1.0, 0.0))
+            continue_with_rollout_hash = rollout_choice
             continue_with_rollout = chosen_rollout
         print("Continuing with rollout {}".format(continue_with_rollout.hash))
+
+        # write which rollout was chosen for this group in the trajectory file
+        trajectory_filename = os.path.join(trajectory_dir, "trajectory_{}".format(trajectory_serial))
+        timestamp = str(time.time())
+        with open(trajectory_filename, 'a') as f:
+            f.write(group_name + "," + continue_with_rollout_hash + "," + timestamp + "," + rollout_choice + "\n")
 
         trajectory_dir = get_trajectory_dir(trajectory_serial)
         trajectory_filename = os.path.join(trajectory_dir, "trajectory_{}".format(trajectory_serial))
@@ -208,18 +216,10 @@ def choose_rollout():
         shutil.move(pkl_name, trajectory_dir)
         shutil.move(vid_name, trajectory_dir)
 
-    # write which rollout was chosen for this group in the trajectory file
-    trajectory_filename = os.path.join(trajectory_dir, "trajectory_{}".format(trajectory_serial))
-    timestamp = str(time.time())
-    with open(trajectory_filename, 'a') as f:
-        f.write(group_name + "," + chosen_rollout_hash_str + "," + timestamp + "\n")
-
-
-
     n_rollouts_in_progress.value += 1
     Thread(target=lambda: process_choice_and_generate_new_rollouts(rollouts, chosen_rollout_hash_str,
-                                                                   trajectory_serial, policy_names,
-                                                                   softmax_temp)).start()
+                                                                   group_name, trajectory_dir, trajectory_serial,
+                                                                   policy_names, softmax_temp)).start()
 
     return ""
 
@@ -247,8 +247,8 @@ def get_chosen_rollout_videos_for_trajectory(trajectory_serial):
 
     chosen_rollout_vid_paths = []
     for line in lines:
-        group_serial, chosen_rollout_hash, timestamp = line.split(',')
-        chosen_rollout_vid_path = os.path.join(trajectory_dir, chosen_rollout_hash + '.mp4')
+        group_serial, continue_rollout_hash, timestamp, _ = line.split(',')
+        chosen_rollout_vid_path = os.path.join(trajectory_dir, continue_rollout_hash + '.mp4')
         chosen_rollout_vid_paths.append(chosen_rollout_vid_path)
 
     return chosen_rollout_vid_paths
