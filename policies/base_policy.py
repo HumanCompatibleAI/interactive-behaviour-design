@@ -20,6 +20,7 @@ So the Policy constructor itself is fairly minimal, only setting up the step mod
 Other stuff like runners and loggers are started later on when needed.
 """
 
+
 class Policy:
     def __init__(self, name, env_id, obs_space, ac_space, n_envs, seed=0):
         self.name = name
@@ -28,7 +29,7 @@ class Policy:
         self.n_updates = 0
         self.log_interval = 20
         self.logger = None  # type: easy_tf_log.Logger
-        self.training_enabled = None
+        self.training_enabled = False
         self.train_thread = None
         self.demonstration_rollouts = None
 
@@ -80,4 +81,6 @@ class PolicyTrainMode(Enum):
     R_ONLY = 1
     R_PLUS_BC = 2
     BC_ONLY = 3
-    NO_TRAINING = 4
+    SQIL_ONLY = 4
+    R_PLUS_SQIL = 5
+    NO_TRAINING = 6
