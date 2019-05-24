@@ -138,6 +138,9 @@ def unwrap_to(wrapped_env: Wrapper, class_name: type, n_before=0):
 
 def find_latest_checkpoint(ckpt_dir, name):
     meta_paths = glob.glob(os.path.join(ckpt_dir, name + '*.meta'))
+    if not meta_paths:
+        raise Exception(f"Couldn't find checkpoint matching '{name}'")
+    meta_paths = sorted(meta_paths, key=lambda f: os.path.getmtime(f))
     ckpt_names = [path.replace('.meta', '') for path in meta_paths]
     if not ckpt_names:
         raise Exception(f"Couldn't find checkpoint matching '{name}'")
