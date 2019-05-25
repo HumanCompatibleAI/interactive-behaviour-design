@@ -176,8 +176,8 @@ def add_master_policy(base_url):
 
 
 def wait_for_demonstration_rollouts(base_url):
-    requests.get(base_url + '/generate_rollouts?policies=').raise_for_status()
     print("Waiting for demonstration rollouts...")
+    requests.get(base_url + '/generate_rollouts?policies=').raise_for_status()
     check_url = base_url + '/get_rollouts'
     while True:
         response = requests.get(check_url).json()
