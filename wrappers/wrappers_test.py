@@ -10,7 +10,7 @@ import numpy as np
 from gym import Env
 
 import global_constants
-from a2c.common.vec_env.subproc_vec_env import SubprocVecEnv
+from subproc_vec_env_custom import CustomSubprocVecEnv
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -118,14 +118,18 @@ class TestVecSaveSegments(unittest.TestCase):
     def test(self):
         segments_queue = multiprocessing.Queue()
         n_envs = 3
-        venv = SubprocVecEnv([lambda n=n: StateBoundaryWrapper(DummyEnv(global_constants.FRAMES_PER_SEGMENT - 1 + n,
-                                                                        step_offset=(n * 100)))
-                              for n in range(n_envs)])
+        venv = CustomSubprocVecEnv([lambda n=n: StateBoundaryWrapper(DummyEnv(global_constants.FRAMES_PER_SEGMENT - 1 + n,
+                                                                              step_offset=(n * 100)))
+                                    for n in range(n_envs)])
         venv = VecSaveSegments(venv, segments_queue)
 
-        venv.reset()
+        for n in range(n_envs):
+            venv.reset_one_env(n)
         for _ in range(3 * global_constants.FRAMES_PER_SEGMENT):
-            venv.step([0] * venv.num_envs)
+            obses, rews, dones, infos = venv.step([0] * venv.num_envs)
+            for n in range(n_envs):
+                if dones[n]:
+                    venv.reset_one_env(n)
 
         obses, rewards, frames = segments_queue.get()
         # The first segment we get should be from the environment that reset after 29 steps

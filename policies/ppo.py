@@ -195,6 +195,10 @@ class PPOPolicy(Policy):
                                     log_dir=log_dir)
             self.last_obs = self.runner.obs
 
+    def set_test_env(self, env, log_dir):
+        # We don't use a test environment; we just rely on the training environment
+        pass
+
     def train(self):
         train_mode = self.train_mode  # Could be changed while we're running
 

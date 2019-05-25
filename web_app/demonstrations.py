@@ -19,7 +19,7 @@ from web_app import web_globals
 from web_app.utils import nocache, add_pref
 from web_app.web_globals import _demonstration_rollouts, experience_dir, _policies, \
     _policy_rollouter, _demonstration_rollouts_dir, _reset_state_cache
-from wrappers.util_wrappers import LogEpisodeStats
+from wrappers.util_wrappers import SaveEpisodeStats
 
 """
 Bugs:
@@ -145,9 +145,9 @@ def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollo
         if force_reset or continue_with_rollout.final_env_state.done:
             env = continue_with_rollout.final_env_state.env
             if episode_stats_logger is None:
-                episode_stats_logger = LogEpisodeStats(env,
-                                                       os.path.join(_demonstration_rollouts_dir, 'demo_env'),
-                                                       suffix='_demo')
+                episode_stats_logger = SaveEpisodeStats(env,
+                                                        os.path.join(_demonstration_rollouts_dir, 'demo_env'),
+                                                        suffix='_demo')
             else:
                 episode_stats_logger.set_env(env)
             episode_stats_logger.reset()  # trigger stats save

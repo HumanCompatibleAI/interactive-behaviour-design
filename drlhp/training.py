@@ -44,6 +44,7 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
     load_cpu_config(log_dir, 'drlhp_training')
 
     reward_predictor = cloudpickle.loads(make_reward_predictor_fn_cloudpickle)('training', gpu_n)  # type: RewardPredictor
+    reward_predictor.save(save_ckpt_path)  # So that the checkpoint load thread is quieted
     pref_db = PrefDBTestTrain()
     logger = easy_tf_log.Logger(os.path.join(log_dir, 'drlhp_train_loop'))
 

@@ -6,7 +6,7 @@ from wrappers.fetch_pick_and_place import FixedGoal, FixedBlockInitialPositions
 
 
 def make_env(include_grip_obs, repeat_n, early_termination, binary_gripper, grip_close_bonus, grip_open_bonus,
-             reward_mode, n_initial_block_positions, fixed_goal, slow_gripper, vanilla_rl, full_obs):
+             reward_mode, n_initial_block_positions, fixed_goal):
     from gym.envs.robotics import FetchPickAndPlaceEnv
     from gym.wrappers import FlattenDictWrapper
 
@@ -24,14 +24,8 @@ def make_env(include_grip_obs, repeat_n, early_termination, binary_gripper, grip
                                          binary_gripper=binary_gripper,
                                          grip_close_bonus=grip_close_bonus,
                                          grip_open_bonus=grip_open_bonus,
-                                         reward_mode=reward_mode,
-                                         slow_gripper=slow_gripper,
-                                         vanilla_rl=vanilla_rl)
-    if full_obs:
-        mode = 'full'
-    else:
-        mode = 'minimal'
-    env = FetchPickAndPlaceObsWrapper(env, mode=mode, include_grip_obs=include_grip_obs)
+                                         reward_mode=reward_mode)
+    env = FetchPickAndPlaceObsWrapper(env, include_grip_obs)
     env = RepeatActions(env, repeat_n)
     return env
 
@@ -40,47 +34,37 @@ def enumerate_envs(register=False):
     repeat_ns = [('Repeat1', 1), ('Repeat3', 3)]
     binary_grippers = [('BinaryGripper', True), ('ContGripper', False)]
     include_grip_obss = [('WithGripObs', True), ('NoGripObs', False)]
-    gripper_bonuses = [('GripperBonus', True), ('NoGripperBonus', False)]
-    early_terminations = [('ET', True), ('NoET', False)]
     n_initial_block_positionss = [('1InitialBlockPos', 1),
                                   ('5InitialBlockPos', 5),
+                                  ('10InitialBlockPos', 10),
                                   ('InfInitialBlockPos', None)]
     fixed_goals = [('FixedGoal', True), ('RandomGoal', False)]
-    slow_grippers = [('SlowGripper', True), ('FastGripper', False)]
-    vanilla_rls = [('VanillaRL', True), ('NoVanillaRL', False)]
-    full_obss = [('FullObs', True), ('PartialObs', False)]
     modes = [('Delta', 'delta2'), ('NonDelta', 'nondelta')]
+    gripper_bonuses = [('GripperBonuses', True), ('NoGripperBonus', False)]
 
     env_ids = []
     for s1, repeat in repeat_ns:
         for s2, binary_gripper in binary_grippers:
-            for s4, n_initial_block_positions in n_initial_block_positionss:
-                for s5, fixed_goal in fixed_goals:
-                    for s6, gripper_bonus in gripper_bonuses:
-                        for s7, early_termination in early_terminations:
-                            for s8, slow_gripper in slow_grippers:
-                                for s9, vanilla_rl in vanilla_rls:
-                                    for s10, full_obs in full_obss:
-                                        for s11, mode in modes:
-                                            for s12, include_grip_obs in include_grip_obss:
-                                                    env_id = f'FetchPickAndPlace-{s1}-{s2}-{s4}-{s5}-{s6}-{s7}-{s8}-{s9}-{s10}-{s11}-{s12}-v0'
-                                                    env_ids.append(env_id)
-                                                    if register:
-                                                        from gym.envs import register as gym_register
-                                                        entry_fn = lambda locals=dict(locals()): \
-                                                            make_env(reward_mode=locals['mode'], early_termination=locals['early_termination'],
-                                                                     grip_open_bonus=locals['gripper_bonus'], grip_close_bonus=locals['gripper_bonus'],
-                                                                     binary_gripper=locals['binary_gripper'],
-                                                                     repeat_n=locals['repeat'],
-                                                                     include_grip_obs=locals['include_grip_obs'],
-                                                                     n_initial_block_positions=locals['n_initial_block_positions'],
-                                                                     fixed_goal=locals['fixed_goal'],
-                                                                     slow_gripper=locals['slow_gripper'],
-                                                                     vanilla_rl=locals['vanilla_rl'],
-                                                                     full_obs=locals['full_obs'])
-                                                        gym_register(env_id,
-                                                                     entry_point=entry_fn,
-                                                                     max_episode_steps=250)
+            for s3, include_grip_obs in include_grip_obss:
+                for s4, n_initial_block_positions in n_initial_block_positionss:
+                    for s5, fixed_goal in fixed_goals:
+                        for s6, mode in modes:
+                            for s7, gripper_bonus in gripper_bonuses:
+                                env_id = f'FetchPickAndPlace-{s1}-{s2}-{s3}-{s4}-{s5}-{s6}-{s7}-v0'
+                                env_ids.append(env_id)
+                                if register:
+                                    from gym.envs import register as gym_register
+                                    entry_fn = lambda locals=dict(locals()): \
+                                        make_env(reward_mode=locals['mode'], early_termination=False,
+                                                 grip_open_bonus=locals['gripper_bonus'], grip_close_bonus=locals['gripper_bonus'],
+                                                 binary_gripper=locals['binary_gripper'],
+                                                 repeat_n=locals['repeat'],
+                                                 include_grip_obs=locals['include_grip_obs'],
+                                                 n_initial_block_positions=locals['n_initial_block_positions'],
+                                                 fixed_goal=locals['fixed_goal'])
+                                    gym_register(env_id,
+                                                 entry_point=entry_fn,
+                                                 max_episode_steps=250)
     return env_ids
 
 

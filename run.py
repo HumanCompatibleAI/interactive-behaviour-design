@@ -34,9 +34,9 @@ from drlhp.pref_db import PrefDBTestTrain
 from drlhp.reward_predictor import RewardPredictor
 from drlhp.reward_predictor_core_network import net_mlp, net_cnn
 from drlhp.training import drlhp_train_loop, drlhp_load_loop
-from env import make_env
+from env import make_envs
 from params import parse_args
-from policies.fetch import FetchAction, FetchPPOPolicy
+from policies.fetch import FetchAction, FetchTD3Policy
 from policies.policy_collection import PolicyCollection
 from policies.ppo import PPOPolicy
 from policy_rollouter import PolicyRollouter
@@ -44,9 +44,10 @@ from reward_switcher import RewardSelector
 from rollouts import RolloutsByHash
 from segments import monitor_segments_dir_loop, write_segments_loop
 from utils import find_latest_checkpoint, MemoryProfiler, configure_cpus, \
-    load_cpu_config
+    load_cpu_config, unwrap_to
 from web_app.app import run_web_app
 from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro
+from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
     VecSaveSegments
 
@@ -109,29 +110,25 @@ def main():
     max_episode_steps_value = multiprocessing.Value('i', 100000)
     segments_queue = Queue(maxsize=1)
     obs_queue = Queue()
-    env = make_env(env_id=args.env,
-                   num_env=args.n_envs, seed=args.seed,
-                   experience_dir=experience_dir,
-                   reset_state_server_queue=reset_state_cache.queue_to_training,
-                   reset_state_receiver_queue=reset_state_cache.queue_from_training,
-                   reset_mode_value=training_reset_mode_value,
-                   max_episode_steps_value=max_episode_steps_value,
-                   episode_proportion_value=save_state_from_proportion_through_episode_value,
-                   episode_obs_queue=obs_queue,
-                   segments_queue=segments_queue,
-                   segments_dir=segments_dir,
-                   render_segments=args.render_segments,
-                   render_every_nth_episode=args.render_every_nth_episode,
-                   save_states=(not args.no_save_states))
+    train_env, test_env, demo_env = make_envs(env_id=args.env,
+                                              num_env=args.n_envs, seed=args.seed,
+                                              log_dir=log_dir,
+                                              reset_state_server_queue=reset_state_cache.queue_to_training,
+                                              reset_state_receiver_queue=reset_state_cache.queue_from_training,
+                                              reset_mode_value=training_reset_mode_value,
+                                              episode_obs_queue=obs_queue,
+                                              segments_queue=segments_queue,
+                                              render_segments=args.render_segments,
+                                              render_every_nth_episode=args.render_every_nth_episode,
+                                              save_states=(not args.no_save_states))
 
     reset_state_cache.start_saver_receiver()
 
     global_variables.env_creation_lock = threading.Lock()
 
-    demonstrations_env = env.demonstrations_env
     if args.no_render_demonstrations:
-        demonstrations_env = DummyRender(demonstrations_env)
-    demonstrations_env.reset()
+        demo_env = DummyRender(demo_env)
+    demo_env.reset()
 
     dummy_env = gym.make(args.env)
     if isinstance(dummy_env.unwrapped, (MujocoEnv, LunarLander)):
@@ -145,7 +142,7 @@ def main():
         reward_predictor_network = net_mlp
         reward_predictor_network_args = {}
         reward_predictor_std = 1.0
-        policy_type = FetchPPOPolicy
+        policy_type = FetchTD3Policy
     elif isinstance(dummy_env.unwrapped, AtariEnv):
         classifier_network = nature_cnn
         reward_predictor_network = net_cnn
@@ -160,10 +157,24 @@ def main():
         print("Overriding reward predictor std:", reward_predictor_std)
 
     # So that the function can be pickled without having to pickle the env itself
-    obs_space = env.observation_space
-    ac_space = env.action_space
+    obs_space = train_env.observation_space
+    ac_space = train_env.action_space
+
+    if args.policy_args:
+        policy_args = {k: v for k, v in [a.split('=') for a in args.policy_args.split(';')]}
+        for k, v in policy_args.items():
+            if k == 'hidden_sizes':
+                policy_args['hidden_sizes'] = list(map(int, policy_args['hidden_sizes'].split(',')))
+            elif '.' in v:
+                policy_args[k] = float(v)
+            else:
+                policy_args[k] = int(v)
+    else:
+        policy_args = {}
 
     def make_policy(name, **kwargs):
+        kwargs = dict(kwargs)
+        kwargs.update(policy_args)
         return policy_type(name=name,
                            env_id=args.env,
                            obs_space=obs_space,
@@ -173,7 +184,7 @@ def main():
 
     demonstration_rollouts = RolloutsByHash(maxlen=args.demonstrations_buffer_len)
 
-    policies = PolicyCollection(make_policy, log_dir, demonstration_rollouts, args.seed)
+    policies = PolicyCollection(make_policy, log_dir, demonstration_rollouts, args.seed, test_env)
     if args.add_manual_fetch_policies:
         for action in FetchAction:
             policies.add_policy(str(action), policy_kwargs={'fetch_action': action})
@@ -181,7 +192,7 @@ def main():
     demonstration_rollouts_dir = osp.join(log_dir, 'demonstrations')
     os.makedirs(demonstration_rollouts_dir)
     demonstrations_reset_mode_value = multiprocessing.Value('i', ResetMode.USE_ENV_RESET.value)
-    policy_rollouter = PolicyRollouter(demonstrations_env, demonstration_rollouts_dir,
+    policy_rollouter = PolicyRollouter(demo_env, demonstration_rollouts_dir,
                                        reset_state_queue_in=reset_state_cache.queue_to_demonstrations,
                                        reset_mode_value=demonstrations_reset_mode_value,
                                        log_dir=log_dir, make_policy_fn=make_policy,
@@ -260,16 +271,16 @@ def main():
 
     # classifier_data_buffer is passed because it's what the classifiers train on
     classifier = ClassifierCollection(classifier_data_buffer, log_dir,
-                                      classifier_network, env.observation_space.shape)
+                                      classifier_network, train_env.observation_space.shape)
     for label_name in classifier_data_buffer.get_label_names():
         print("Adding classifier for label '{}'...".format(label_name))
         classifier.add_classifier(label_name)
 
     if global_variables.segment_save_mode == 'multi_env':
-        env = VecSaveSegments(env, segments_queue)
-    env = VecLogRewards(env, os.path.join(log_dir, 'vec_rewards'))
+        train_env = VecSaveSegments(train_env, segments_queue)
+    train_env = VecLogRewards(train_env, os.path.join(log_dir, 'vec_rewards'))
 
-    policies.env = env
+    policies.train_env = train_env
 
     ckpt_dir = os.path.join(log_dir, 'checkpoints')
     pref_db_ckpt_name = 'pref_dbs.pkl'
@@ -277,7 +288,7 @@ def main():
     checkpointer.checkpoint()
 
     reward_predictor_log_dir = os.path.join(log_dir, 'drlhp')
-    obs_shape = env.observation_space.shape
+    obs_shape = train_env.observation_space.shape
 
     def make_reward_predictor_fn(name, gpu_n):
         return RewardPredictor(network=reward_predictor_network, network_args=reward_predictor_network_args,
@@ -292,7 +303,7 @@ def main():
     reward_predictor = make_reward_predictor_fn('inference', gpu_n=n)
 
     # Reward predictor training loop
-    # Loads preferences, trains, saved checkpoint
+    # Loads preferences, trains, saves checkpoint
     reward_predictor_ckpt_name = 'reward_predictor.ckpt'
     context = multiprocessing.get_context('spawn')
     run_drlhp_training = context.Value('B', 0)
@@ -337,7 +348,8 @@ def main():
     reward_selector = RewardSelector(classifier, reward_predictor)
     global_variables.reward_selector = reward_selector
 
-    env.reset()
+    for n in range(train_env.num_envs):
+        train_env.reset_one_env(n)
 
     time.sleep(5)  # Give time for processes to start
     mp = MemoryProfiler(pid=-1, log_path=os.path.join(log_dir, f'memory-self.txt'))
@@ -360,7 +372,7 @@ def main():
                 log_dir=log_dir,
                 port=args.port,
                 pref_db=pref_db,
-                demo_env=demonstrations_env,
+                demo_env=demo_env,
                 policy_rollouter=policy_rollouter,
                 demonstration_rollouts=demonstration_rollouts,
                 reset_mode_value=training_reset_mode_value,
@@ -374,7 +386,7 @@ def main():
                 checkpointer=checkpointer,
                 max_demonstration_length=args.max_demonstration_length)
 
-    env.close()
+    train_env.close()
 
 
 if __name__ == '__main__':

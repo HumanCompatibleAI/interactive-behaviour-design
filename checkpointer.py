@@ -33,6 +33,8 @@ class Checkpointer:
         Thread(target=checkpoint_loop).start()
 
     def checkpoint(self):
+        # Why lock? Because the checkpoint_loop thread will run this regularly,
+        # but we also might want to call this method manually
         self.lock.acquire()
 
         now = str(datetime.datetime.now())

@@ -20,12 +20,10 @@ import numpy as np
 from gym.core import ObservationWrapper, Wrapper
 
 import global_constants
-from a2c.common.vec_env.subproc_vec_env import SubprocVecEnv as A2CSubprocVecEnv
 from baselines import logger
-from a2c.common.vec_env import VecEnvWrapper
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as BaselinesSubprocVecEnv
 from classifier_collection import ClassifierCollection
 from drlhp.reward_predictor import RewardPredictor
+from subproc_vec_env_custom import CustomSubprocVecEnv, CustomVecEnvWrapper
 from utils import unwrap_to, EnvState, TimerContext
 from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 
@@ -60,9 +58,9 @@ class DrawClassifierPredictionWrapper(ObservationWrapper):
         return obs
 
 
-class VecLogRewards(VecEnvWrapper):
+class VecLogRewards(CustomVecEnvWrapper):
     def __init__(self, venv, log_dir, postfix=None):
-        VecEnvWrapper.__init__(self, venv)
+        super().__init__(venv)
         self.episode_reward_sum = 0
         self.logger = easy_tf_log.Logger()
         self.logger.set_log_dir(log_dir)
@@ -82,7 +80,7 @@ class VecLogRewards(VecEnvWrapper):
         return self.venv.reset()
 
 
-class LogEpisodeStats(Wrapper):
+class SaveEpisodeStats(Wrapper):
     def __init__(self, env, log_dir=None, suffix=None, stdout=False):
         Wrapper.__init__(self, env)
         self.stdout = stdout
@@ -99,7 +97,7 @@ class LogEpisodeStats(Wrapper):
         self.env = env
         self.stats_envs = []
         while True:
-            if isinstance(env, SaveEpisodeStats):
+            if isinstance(env, CollectEpisodeStats):
                 self.stats_envs.append(env)
             try:
                 env = env.env
@@ -138,7 +136,7 @@ class LogDoneInfo(Wrapper):
         return obs, reward, done, info
 
 
-class SaveEpisodeStats(Wrapper):
+class CollectEpisodeStats(Wrapper):
     """
     Save per-episode rewards and episode lengths.
     """
@@ -172,9 +170,9 @@ class SaveEpisodeStats(Wrapper):
         return obs, reward, done, info
 
 
-class SeaquestStatsWrapper(SaveEpisodeStats):
+class SeaquestStatsWrapper(CollectEpisodeStats):
     def __init__(self, env):
-        SaveEpisodeStats.__init__(self, env)
+        CollectEpisodeStats.__init__(self, env)
         self.last_n_divers = None
         self.n_diver_pickups = None
 
@@ -437,14 +435,9 @@ class DummyRender(Wrapper):
         return self.env.reset()
 
 
-class VecSaveSegments(VecEnvWrapper):
+class VecSaveSegments(CustomVecEnvWrapper):
     def __init__(self, venv, segment_queue: multiprocessing.Queue):
-        assert isinstance(venv, A2CSubprocVecEnv)
-        # A2CSubprocVecEnv's render() tiles frames from all environments, which is not ideal for us.
-        # Why not switch to BaselinseSubprocVecEnv throughout?
-        # Because I haven't checked how different it is to A2CSubprocVecEnv.
-        A2CSubprocVecEnv.get_images = BaselinesSubprocVecEnv.get_images
-        A2CSubprocVecEnv._assert_not_closed = BaselinesSubprocVecEnv._assert_not_closed
+        assert isinstance(venv, CustomSubprocVecEnv)
         super().__init__(venv)
         self.queue = segment_queue
         self.segment_frames = [None] * self.num_envs
@@ -489,13 +482,11 @@ class VecSaveSegments(VecEnvWrapper):
                 self._reset_segment(n)
         return obses, rewards, dones, infos
 
-    def reset(self):
-        # We assume we're wrapping a SubprocVecEnv, which normally doesn't need to be reset, so that if we
-        # receive an explicit reset, we're doing something unusual. We might be part-way through an episode and only
-        # have a couple of frames in the segment so far, so let's play it safe by dropping the current segment.
-        for n in range(self.num_envs):
-            self._reset_segment(n)
-        return self.venv.reset()
+    def reset_one_env(self, env_n):
+        if self.segment_frames[env_n]:
+            # We should have seen 'done' during 'step'
+            raise RuntimeError("segment_frames[{0}] not empty on env[{0}] reset".format(env_n))
+        return super().reset_one_env(env_n)
 
 
 class SaveSegments(Wrapper):
@@ -534,10 +525,9 @@ class SaveSegments(Wrapper):
         return obs, reward, done, info
 
     def reset(self):
-        # We assume we're operating in a SubprocVecEnv, which normally doesn't need to be reset, so that if we
-        # receive an explicit reset, we're doing something unusual. We might be part-way through an episode and only
-        # have a couple of frames in the segment so far, so let's play it safe by dropping the current segment.
-        self._reset_segment()
+        if self.segment_frames:
+            # We should have seen 'done' during 'step'
+            raise RuntimeError("segment_frames not empty on env reset")
         return self.env.reset()
 
 

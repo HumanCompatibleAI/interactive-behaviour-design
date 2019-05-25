@@ -11,7 +11,7 @@ from gym.utils import atomic_write
 from gym.wrappers import Monitor
 
 from wrappers.lunar_lander_reward import LunarLanderStatsWrapper
-from wrappers.util_wrappers import LogEpisodeStats
+from wrappers.util_wrappers import SaveEpisodeStats
 
 
 class Demonstration:
@@ -34,7 +34,7 @@ def main():
     env = gym.make('LunarLander-v2')
     env = Monitor(env, args.log_dir, video_callable=lambda n: True)
     env = LunarLanderStatsWrapper(env)
-    env = LogEpisodeStats(env, stdout=True, log_dir=args.log_dir)
+    env = SaveEpisodeStats(env, stdout=True, log_dir=args.log_dir)
 
     ACTIONS = env.action_space.n
     human_agent_action = 0
