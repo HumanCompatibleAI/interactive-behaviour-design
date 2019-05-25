@@ -303,7 +303,7 @@ def main():
     reward_predictor = make_reward_predictor_fn('inference', gpu_n=n)
 
     # Reward predictor training loop
-    # Loads preferences, trains, saved checkpoint
+    # Loads preferences, trains, saves checkpoint
     reward_predictor_ckpt_name = 'reward_predictor.ckpt'
     context = multiprocessing.get_context('spawn')
     run_drlhp_training = context.Value('B', 0)
