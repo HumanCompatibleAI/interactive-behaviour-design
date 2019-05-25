@@ -116,11 +116,8 @@ def main():
                    reset_state_server_queue=reset_state_cache.queue_to_training,
                    reset_state_receiver_queue=reset_state_cache.queue_from_training,
                    reset_mode_value=training_reset_mode_value,
-                   max_episode_steps_value=max_episode_steps_value,
-                   episode_proportion_value=save_state_from_proportion_through_episode_value,
                    episode_obs_queue=obs_queue,
                    segments_queue=segments_queue,
-                   segments_dir=segments_dir,
                    render_segments=args.render_segments,
                    render_every_nth_episode=args.render_every_nth_episode,
                    save_states=(not args.no_save_states))
