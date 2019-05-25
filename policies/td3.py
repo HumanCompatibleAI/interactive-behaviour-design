@@ -538,7 +538,8 @@ class TD3Policy(Policy):
 
     def set_training_env(self, env, log_dir):
         self.train_env = env
-        self.obs1 = self.train_env.reset()
+        self.obs1 = np.array([self.train_env.reset_one_env(n)
+                              for n in range(self.train_env.num_envs)])
 
     def set_test_env(self, env, log_dir):
         self.test_env = env

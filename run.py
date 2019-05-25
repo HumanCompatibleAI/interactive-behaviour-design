@@ -348,7 +348,8 @@ def main():
     reward_selector = RewardSelector(classifier, reward_predictor)
     global_variables.reward_selector = reward_selector
 
-    train_env.reset()
+    for n in range(train_env.num_envs):
+        train_env.reset_one_env(n)
 
     time.sleep(5)  # Give time for processes to start
     mp = MemoryProfiler(pid=-1, log_path=os.path.join(log_dir, f'memory-self.txt'))
