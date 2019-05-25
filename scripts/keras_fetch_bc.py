@@ -13,7 +13,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from wrappers.wrappers_debug import DrawActions, DrawRewards
 from wrappers.fetch_pick_and_place import FetchStatsWrapper, FetchPickAndPlaceObsWrapper
 from wrappers.fetch_pick_and_place_register import register
-from wrappers.util_wrappers import LogEpisodeStats
+from wrappers.util_wrappers import SaveEpisodeStats
 
 
 class Oracle:
@@ -76,7 +76,7 @@ def gen_demonstrations(env_id, log_dir, n_demonstrations, seed):
     env = FlattenDictWrapper(env, ['observation', 'desired_goal'])
     env = FetchStatsWrapper(env)
     env = FetchPickAndPlaceObsWrapper(env, include_grip_obs=True)
-    env = LogEpisodeStats(env, log_dir, '_demo')
+    env = SaveEpisodeStats(env, log_dir, '_demo')
 
     # from wrappers.wrappers_debug import DrawObses
     # env = DrawObses(env)
@@ -121,7 +121,7 @@ def run_test_env(env_id, log_dir, model_path, model_lock, seed):
     test_env = FetchPickAndPlaceObsWrapper(test_env, include_grip_obs=False)
     test_env = DrawActions(test_env)
     test_env = DrawRewards(test_env)
-    test_env = LogEpisodeStats(test_env, log_dir, '_test')
+    test_env = SaveEpisodeStats(test_env, log_dir, '_test')
     test_env = Monitor(test_env, video_callable=lambda n: n % 7 == 0, directory=log_dir, uid=999)
 
     n = 0

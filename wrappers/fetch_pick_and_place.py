@@ -8,7 +8,7 @@ from gym.spaces import Discrete
 from gym.wrappers import FlattenDictWrapper
 
 from utils import RunningProportion
-from wrappers.util_wrappers import SaveEpisodeStats
+from wrappers.util_wrappers import CollectEpisodeStats
 
 
 def decode_fetch_obs(obs):
@@ -184,11 +184,11 @@ class FetchPickAndPlaceRewardWrapper(Wrapper):
         return self.env.reset()
 
 
-class FetchStatsWrapper(SaveEpisodeStats):
+class FetchStatsWrapper(CollectEpisodeStats):
     def __init__(self, env):
         assert isinstance(env, FlattenDictWrapper)
         assert env.observation_space.shape == (28,)
-        SaveEpisodeStats.__init__(self, env)
+        CollectEpisodeStats.__init__(self, env)
         self.stats = {}
         self.last_stats = {}
         self.aligned_proportion = None

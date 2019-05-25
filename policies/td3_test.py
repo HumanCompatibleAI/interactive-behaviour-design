@@ -17,7 +17,7 @@ from policies.td3 import TD3Policy, LockedReplayBuffer
 from subproc_vec_env_custom import CustomDummyVecEnv, CustomSubprocVecEnv
 from wrappers.fetch_pick_and_place_register import register
 from wrappers.fetch_pick_and_place import RandomInitialPosition
-from wrappers.util_wrappers import LogEpisodeStats
+from wrappers.util_wrappers import SaveEpisodeStats
 
 tf.logging.set_verbosity(tf.logging.ERROR)
 
@@ -90,7 +90,7 @@ def gen_demonstrations(env_id, log_dir, n_demonstrations, demonstrations_buffer:
     np.random.seed(0)
     # env = Monitor(env, video_callable=lambda n: True, directory=log_dir, uid=111)
     env = RandomInitialPosition(env)
-    env = LogEpisodeStats(env, log_dir, '_demo')
+    env = SaveEpisodeStats(env, log_dir, '_demo')
 
     for n in range(n_demonstrations):
         print(f"Generating demonstration {n}...")
@@ -232,7 +232,7 @@ class TestTD3(unittest.TestCase):
         test_env = gym.make(env_id)
         test_env.seed(0)
         test_env = Monitor(test_env, directory=temp_dir, video_callable=lambda n: True)
-        test_env = LogEpisodeStats(test_env, log_dir=temp_dir, stdout=False)
+        test_env = SaveEpisodeStats(test_env, log_dir=temp_dir, stdout=False)
         policy.test_env = test_env
 
         policy.init_logger(temp_dir)

@@ -80,7 +80,7 @@ class VecLogRewards(CustomVecEnvWrapper):
         return self.venv.reset()
 
 
-class LogEpisodeStats(Wrapper):
+class SaveEpisodeStats(Wrapper):
     def __init__(self, env, log_dir=None, suffix=None, stdout=False):
         Wrapper.__init__(self, env)
         self.stdout = stdout
@@ -97,7 +97,7 @@ class LogEpisodeStats(Wrapper):
         self.env = env
         self.stats_envs = []
         while True:
-            if isinstance(env, SaveEpisodeStats):
+            if isinstance(env, CollectEpisodeStats):
                 self.stats_envs.append(env)
             try:
                 env = env.env
@@ -136,7 +136,7 @@ class LogDoneInfo(Wrapper):
         return obs, reward, done, info
 
 
-class SaveEpisodeStats(Wrapper):
+class CollectEpisodeStats(Wrapper):
     """
     Save per-episode rewards and episode lengths.
     """
@@ -170,9 +170,9 @@ class SaveEpisodeStats(Wrapper):
         return obs, reward, done, info
 
 
-class SeaquestStatsWrapper(SaveEpisodeStats):
+class SeaquestStatsWrapper(CollectEpisodeStats):
     def __init__(self, env):
-        SaveEpisodeStats.__init__(self, env)
+        CollectEpisodeStats.__init__(self, env)
         self.last_n_divers = None
         self.n_diver_pickups = None
 

@@ -15,7 +15,7 @@ from wrappers.atari_generic import make_atari_env_with_preprocessing
 from wrappers.lunar_lander_stateful import LunarLanderStateful
 from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 from wrappers.util_wrappers import StoredResetsWrapper, SaveMidStateWrapper, SaveEpisodeObs, SaveSegments, \
-    SaveEpisodeStats, LogEpisodeStats, DummyRender
+    CollectEpisodeStats, SaveEpisodeStats, DummyRender
 
 
 def set_timeouts(env):
@@ -64,14 +64,14 @@ def make_env(env_id, num_env, seed, experience_dir,
             # needs to be done before preprocessing
             unwrapped_env = env.unwrapped
             first_wrapper = unwrap_to(env, type(unwrapped_env), n_before=1)
-            first_wrapper.env = SaveEpisodeStats(unwrapped_env)
-            env = SaveEpisodeStats(env, rewards_only=True, suffix='_post_wrappers')
+            first_wrapper.env = CollectEpisodeStats(unwrapped_env)
+            env = CollectEpisodeStats(env, rewards_only=True, suffix='_post_wrappers')
 
             env = StateBoundaryWrapper(env)
 
             env = StoredResetsWrapper(env, reset_mode_value, reset_state_server_queue)
             if rank == 0:
-                env = LogEpisodeStats(env, suffix='_train', log_dir=experience_dir)
+                env = SaveEpisodeStats(env, suffix='_train', log_dir=experience_dir)
                 env = Monitor(env, experience_dir,
                               lambda n: n and n % render_every_nth_episode == 0)  # save videos
                 env = SaveEpisodeObs(env, episode_obs_queue)

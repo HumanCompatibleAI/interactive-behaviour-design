@@ -19,7 +19,7 @@ from policies.td3_test import gen_demonstrations, Oracle
 from subproc_vec_env_custom import CustomSubprocVecEnv
 from utils import get_git_rev
 from wrappers.fetch_pick_and_place_register import register
-from wrappers.util_wrappers import LogEpisodeStats
+from wrappers.util_wrappers import SaveEpisodeStats
 from wrappers.wrappers_debug import DrawActions, DrawRewards
 
 faulthandler.enable()
@@ -45,7 +45,7 @@ def run_test_env(policy_fn_pickle, env_id, log_dir, n_test_eps_val: multiprocess
     test_env = gym.make(env_id)
     test_env = DrawActions(test_env)
     test_env = DrawRewards(test_env)
-    test_env = LogEpisodeStats(test_env, os.path.join(log_dir, 'env'), '_test')
+    test_env = SaveEpisodeStats(test_env, os.path.join(log_dir, 'env'), '_test')
     test_env = Monitor(test_env, video_callable=lambda n: n % 7 == 0, directory=log_dir, uid=999)
     policy.test_env = test_env
     policy.init_logger(os.path.join(log_dir, 'test'))

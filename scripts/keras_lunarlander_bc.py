@@ -21,7 +21,7 @@ from keras.optimizers import Adam
 
 from lunarlander_manual import Demonstration
 from wrappers.lunar_lander_reward import register
-from wrappers.util_wrappers import LogEpisodeStats
+from wrappers.util_wrappers import SaveEpisodeStats
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -53,7 +53,7 @@ def key_release(key, mod):
 def gen_demonstrations(env_id, log_dir, n_demonstrations):
     register()
     env = gym.make(env_id)
-    env = LogEpisodeStats(env, log_dir, '_demo')
+    env = SaveEpisodeStats(env, log_dir, '_demo')
     # env = Monitor(env, video_callable=lambda n: True, directory=log_dir, uid=111)
 
     obses, actions = [], []
@@ -76,7 +76,7 @@ def run_test_env(env_id, log_dir, model_path, model_lock):
 
     register()
     test_env = gym.make(env_id)
-    test_env = LogEpisodeStats(test_env, log_dir, '_test')
+    test_env = SaveEpisodeStats(test_env, log_dir, '_test')
     test_env = Monitor(test_env, video_callable=lambda n: n % 10 == 0, directory=log_dir, uid=999)
 
     while True:
@@ -104,7 +104,7 @@ def run_dagger_env(env_id, log_dir, model_path, model_lock, dagger_queue):
     register()
     dagger_env = gym.make(env_id)
     dagger_env = SetLanderWhite(dagger_env)
-    dagger_env = LogEpisodeStats(dagger_env, log_dir, '_dagger')
+    dagger_env = SaveEpisodeStats(dagger_env, log_dir, '_dagger')
     dagger_env = Monitor(dagger_env, video_callable=lambda n: True, directory=log_dir, uid=100)
 
     dagger_env.render()

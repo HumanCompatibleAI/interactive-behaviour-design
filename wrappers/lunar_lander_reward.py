@@ -8,7 +8,7 @@ from gym.envs import register as gym_register
 from baselines import logger
 from utils import draw_dict_on_image
 from wrappers import lunar_lander_stateful
-from wrappers.util_wrappers import SaveEpisodeStats, LogEpisodeStats
+from wrappers.util_wrappers import CollectEpisodeStats, SaveEpisodeStats
 
 lunar_lander_stateful.register()
 
@@ -26,9 +26,9 @@ def has_landed(env, observation):
     return bothLegsOnGround and hasStopped
 
 
-class LunarLanderStatsWrapper(SaveEpisodeStats):
+class LunarLanderStatsWrapper(CollectEpisodeStats):
     def __init__(self, env, window_size=10):
-        SaveEpisodeStats.__init__(self, env)
+        CollectEpisodeStats.__init__(self, env)
         self.landings = deque(maxlen=window_size)
         self.landings_between_flags = deque(maxlen=window_size)
         self.crashes = deque(maxlen=window_size)
@@ -116,7 +116,7 @@ def make_stats_env(early_termination=True):
     if early_termination:
         env = LunarLanderEarlyTermination(env)
     env = LunarLanderStatsWrapper(env)
-    env = LogEpisodeStats(env, log_dir=logger.get_dir())
+    env = SaveEpisodeStats(env, log_dir=logger.get_dir())
     return env
 
 
