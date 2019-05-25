@@ -79,7 +79,7 @@ class TD3Policy(Policy):
                  n_initial_episodes=100, replay_size=int(1e6),
                  l2_coef=1e-4, train_mode=PolicyTrainMode.R_ONLY,
                  hidden_sizes=(256, 256, 256, 256),
-                 sess_config=None):
+                 sess_config=None, test_rollouts_per_epoch=10):
         assert policy_delay < batches_per_cycle
         assert noise_type in ['gaussian', 'ou']
         Policy.__init__(self, name, env_id, obs_space, ac_space, n_envs, seed)
@@ -237,7 +237,7 @@ class TD3Policy(Policy):
         self.bc_x_ph = bc_x_ph
         self.bc_a_ph = bc_a_ph
         self.obs1 = None
-        self.env = None
+        self.train_env = None
         self.test_env = None
         self.replay_buffer = replay_buffer
         self.demonstrations_buffer = demonstrations_buffer
@@ -262,6 +262,7 @@ class TD3Policy(Policy):
         self.seen_demonstrations = set()
         self.monitor_q_s = []
         self.monitor_q_a = []
+        self.test_rollouts_per_epoch = test_rollouts_per_epoch
 
         self.reset_noise()
 
@@ -269,28 +270,23 @@ class TD3Policy(Policy):
         mu = np.zeros((self.n_envs, self.act_dim))
         self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=self.noise_sigma)
 
-    def test_agent(self, n=10):
-        rets = []
-        for j in range(n):
-            o, r, d, ep_ret, ep_len = self.test_env.reset(), 0, False, 0, 0
-            while not d:
-                # Take deterministic actions at test time
-                o, r, d, _ = self.test_env.step(self.test_step(o))
-                ep_ret += r
-                ep_len += 1
-            rets.append(ep_ret)
-            self.logger.logkv('test_ep_reward', ep_ret)
-            self.logger.logkv('test_ep_len', ep_len)
-        return rets
+    def test_agent(self):
+        # Logging will be taken care of by the environment itself (see env.py)
+        for _ in range(self.test_rollouts_per_epoch):
+            obs, done = self.test_env.reset(), False
+            while not done:
+                obs, r, done, _ = self.test_env.step(self.step(obs, deterministic=True))
 
     def train_bc(self):
         loss_bc_pi_l, loss_l2_l = [], []
         for _ in range(self.batches_per_cycle):
             bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-            feed_dict = {
-                self.bc_x_ph: bc_batch['obs1'], self.bc_a_ph: bc_batch['acts']
-            }
-            bc_pi_loss, l2_loss, _ = self.sess.run([self.bc_pi_loss, self.l2_loss, self.train_pi_bc_only_op], feed_dict)
+            feed_dict = {self.bc_x_ph: bc_batch['obs1'],
+                         self.bc_a_ph: bc_batch['acts']}
+            bc_pi_loss, l2_loss, _ = self.sess.run([self.bc_pi_loss,
+                                                    self.l2_loss,
+                                                    self.train_pi_bc_only_op],
+                                                   feed_dict)
             loss_bc_pi_l.append(bc_pi_loss)
             loss_l2_l.append(l2_loss)
         self.logger.log_list_stats(f'policy_{self.name}/loss_bc_pi', loss_bc_pi_l)
@@ -300,6 +296,7 @@ class TD3Policy(Policy):
         if self.cycle_n % self.cycles_per_epoch == 0:
             self.epoch_n += 1
             self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
+            self.test_agent()
         return np.mean(loss_bc_pi_l)
 
     def train(self):
@@ -307,7 +304,7 @@ class TD3Policy(Policy):
             self.train_bc()
             return
 
-        if self.env is None:
+        if self.train_env is None:
             raise Exception("env not set")
 
         if self.initial_exploration_phase and self.serial_episode_n * self.n_envs >= self.n_initial_episodes:
@@ -321,14 +318,14 @@ class TD3Policy(Policy):
             action = self.train_step(self.obs1)
 
         # Step the env
-        obs2, reward, done, _ = self.env.step(action)
+        obs2, reward, done, _ = self.train_env.step(action)
         self.n_serial_steps += 1
 
         # Store experience to replay buffer
         for i in range(self.n_envs):
             self.replay_buffer.store(self.obs1[i], action[i], reward[i], obs2[i], done[i])
             if done[i]:
-                obs2[i] = self.env.reset_one_env(i)
+                obs2[i] = self.train_env.reset_one_env(i)
 
         # Super critical, easy to overlook step: make sure to update
         # most recent observation!
@@ -364,6 +361,7 @@ class TD3Policy(Policy):
             if self.cycle_n and self.cycle_n % self.cycles_per_epoch == 0:
                 self.epoch_n += 1
                 self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
+                self.test_agent()
 
             self.cycle_n += 1
 
@@ -538,9 +536,12 @@ class TD3Policy(Policy):
         self.ckpt_n += 1
         print("Saved policy checkpoint to '{}'".format(saved_path))
 
-    def set_training_env(self, env):
-        self.env = env
-        self.obs1 = self.env.reset()
+    def set_training_env(self, env, log_dir):
+        self.train_env = env
+        self.obs1 = self.train_env.reset()
+
+    def set_test_env(self, env, log_dir):
+        self.test_env = env
 
     def use_demonstrations(self, demonstrations: RolloutsByHash):
         def f():

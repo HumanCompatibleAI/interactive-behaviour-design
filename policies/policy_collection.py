@@ -9,11 +9,12 @@ from rollouts import RolloutsByHash
 class PolicyCollection:
     policies: Dict[str, Policy]
 
-    def __init__(self, make_policy_fn, log_dir, demonstrations: RolloutsByHash, seed):
+    def __init__(self, make_policy_fn, log_dir, demonstrations: RolloutsByHash, seed, test_env):
         self.policies = {}
         self.cur_policy = None
         self.make_policy = make_policy_fn
-        self.env = None
+        self.train_env = None
+        self.test_env = test_env
         self.log_dir = log_dir
         self.demonstrations = demonstrations
         self.seed = seed
@@ -30,7 +31,8 @@ class PolicyCollection:
         if name is not None:
             policy = self.policies[name]
             policy.init_logger(self.log_dir)
-            policy.set_training_env(self.env, self.log_dir)
+            policy.set_training_env(self.train_env, self.log_dir)
+            policy.set_test_env(self.test_env, self.log_dir)
             policy.use_demonstrations(self.demonstrations)
             policy.start_training()
             if isinstance(policy, TD3Policy):

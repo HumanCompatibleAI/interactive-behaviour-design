@@ -184,7 +184,7 @@ def main():
 
     demonstration_rollouts = RolloutsByHash(maxlen=args.demonstrations_buffer_len)
 
-    policies = PolicyCollection(make_policy, log_dir, demonstration_rollouts, args.seed)
+    policies = PolicyCollection(make_policy, log_dir, demonstration_rollouts, args.seed, test_env)
     if args.add_manual_fetch_policies:
         for action in FetchAction:
             policies.add_policy(str(action), policy_kwargs={'fetch_action': action})
@@ -280,7 +280,7 @@ def main():
         train_env = VecSaveSegments(train_env, segments_queue)
     train_env = VecLogRewards(train_env, os.path.join(log_dir, 'vec_rewards'))
 
-    policies.env = train_env
+    policies.train_env = train_env
 
     ckpt_dir = os.path.join(log_dir, 'checkpoints')
     pref_db_ckpt_name = 'pref_dbs.pkl'

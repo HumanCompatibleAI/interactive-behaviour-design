@@ -69,7 +69,11 @@ class Policy:
         raise NotImplementedError()
 
     @abstractmethod
-    def set_training_env(self, env):
+    def set_training_env(self, env, log_dir):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def set_test_env(self, env, log_dir):
         raise NotImplementedError()
 
     @abstractmethod
