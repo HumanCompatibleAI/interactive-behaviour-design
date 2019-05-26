@@ -275,7 +275,8 @@ class TD3Policy(Policy):
         for _ in range(self.test_rollouts_per_epoch):
             obs, done = self.test_env.reset(), False
             while not done:
-                obs, r, done, _ = self.test_env.step(self.step(obs, deterministic=True))
+                obs, _, done, _ = self.test_env.step(self.step(obs, deterministic=True))
+        self.test_env.reset()  # Trigger stats save from last episode
 
     def train_bc(self):
         loss_bc_pi_l, loss_l2_l = [], []

@@ -98,7 +98,7 @@ def make_envs(env_id, num_env, seed, log_dir,
             if env_type == 'test':
                 test_log_dir = os.path.join(log_dir, 'test_env')
                 env = SaveEpisodeStats(env, suffix='_test', log_dir=test_log_dir)
-                env = Monitor(env, test_log_dir, lambda n: n and n % render_every_nth_episode == 0)  # Save videos
+                env = Monitor(env, test_log_dir, lambda n: True)
 
             return env
 
