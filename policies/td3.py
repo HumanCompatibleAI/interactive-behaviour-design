@@ -271,6 +271,7 @@ class TD3Policy(Policy):
         self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=self.noise_sigma)
 
     def test_agent(self):
+        print("Running test episodes...")
         # Logging will be taken care of by the environment itself (see env.py)
         for _ in range(self.test_rollouts_per_epoch):
             obs, done = self.test_env.reset(), False
