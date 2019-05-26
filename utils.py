@@ -1,3 +1,5 @@
+import code
+import faulthandler
 import glob
 import gzip
 import json
@@ -7,10 +9,12 @@ import os
 import pickle
 import queue
 import random
+import signal
 import subprocess
 import sys
 import tempfile
 import time
+import traceback
 from collections import deque
 from functools import partial
 from multiprocessing import Queue
@@ -501,3 +505,21 @@ def configure_cpus(log_dir, cpus):
     drlhp_training_cpus = [all_cpus.pop() for _ in range(4)]
     main_cpus = all_cpus
     save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus)
+
+
+# https://stackoverflow.com/a/133384/7832197
+
+def debug(sig, frame):
+    """Interrupt running process, and provide a python prompt for
+    interactive debugging."""
+    d = {'_frame': frame}  # Allow access to frame object.
+    d.update(frame.f_globals)  # Unless shadowed by global
+    d.update(frame.f_locals)
+
+    faulthandler.dump_traceback(all_threads=True)
+    i = code.InteractiveConsole(d)
+    i.interact('Entering shell')
+
+
+def register_debug_handler():
+    signal.signal(signal.SIGUSR1, debug)  # Register handler
