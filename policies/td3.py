@@ -557,7 +557,8 @@ class TD3Policy(Policy):
                     acts = d.actions[:-1]
                     o2s = d.obses[1:]
                     dones = [0] * (len(d.obses) - 1) + [1]
-                    assert len(o1s) == len(acts) == len(o2s) == len(dones)
+                    assert len(o1s) == len(acts) == len(o2s) == len(dones),\
+                        (len(o1s), len(acts), len(o2s), len(dones))
                     for o, a, o2, done in zip(o1s, acts, o2s, dones):
                         self.demonstrations_buffer.store(obs=o, act=a, next_obs=o2, done=done, rew=None)
                     self.seen_demonstrations.add(demonstration_hash)
