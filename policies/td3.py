@@ -557,11 +557,11 @@ class TD3Policy(Policy):
                     o1s = d.obses[:-1]
                     acts = d.actions[:-1]
                     o2s = d.obses[1:]
-                    dones = [0] * (len(d.obses) - 1) + [1]
+                    dones = [0] * len(o1s)
                     assert len(o1s) == len(acts) == len(o2s) == len(dones),\
                         (len(o1s), len(acts), len(o2s), len(dones))
-                    for o, a, o2, done in zip(o1s, acts, o2s, dones):
-                        self.demonstrations_buffer.store(obs=o, act=a, next_obs=o2, done=done, rew=None)
+                    for o1, a, o2, done in zip(o1s, acts, o2s, dones):
+                        self.demonstrations_buffer.store(obs=o1, act=a, next_obs=o2, done=done, rew=None)
                     self.seen_demonstrations.add(demonstration_hash)
                 self.logger.logkv(f'policy_{self.name}/replay_buffer_demo_ptr', self.demonstrations_buffer.ptr)
                 time.sleep(1)
