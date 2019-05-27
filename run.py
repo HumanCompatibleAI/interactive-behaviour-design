@@ -267,8 +267,8 @@ def main():
                         for p in meta_paths}
         for policy_name in policy_names:
             policies.add_policy(policy_name)
-            last_ckpt_name = find_latest_checkpoint(args.load_policy_ckpt_dir,
-                                                    'policy-{}-'.format(policy_name))
+            last_ckpt_name = find_latest_checkpoint(
+                os.path.join(args.load_policy_ckpt_dir, 'policy-{}-'.format(policy_name)))
             policies.policies[policy_name].load_checkpoint(last_ckpt_name)
 
     # classifier_data_buffer is passed because it's what the classifiers train on
@@ -344,7 +344,7 @@ def main():
             if not classifier_name in classifier.classifiers:
                 classifier.add_classifier(classifier_name)
                 print("Added classifier '{}'".format(classifier_name))
-        last_ckpt_name = find_latest_checkpoint(args.load_classifier_ckpt, 'classifiers-')
+        last_ckpt_name = find_latest_checkpoint(os.path.join(args.load_classifier_ckpt, 'classifiers-'))
         classifier.load_checkpoint(last_ckpt_name)
 
     reward_selector = RewardSelector(classifier, reward_predictor)

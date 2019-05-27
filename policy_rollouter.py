@@ -18,8 +18,7 @@ import global_variables
 from global_constants import ROLLOUT_FPS
 from global_variables import RolloutMode, RolloutRandomness
 from rollouts import CompressedRollout
-from utils import EnvState, get_noop_action, save_video, make_small_change, \
-    find_latest_checkpoint, load_cpu_config
+from utils import EnvState, get_noop_action, save_video, make_small_change, find_latest_checkpoint, load_cpu_config
 from wrappers.util_wrappers import ResetMode
 
 
@@ -90,8 +89,7 @@ class RolloutWorker:
     def load_policy_checkpoint(self, policy_name):
         while True:
             try:
-                last_ckpt_name = find_latest_checkpoint(self.checkpoint_dir,
-                                                        'policy-{}-'.format(policy_name))
+                last_ckpt_name = find_latest_checkpoint(os.path.join(self.checkpoint_dir, 'policy-{}-'.format(policy_name)))
                 self.policy.load_checkpoint(last_ckpt_name)
             except NotFoundError:
                 # If e.g. the checkpoint got replaced with a newer one

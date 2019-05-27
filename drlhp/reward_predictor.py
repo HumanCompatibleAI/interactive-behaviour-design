@@ -44,7 +44,7 @@ class RewardPredictor:
             # So that the plain-text 'checkpoint' file written uses relative paths,
             # which seems to be needed in order to avoid confusing saver.restore()
             # when restoring from FloydHub runs.
-            self.saver = tf.train.Saver(max_to_keep=2, save_relative_paths=True)
+            self.saver = tf.train.Saver(max_to_keep=5, save_relative_paths=True)
             self.summaries = self.add_summary_ops()
 
         self.train_writer = tf.summary.FileWriter(
@@ -62,6 +62,8 @@ class RewardPredictor:
         self.reward_call_n = 0
 
         self.log_interval = 20
+
+        self.ckpt_n = 0
 
         self.init_network()
 
@@ -98,8 +100,9 @@ class RewardPredictor:
             self.sess.run(self.init_op)
 
     def save(self, path):
-        ckpt_name = self.saver.save(self.sess, path)
+        ckpt_name = self.saver.save(self.sess, path, self.ckpt_n)
         print("Saved reward predictor checkpoint to '{}'".format(ckpt_name))
+        self.ckpt_n += 1
 
     def load(self, path):
         self.saver.restore(self.sess, path)
