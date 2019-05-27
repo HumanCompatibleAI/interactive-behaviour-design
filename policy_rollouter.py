@@ -1,6 +1,7 @@
 import json
 import multiprocessing
 import sys
+import pysnooper
 
 import os
 import pickle
@@ -104,7 +105,7 @@ class RolloutWorker:
                 deterministic = False  # Lunar Lander primitives don't work well if deterministic?
             else:
                 deterministic = (policy_name != 'random')
-            action = self.policy.step(obs, deterministic=deterministic)
+            action = self.policy.step(obs, name=policy_name, deterministic=deterministic)
             if noise:
                 assert env.action_space.dtype in [np.int64, np.float32]
                 if env.action_space.dtype == np.float32:

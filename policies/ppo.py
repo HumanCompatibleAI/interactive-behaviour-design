@@ -145,7 +145,7 @@ class PPOPolicy(Policy):
         self.train_bc_time = 10
         self.last_obs = None
 
-    def step(self, obs, obs_is_batch=False, **step_kwargs):
+    def step(self, obs, name=None, obs_is_batch=False, **step_kwargs):
         if isinstance(self.action_space, Discrete):
             n_actions = self.action_space.n
         elif isinstance(self.action_space, Box):
@@ -178,9 +178,18 @@ class PPOPolicy(Policy):
             elif isinstance(self.action_space, Box):
                 assert actions.shape == (batch_size, n_actions), actions.shape
 
+        self.is_hard_policy = False
+        if '_hardp_' in name:
+            self.is_hard_policy = True
+            i = name.index('_hardp_')
+            self.action = int(name[i + 7:])
         if obs_is_batch:
+            if self.is_hard_policy:
+                return np.ones(actions.shape).astype(int) * self.action
             return actions
         else:
+            if self.is_hard_policy:
+                return np.ones(actions[0].shape).astype(int) * self.action
             return actions[0]
 
     def set_training_env(self, env):
