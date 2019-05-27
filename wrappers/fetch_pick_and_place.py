@@ -90,7 +90,7 @@ class FetchPickAndPlaceRewardWrapper(Wrapper):
     @staticmethod
     def _reward_delta1(obs_by_name, last_obs_by_name):
         if last_obs_by_name is None:
-            reward = 0
+            reward = 0.0
         else:
             gripper_to_object_delta = (np.linalg.norm(obs_by_name['object_rel_pos']) -
                                        np.linalg.norm(last_obs_by_name['object_rel_pos']))
@@ -101,7 +101,7 @@ class FetchPickAndPlaceRewardWrapper(Wrapper):
     @staticmethod
     def _reward_delta2(obs_by_name, last_obs_by_name):
         if last_obs_by_name is None:
-            reward = 0
+            reward = 0.0
         else:
             gripper_to_object_delta = (np.linalg.norm(obs_by_name['object_rel_pos']) -
                                        np.linalg.norm(last_obs_by_name['object_rel_pos']))
