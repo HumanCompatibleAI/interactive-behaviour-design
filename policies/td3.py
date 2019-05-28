@@ -282,31 +282,54 @@ class TD3Policy(Policy):
                 obs, _, done, _ = self.test_env.step(self.step(obs, deterministic=True))
             self.last_test_obs = self.test_env.reset()
 
-    def train_bc(self):
+    def train_bc_only(self):
+        t1 = time.time()
+
         loss_bc_pi_l, loss_l2_l = [], []
         for _ in range(self.batches_per_cycle):
             bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-            feed_dict = {self.bc_x_ph: bc_batch['obs1'],
-                         self.bc_a_ph: bc_batch['acts']}
-            bc_pi_loss, l2_loss, _ = self.sess.run([self.bc_pi_loss,
-                                                    self.l2_loss,
-                                                    self.train_pi_bc_only_op],
-                                                   feed_dict)
+            feed_dict = {self.bc_x_ph: bc_batch['obs1'], self.bc_a_ph: bc_batch['acts']}
+            bc_pi_loss, l2_loss, _ = self.sess.run([self.bc_pi_loss, self.l2_loss, self.train_pi_bc_only_op], feed_dict)
             loss_bc_pi_l.append(bc_pi_loss)
             loss_l2_l.append(l2_loss)
         self.logger.log_list_stats(f'policy_{self.name}/loss_bc_pi', loss_bc_pi_l)
         self.logger.log_list_stats(f'policy_{self.name}/loss_l2', loss_l2_l)
         self.cycle_n += 1
         self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
+
+        t2 = time.time()
+
+        done = [False]
+        obs = self.obs1
+        # Generate reset states for demonstrations
+        # (We only care about the first environment, because that's the one from which reset states are generated)
+        # TODO: we should be generating reset states from the test environment
+        while not done[0]:
+            obs, reward, done, info = self.train_env.step(self.train_step(obs))
+        self.obs1 = np.array([self.train_env.reset_one_env(n)
+                              for n in range(self.train_env.num_envs)])
+
+        t3 = time.time()
+
         if self.cycle_n % self.cycles_per_epoch == 0:
             self.epoch_n += 1
             self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
             self.test_agent()
+
+        t4 = time.time()
+
+        train_time_ms = (t2 - t1) * 1000
+        env_time_ms = (t3 - t2) * 1000
+        test_time_ms = (t4 - t3) * 1000
+        self.logger.logkv(f'policy_{self.name}/bc_train_time_ms', train_time_ms)
+        self.logger.logkv(f'policy_{self.name}/train_env_time_ms', env_time_ms)
+        self.logger.logkv(f'policy_{self.name}/test_env_time_ms', test_time_ms)
+
         return np.mean(loss_bc_pi_l)
 
     def train(self):
         if self.train_mode == PolicyTrainMode.BC_ONLY:
-            self.train_bc()
+            self.train_bc_only()
             return
 
         if self.train_env is None:
@@ -329,6 +352,7 @@ class TD3Policy(Policy):
         # Store experience to replay buffer
         for i in range(self.n_envs):
             self.replay_buffer.store(self.obs1[i], action[i], reward[i], obs2[i], done[i])
+            # So that obs1 is immediately set to the first obs from the next episode
             if done[i]:
                 obs2[i] = self.train_env.reset_one_env(i)
 

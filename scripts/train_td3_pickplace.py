@@ -207,7 +207,7 @@ def main():
     last_cycle_n = None
     while policy.cycle_n < 1000:
         if args.mode == 'bc':
-            policy.train_bc()
+            policy.train_bc_only()
         elif args.mode == 'rbc':
             policy.train()
         else:

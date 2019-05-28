@@ -243,7 +243,7 @@ class TestTD3(unittest.TestCase):
                 last_epoch_n = policy.epoch_n
                 print(f"Epoch {last_epoch_n}")
             print(f"Cycle {policy.cycle_n}")
-            policy.train_bc()
+            policy.train_bc_only()
         policy.test_agent(n=30)
         self.assertGreater(test_env.stats['success_rate'], 0.6)
 
