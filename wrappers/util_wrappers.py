@@ -490,11 +490,12 @@ class VecSaveSegments(CustomVecEnvWrapper):
 class SaveSegments(Wrapper):
     def __init__(self, env, segment_queue: multiprocessing.Queue):
         Wrapper.__init__(self, env)
-        self.queue = segment_queue
-        self.segment_frames = None
-        self.segment_obses = None
-        self.segment_rewards = None
-        self._reset_segment()
+        raise RuntimeError("Error: SaveSegments has not yet been updated with fixes from VecSaveSegments")
+        # self.queue = segment_queue
+        # self.segment_frames = None
+        # self.segment_obses = None
+        # self.segment_rewards = None
+        # self._reset_segment()
 
     def _reset_segment(self):
         self.segment_frames = []
