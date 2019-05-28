@@ -285,11 +285,12 @@ class PPOPolicy(Policy):
             t1 = time.time()
             done = [False]
             obs = self.last_obs
-            # We only care about the first environment, because that's the one that generates stats and reset states
+            # Generate reset states for demonstrations
+            # (We only care about the first environment, because that's the one from which reset states are generated)
             while not done[0]:
                 a = self.step(obs, deterministic=True, obs_is_batch=True)
                 obs, reward, done, info = self.env.step(a)
-            self.last_obs = obs  # obs when done is reset obs
+            self.last_obs = self.env.reset()
             t2 = time.time()
             self.train_bc_time = (t2 - t1) * 5
             return
