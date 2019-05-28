@@ -145,8 +145,14 @@ def find_latest_checkpoint(ckpt_prefix):
     meta_paths = glob.glob(ckpt_prefix + '*.meta')
     if not meta_paths:
         raise Exception(f"Couldn't find checkpoint matching '{ckpt_prefix}*'")
-    meta_paths = sorted(meta_paths, key=lambda f: os.path.getmtime(f))
-    ckpt_paths = [path.replace('.meta', '') for path in meta_paths]
+    meta_path_timestample_tuples = []
+    for p in meta_paths:
+        # The oldest checkpoint could have been deleted since when we globbed
+        if not os.path.exists(p):
+            continue
+        meta_path_timestample_tuples.append((p, os.path.getmtime(p)))
+    meta_path_timestample_tuples.sort(key=lambda tup: tup[1])
+    ckpt_paths = [meta_path.replace('.meta', '') for meta_path, _ in meta_path_timestample_tuples]
     if len(ckpt_paths) == 1:
         return ckpt_paths[0]
     else:
