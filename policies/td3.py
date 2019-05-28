@@ -263,6 +263,7 @@ class TD3Policy(Policy):
         self.monitor_q_s = []
         self.monitor_q_a = []
         self.test_rollouts_per_epoch = test_rollouts_per_epoch
+        self.last_test_obs = None
 
         self.reset_noise()
 
@@ -273,11 +274,13 @@ class TD3Policy(Policy):
     def test_agent(self):
         print("Running test episodes...")
         # Logging will be taken care of by the environment itself (see env.py)
+        # Why do the env reset in this funny way? Because we need to end with a reset to trigger
+        # SaveEpisodeStats to save the stats from the final episode.
         for _ in range(self.test_rollouts_per_epoch):
-            obs, done = self.test_env.reset(), False
+            obs, done = self.last_test_obs, False
             while not done:
                 obs, _, done, _ = self.test_env.step(self.step(obs, deterministic=True))
-        self.test_env.reset()  # Trigger stats save from last episode
+            self.last_test_obs = self.test_env.reset()
 
     def train_bc(self):
         loss_bc_pi_l, loss_l2_l = [], []
@@ -545,6 +548,7 @@ class TD3Policy(Policy):
 
     def set_test_env(self, env, log_dir):
         self.test_env = env
+        self.last_test_obs = self.test_env.reset()
 
     def use_demonstrations(self, demonstrations: RolloutsByHash):
         def f():
