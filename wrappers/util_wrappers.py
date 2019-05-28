@@ -483,9 +483,10 @@ class VecSaveSegments(CustomVecEnvWrapper):
         return obses, rewards, dones, infos
 
     def reset_one_env(self, env_n):
-        if self.segment_frames[env_n]:
-            # We should have seen 'done' during 'step'
-            raise RuntimeError("segment_frames[{0}] not empty on env[{0}] reset".format(env_n))
+        # Shouldn't we have seen 'done' before reset, making this call unnecessary?
+        # Not necessarily: if we've just switched policy, that policy is going to want to reset the environment,
+        # even if the previous policy hadn't finished the episode
+        self._reset_segment(env_n)
         return super().reset_one_env(env_n)
 
 
