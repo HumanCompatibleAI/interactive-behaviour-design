@@ -1,4 +1,3 @@
-import logging
 import multiprocessing
 import os
 import pickle
@@ -20,11 +19,13 @@ import easy_tf_log
 import numpy as np
 from gym.core import ObservationWrapper, Wrapper
 
+import global_constants
 from baselines import logger
-from a2c.common.vec_env import VecEnvWrapper
 from classifier_collection import ClassifierCollection
 from drlhp.reward_predictor import RewardPredictor
+from subproc_vec_env_custom import CustomSubprocVecEnv, CustomVecEnvWrapper
 from utils import unwrap_to, EnvState, TimerContext
+from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 
 
 class DrawClassifierPredictionWrapper(ObservationWrapper):
@@ -57,16 +58,9 @@ class DrawClassifierPredictionWrapper(ObservationWrapper):
         return obs
 
 
-class RewardSource(Enum):
-    CLASSIFIER = 0
-    DRLHP = 1
-    ENV = 2
-    NONE = 3
-
-
-class VecLogRewards(VecEnvWrapper):
+class VecLogRewards(CustomVecEnvWrapper):
     def __init__(self, venv, log_dir, postfix=None):
-        VecEnvWrapper.__init__(self, venv)
+        super().__init__(venv)
         self.episode_reward_sum = 0
         self.logger = easy_tf_log.Logger()
         self.logger.set_log_dir(log_dir)
@@ -86,58 +80,7 @@ class VecLogRewards(VecEnvWrapper):
         return self.venv.reset()
 
 
-class VecRewardSwitcherWrapper(VecEnvWrapper):
-
-    def __init__(self, venv, classifiers: ClassifierCollection,
-                 network, network_args, reward_predictor_std, log_dir):
-        VecEnvWrapper.__init__(self, venv)
-
-        drlhp_log_dir = os.path.join(log_dir, 'drlhp')
-        obs_shape = venv.observation_space.shape
-        self.reward_predictor = RewardPredictor(network=network, network_args=network_args,
-                                                log_dir=drlhp_log_dir, obs_shape=obs_shape,
-                                                r_std=reward_predictor_std)
-
-        self.classifiers = classifiers
-        self.cur_classifier_name = None
-        self.cur_reward_source = RewardSource.NONE
-
-    def set_reward_source(self, reward_source: RewardSource):
-        self.cur_reward_source = reward_source
-
-    def reward_drlhp(self, obs):
-        rewards = self.reward_predictor.reward(obs)
-        assert rewards.shape == (self.venv.num_envs,)
-        return rewards
-
-    def reward_classifier(self, obs):
-        if self.cur_classifier_name is None:
-            print("Warning: classifier not set")
-            return [0.0] * len(obs)
-
-        probs = self.classifiers.predict_positive_prob(self.cur_classifier_name, obs)
-        assert probs.shape == (self.venv.num_envs,)
-        rewards = (probs >= 0.5).astype(np.float32)
-        return rewards
-
-    def step_wait(self):
-        obs, rewards_env, dones, infos = self.venv.step_wait()
-        assert obs.shape[0] == self.venv.num_envs
-        if self.cur_reward_source == RewardSource.ENV:
-            rewards = rewards_env
-        elif self.cur_reward_source == RewardSource.CLASSIFIER:
-            rewards = self.reward_classifier(obs)
-        elif self.cur_reward_source == RewardSource.DRLHP:
-            rewards = self.reward_drlhp(obs)
-        elif self.cur_reward_source == RewardSource.NONE:
-            rewards = [0.0] * self.venv.num_envs
-        return obs, rewards, dones, infos
-
-    def reset(self):
-        return self.venv.reset()
-
-
-class LogEpisodeStats(Wrapper):
+class SaveEpisodeStats(Wrapper):
     def __init__(self, env, log_dir=None, suffix=None, stdout=False):
         Wrapper.__init__(self, env)
         self.stdout = stdout
@@ -154,7 +97,7 @@ class LogEpisodeStats(Wrapper):
         self.env = env
         self.stats_envs = []
         while True:
-            if isinstance(env, SaveEpisodeStats):
+            if isinstance(env, CollectEpisodeStats):
                 self.stats_envs.append(env)
             try:
                 env = env.env
@@ -193,7 +136,7 @@ class LogDoneInfo(Wrapper):
         return obs, reward, done, info
 
 
-class SaveEpisodeStats(Wrapper):
+class CollectEpisodeStats(Wrapper):
     """
     Save per-episode rewards and episode lengths.
     """
@@ -227,9 +170,9 @@ class SaveEpisodeStats(Wrapper):
         return obs, reward, done, info
 
 
-class SeaquestStatsWrapper(SaveEpisodeStats):
+class SeaquestStatsWrapper(CollectEpisodeStats):
     def __init__(self, env):
-        SaveEpisodeStats.__init__(self, env)
+        CollectEpisodeStats.__init__(self, env)
         self.last_n_divers = None
         self.n_diver_pickups = None
 
@@ -435,14 +378,6 @@ class SaveMidStateWrapper(Wrapper):
         return self.env.reset()
 
 
-class StateBoundaryWrapper(Wrapper):
-    def reset(self):
-        return self.env.reset()
-
-    def step(self, action):
-        return self.env.step(action)
-
-
 class OneLifeWrapper(Wrapper):
 
     def __init__(self, env):
@@ -500,9 +435,61 @@ class DummyRender(Wrapper):
         return self.env.reset()
 
 
-class SaveSegments(Wrapper):
-    FRAMES_PER_SEGMENT = 30
+class VecSaveSegments(CustomVecEnvWrapper):
+    def __init__(self, venv, segment_queue: multiprocessing.Queue):
+        assert isinstance(venv, CustomSubprocVecEnv)
+        super().__init__(venv)
+        self.queue = segment_queue
+        self.segment_frames = [None] * self.num_envs
+        self.segment_obses = [None] * self.num_envs
+        self.segment_rewards = [None] * self.num_envs
+        for n in range(self.num_envs):
+            self._reset_segment(n)
 
+    def _reset_segment(self, n):
+        self.segment_frames[n] = []
+        self.segment_obses[n] = []
+        self.segment_rewards[n] = []
+
+    def _pad_segment(self, n):
+        while len(self.segment_obses[n]) < global_constants.FRAMES_PER_SEGMENT:
+            self.segment_frames[n].append(self.segment_frames[n][-1])
+            self.segment_obses[n].append(self.segment_obses[n][-1])
+            self.segment_rewards[n].append(self.segment_rewards[n][-1])
+
+    def step_wait(self):
+        obses, rewards, dones, infos = self.venv.step_wait()
+        frames = self.venv.get_images()
+
+        for n in range(self.num_envs):
+            # When done, SubprocVecEnv automatically resets the environment,
+            # and we don't want the frame from the resetted environment in this segment
+            if not dones[n]:
+                self.segment_frames[n].append(frames[n])
+                self.segment_obses[n].append(np.copy(obses[n]))
+                self.segment_rewards[n].append(rewards[n])
+
+            # We could get unlucky and get a 'done' just after we've reset the segment,
+            # so we need to be careful about the segment being empty
+            if (dones[n] and len(self.segment_obses[n]) > 0) or \
+                    len(self.segment_obses[n]) == global_constants.FRAMES_PER_SEGMENT:
+                self._pad_segment(n)
+                tuple = (self.segment_obses[n], self.segment_rewards[n], self.segment_frames[n])
+                try:
+                    self.queue.put(tuple, block=False)
+                except queue.Full:
+                    pass
+                self._reset_segment(n)
+        return obses, rewards, dones, infos
+
+    def reset_one_env(self, env_n):
+        if self.segment_frames[env_n]:
+            # We should have seen 'done' during 'step'
+            raise RuntimeError("segment_frames[{0}] not empty on env[{0}] reset".format(env_n))
+        return super().reset_one_env(env_n)
+
+
+class SaveSegments(Wrapper):
     def __init__(self, env, segment_queue: multiprocessing.Queue):
         Wrapper.__init__(self, env)
         self.queue = segment_queue
@@ -517,7 +504,7 @@ class SaveSegments(Wrapper):
         self.segment_rewards = []
 
     def _pad_segment(self):
-        while len(self.segment_obses) < self.FRAMES_PER_SEGMENT:
+        while len(self.segment_obses) < global_constants.FRAMES_PER_SEGMENT:
             self.segment_frames.append(self.segment_frames[-1])
             self.segment_obses.append(self.segment_obses[-1])
             self.segment_rewards.append(self.segment_rewards[-1])
@@ -527,7 +514,7 @@ class SaveSegments(Wrapper):
         self.segment_frames.append(self.env.render(mode='rgb_array'))
         self.segment_obses.append(np.copy(obs))
         self.segment_rewards.append(reward)
-        if done or len(self.segment_obses) == self.FRAMES_PER_SEGMENT:
+        if done or len(self.segment_obses) == global_constants.FRAMES_PER_SEGMENT:
             self._pad_segment()
             tuple = (self.segment_obses, self.segment_rewards, self.segment_frames)
             try:
@@ -538,10 +525,9 @@ class SaveSegments(Wrapper):
         return obs, reward, done, info
 
     def reset(self):
-        # We assume we're operating in a SubprocVecEnv, which normally doesn't need to be reset, so that if we
-        # receive an explicit reset, we're doing something unusual. We might be part-way through an episode and only
-        # have a couple of frames in the segment so far, so let's play it safe by dropping the current segment.
-        self._reset_segment()
+        if self.segment_frames:
+            # We should have seen 'done' during 'step'
+            raise RuntimeError("segment_frames not empty on env reset")
         return self.env.reset()
 
 

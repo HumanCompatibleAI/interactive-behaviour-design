@@ -1,0 +1,176 @@
+import argparse
+import multiprocessing
+import queue
+import random
+from collections import defaultdict
+from multiprocessing import Process, Queue
+
+import gym
+import gym.spaces
+import numpy as np
+from gym import Wrapper
+from gym.envs.classic_control import rendering
+from gym.spaces import Box
+from gym.wrappers.monitoring.video_recorder import VideoRecorder, ImageEncoder
+
+import global_variables
+from utils import EnvState
+from wrappers.breakout_reward import register as breakout_register
+from wrappers.seaquest_reward import register as seaquest_register
+
+seaquest_register()
+breakout_register()
+
+n_envs = 3
+barrier = multiprocessing.Barrier(n_envs)
+
+parser = argparse.ArgumentParser()
+parser.add_argument('action_selection', choices=['sample', 'correlated'])
+parser.add_argument('--correlation', type=float, default=0.99)
+parser.add_argument('--render', action='store_true')
+parser.add_argument('--seg_len', type=int, default=60)
+args = parser.parse_args()
+
+
+class VideoRecorder(object):
+    def __init__(self, path):
+        self.encoder = None  # lazily start the process
+        self.path = path
+
+    def write_frame(self, frame):
+        self._encode_image_frame(frame)
+
+    def _encode_image_frame(self, frame):
+        if not self.encoder:
+            self.encoder = ImageEncoder(self.path, frame.shape, 60)
+        self.encoder.capture_frame(frame)
+
+def compress(l):
+    l2 = []
+    prev = l[0]
+    count = 1
+    for x in l[1:]:
+        if x != prev:
+            l2.append((prev, count))
+            prev = x
+            count = 1
+        else:
+            count += 1
+    l2.append((prev, count))
+    return l2
+
+
+class Oracle():
+    def __init__(self, env):
+        self.last_action = None
+        self.env = env
+
+    def get_action(self):
+        if self.last_action is not None and random.random() < args.correlation:
+            action = self.last_action
+        else:
+            action = self.env.action_space.sample()
+        self.last_action = action
+        return action
+
+class ObsRender(Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.observation_space = Box(low=0, high=255, shape=(84, 84))
+        self.last_obs = np.zeros((84, 84, 3))
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        self.last_obs = np.tile(obs[:, :, 0][:, :, np.newaxis], [1, 1, 3])
+        return obs, reward, done, info
+
+    def render(self, mode='human', **kwargs):
+        return self.last_obs
+
+def f(env_n, frame_queue, state_queue, best_state_queue):
+    global_variables.env_creation_lock = multiprocessing.Lock()
+    env = gym.make('EnduroNoFrameskip-v4')
+    # env = BreakoutRewardWrapper(env)
+    # env = NumberFrames(env)
+    gym.spaces.seed(env_n)
+    env.reset()
+    rewards = []
+    oracle = Oracle(env)
+    actions = []
+    while True:
+        if args.render:
+            frame_queue.put((env_n, env.render(mode='rgb_array')))
+        if args.action_selection == 'sample':
+            action = env.action_space.sample()
+        elif args.action_selection == 'correlated':
+            action = oracle.get_action()
+        else:
+            raise Exception()
+        actions.append(action)
+        obs, reward, done, info = env.step(action)
+        # time.sleep(1/20)
+        rewards.append(reward)
+        if done or len(rewards) == args.seg_len:
+            # print(env_n, compress([env.unwrapped.get_action_meanings()[a] for a in actions]))
+            if done:
+                env.reset()
+            barrier.wait()
+            state_queue.put((env_n, sum(rewards), EnvState(env, None, None)))
+            env = best_state_queue.get().env
+            rewards = []
+            barrier.wait()
+
+
+def render_loop(frame_queue, n_envs):
+    viewer = rendering.SimpleImageViewer()
+    video_n = 0
+    recorder = VideoRecorder('out-0.mp4')
+    all_frames = None
+    n = 0
+    while True:
+        try:
+            env_n, frame = frame_queue.get()
+        except queue.Empty:
+            continue
+        h = frame.shape[0]
+        w = frame.shape[1]
+        d = frame.shape[2]
+        if all_frames is None:
+            all_frames = np.zeros((h, n_envs * w, d), dtype=np.uint8)
+        all_frames[:, env_n * w:(env_n + 1) * w] = np.copy(frame)
+        viewer.imshow(all_frames)
+        recorder.write_frame(all_frames)
+
+        n += 1
+        if n % (30 * 10) == 0:
+            recorder.encoder.close()
+            video_n += 1
+            recorder = VideoRecorder(f'out-{video_n}.mp4')
+
+
+def state_loop(state_queue, best_state_queue, n_envs):
+    reward_state_tuples = {}
+    d = defaultdict(lambda: 0)
+    r = 0
+    n = 0
+    while True:
+        env_n, reward, state = state_queue.get()
+        reward_state_tuples[env_n] = (reward, state)
+        if len(reward_state_tuples) == n_envs:
+            rewards = [tup[0] for tup in reward_state_tuples.values()]
+            if len(set(rewards)) > 1:
+                print(rewards)
+            d[len(set([t[0] for t in reward_state_tuples.values()]))] += 1
+            best_reward_state = sorted(reward_state_tuples.values(), key=lambda tup: tup[0])[-1]
+            r += best_reward_state[0]
+            for _ in range(n_envs):
+                best_state_queue.put(best_reward_state[1])
+            reward_state_tuples = {}
+            n += 1
+
+
+frame_queue, state_queue, best_state_queue = Queue(maxsize=n_envs * 3), Queue(), Queue()
+for n in range(n_envs):
+    Process(target=f, args=(n, frame_queue, state_queue, best_state_queue)).start()
+Process(target=state_loop, args=(state_queue, best_state_queue, n_envs)).start()
+render_loop(frame_queue, n_envs)

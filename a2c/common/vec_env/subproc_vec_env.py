@@ -3,7 +3,7 @@ from multiprocessing import Process, Pipe
 from a2c.common.vec_env import VecEnv, CloudpickleWrapper
 from a2c.common.tile_images import tile_images
 from utils import unwrap_to
-from wrappers.util_wrappers import StateBoundaryWrapper
+from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 
 
 def worker(remote, parent_remote, env_fn_wrapper):

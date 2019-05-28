@@ -5,23 +5,28 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--seeds', default='0')
 parser.add_argument('--test', action='store_true')
+parser.add_argument('--gpus', default='')
 args = parser.parse_args()
 
 seeds = list(map(int, args.seeds.split(',')))
 if args.test:
-    test_args = '--n_initial_prefs 0 --n_initial_demos 0 --pretrain_reward_predictor_seconds 0 --min_label_interval_seconds 0'
+    test_args = '--n_initial_prefs 0 --n_initial_demos 0 --pretrain_reward_predictor_seconds 0 --min_label_interval_seconds 1'
 else:
     test_args = ''
 
 rl_envs = [
     ('seaquest', 'SeaquestDeepMind-v0'),
-    ('fetch', 'FetchPickAndPlace-Repeat1-BinaryGripper-5InitialBlockPos-FixedGoal-NoGripperBonus-NoET-FastGripper-VanillaRL-FullObs-Delta-WithGripObs-v0'),
+    ('enduro', 'EnduroDeepMindNoSpeedo-v0'),
+    ('breakout', 'BreakoutDeepMind-v0'),
+    ('fetch', 'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-Delta-GripperBonuses-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
 prefs_envs = [
     ('seaquest', 'SeaquestDeepMindDense-v0'),
-    ('fetchpp', 'FetchPickAndPlace-Repeat1-BinaryGripper-5InitialBlockPos-FixedGoal-GripperBonus-NoET-SlowGripper-NoVanillaRL-PartialObs-NonDelta-WithGripObs-v0'),
+    ('enduro', 'EnduroDeepMindNoSpeedo-v0'),
+    ('breakout', 'BreakoutDeepMindDense-v0'),
+    ('fetchpp', 'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-5InitialBlockPos-FixedGoal-Delta-GripperBonuses-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
@@ -29,7 +34,7 @@ prefs_envs = [
 for seed in seeds:
     for env_shortname, env_id in rl_envs:
         run_name = f"{env_shortname}-{seed}-rl"
-        print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name}")
+        print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} --gpus '{args.gpus}'")
 
 for seed in seeds:
     for env_shortname, env_id in prefs_envs:
@@ -41,6 +46,9 @@ for seed in seeds:
             # The speed of the Fetch subpolicies is set assuming Repeat1
             assert 'Repeat1' in env_id
             rollout_length_seconds = 0.15
+        elif 'Breakout' in env_id:
+            # Long enough to stretch from hitting the ball to the ball bouncing off a block
+            rollout_length_seconds = 1.5
         else:
             rollout_length_seconds = 1.0
 
@@ -48,10 +56,29 @@ for seed in seeds:
 
         # DRLHP
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_only drlhp {run_name}-drlhp --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args}")
+              f"{env_id} reward_only drlhp {run_name}-drlhp --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}'")
+
+        # DRLHP with label rate decay
+        print("python3 scripts/train/auto_train_prefs.py "
+              f"{env_id} reward_only drlhp {run_name}-drlhpd --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' --decay_label_rate")
+
         # SDRLHP
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_only demonstrations {run_name}-sdrlhp --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args}")
+              f"{env_id} reward_only demonstrations {run_name}-sdrlhp --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}'")
+
+        # SDRLHP-NP
+        sdrlhp_np_extra_args = extra_args
+        sdrlhp_np_extra_args += ' --no_save_states'
+        if 'Breakout' in env_id:
+            sdrlhp_np_extra_args += ' --cur_policy_randomness correlated_random_action --rollout_random_action_prob 0.8 --rollout_random_correlation 0.7'
+        if 'Enduro' in env_id:
+            sdrlhp_np_extra_args += ' --cur_policy_randomness correlated_random_action --rollout_random_action_prob 1.0 --rollout_random_correlation 0.99'
+        print("python3 scripts/train/auto_train_prefs.py "
+              f"{env_id} reward_only sdrlhp {run_name}-sdrlhpnp --seed {seed} --disable_redo --extra_args ' {sdrlhp_np_extra_args}' {test_args} --gpus '{args.gpus}'")
+
+        # SDRLHP-NP with label rate decay
+        print("python3 scripts/train/auto_train_prefs.py "
+              f"{env_id} reward_only sdrlhp {run_name}-sdrlhpnpd --seed {seed} --disable_redo --extra_args ' {sdrlhp_np_extra_args}' {test_args} --gpus '{args.gpus}' --decay_label_rate")
 
         if 'lunarlander' in env_shortname or 'fetch' in env_shortname:
             redo = '--disable_redo'
@@ -59,7 +86,8 @@ for seed in seeds:
             redo = ''
         # Behavioral cloning
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} bc_only demonstrations {run_name}-bc --seed {seed} {redo} --extra_args ' {extra_args}' {test_args}")
+              f"{env_id} bc_only demonstrations {run_name}-bc --seed {seed} {redo} --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}'")
+
         # SDRLHP + behavioral cloning
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_plus_bc demonstrations {run_name}-sdrlhp-bc --seed {seed} {redo} --extra_args ' {extra_args}' {test_args}")
+              f"{env_id} reward_plus_bc demonstrations {run_name}-sdrlhp-bc --seed {seed} {redo} --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}'")

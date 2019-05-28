@@ -1,14 +1,14 @@
-from collections.__init__ import deque
+from collections import deque
 
 import gym
 import numpy as np
 from gym import Wrapper, ObservationWrapper
-from gym.envs.robotics import FetchEnv, FetchPickAndPlaceEnv
+from gym.envs.robotics import FetchPickAndPlaceEnv
 from gym.spaces import Discrete
 from gym.wrappers import FlattenDictWrapper
 
-from utils import draw_dict_on_image, RunningProportion
-from wrappers.util_wrappers import SaveEpisodeStats
+from utils import RunningProportion
+from wrappers.util_wrappers import CollectEpisodeStats
 
 
 def decode_fetch_obs(obs):
@@ -29,7 +29,7 @@ def decode_fetch_obs(obs):
 
 
 class FetchPickAndPlaceObsWrapper(ObservationWrapper):
-    def __init__(self, env, mode, include_grip_obs):
+    def __init__(self, env, include_grip_obs, mode='minimal'):
         ObservationWrapper.__init__(self, env)
         self.mode = mode
         self.include_grip_obs = include_grip_obs
@@ -63,28 +63,22 @@ class FetchPickAndPlaceObsWrapper(ObservationWrapper):
 
 
 class FetchPickAndPlaceRewardWrapper(Wrapper):
-    def __init__(self, env, reward_mode, binary_gripper, grip_close_bonus, grip_open_bonus, early_termination,
-                 slow_gripper, vanilla_rl):
+    def __init__(self, env, reward_mode, binary_gripper, grip_close_bonus, grip_open_bonus, early_termination):
         Wrapper.__init__(self, env)
         self.reward_mode = reward_mode
         self.binary_gripper = binary_gripper
         self.grip_close_bonus = grip_close_bonus
         self.grip_open_bonus = grip_open_bonus
         self.early_termination = early_termination
-        self.slow_gripper = slow_gripper
-        self.vanilla_rl = vanilla_rl
         self.close_gripper = True
         self.last_grip_width = None
         self.last_obs_by_name = None
-        self.last_action = None
-        self.last_raw_action = None
-        self.debug = False
 
     @staticmethod
     def _r(d):
         r = d ** 2
         r += 0.1 * np.log(d + 1e-3)  # maxes out at -0.69
-        return -r
+        return -0.7 - r  # maxes out at 0.0
 
     @classmethod
     def _reward_nondelta(cls, obs_by_name):
@@ -105,7 +99,7 @@ class FetchPickAndPlaceRewardWrapper(Wrapper):
         return reward
 
     @staticmethod
-    def _reward_delta2(obs_by_name, last_obs_by_name, vanilla_rl_mode):
+    def _reward_delta2(obs_by_name, last_obs_by_name):
         if last_obs_by_name is None:
             reward = 0
         else:
@@ -114,32 +108,18 @@ class FetchPickAndPlaceRewardWrapper(Wrapper):
             object_to_goal_delta = (np.linalg.norm(obs_by_name['goal_pos'] - obs_by_name['object_pos']) -
                                     np.linalg.norm(last_obs_by_name['goal_pos'] - last_obs_by_name['object_pos']))
             # full speed in one direction -> reward = 0.5; full speed in two directions -> reward = 1.0
-            # (but double that for gripper_to_object,
-            #  so that the oracle prioritises gripping the object before trying to move it)
-            if vanilla_rl_mode:
-                c = 1
-            else:
-                c = 2
-            reward = -15 * (c * gripper_to_object_delta + object_to_goal_delta)
+            reward = -15 * (gripper_to_object_delta + object_to_goal_delta)
         return reward
 
     def object_between_grippers(self, obs_by_name):
-        return all([abs(d) < 0.03 for d in obs_by_name['object_rel_pos']])
+        return all([abs(d) < 0.02 for d in obs_by_name['object_rel_pos']])
 
     def step(self, action, return_decoded_obs=False):
-        self.last_raw_action = action
-
         if self.binary_gripper:
             action = np.copy(action)
-
-            if self.vanilla_rl:
-                threshold = 0.001
-            else:
-                threshold = 0.5
-
-            if action[3] <= -threshold:
+            if action[3] <= -0.001:
                 self.close_gripper = True
-            elif action[3] >= threshold:
+            elif action[3] >= 0.001:
                 self.close_gripper = False
 
             if self.close_gripper:
@@ -148,15 +128,10 @@ class FetchPickAndPlaceRewardWrapper(Wrapper):
                 action[3] = -0.002
                 if self.last_obs_by_name is not None:
                     last_grip_width = np.sum(self.last_obs_by_name['gripper_state'])
-                    if last_grip_width < 0.06:
+                    if last_grip_width < 0.055:
                         action[3] = -1
             else:
                 action[3] = +0.002
-
-            if not self.slow_gripper:
-                action[3] = 0.1 * np.sign(action[3])
-
-        self.last_action = action
 
         obs, reward_orig, done, info = self.env.step(action)
         obs_by_name = decode_fetch_obs(obs)
@@ -166,38 +141,35 @@ class FetchPickAndPlaceRewardWrapper(Wrapper):
         elif self.reward_mode == 'delta1':
             reward = self._reward_delta1(obs_by_name, self.last_obs_by_name)
         elif self.reward_mode == 'delta2':
-            reward = self._reward_delta2(obs_by_name, self.last_obs_by_name, self.vanilla_rl)
+            reward = self._reward_delta2(obs_by_name, self.last_obs_by_name)
         else:
             raise RuntimeError(f"reward mode is '{self.reward_mode}'")
 
-        # These rewards should be large enough that the oracle opens/closes the gripper before trying to move the block
-        grip_width = np.sum(obs_by_name['gripper_state'])
-        if self.reward_mode == 'nondelta':
-            if self.grip_open_bonus:
-                # ~ +4.0 reward for fully open
-                bonus = 40 * grip_width
-                reward += bonus
-            if self.grip_close_bonus and self.object_between_grippers(obs_by_name):
-                # ~ +4.0 for closed around block
-                bonus = 80 * (0.1 - grip_width)
-                if self.grip_open_bonus:
-                    bonus *= 1.5  # cancel out open bonus
-                reward += bonus
-        else:
-            if self.last_obs_by_name is not None:
-                last_grip_width = np.sum(self.last_obs_by_name['gripper_state'])
-                if self.grip_open_bonus:
-                    # ~ +4.0 reward for fully closed to fully open, spread out over a few steps
-                    reward += 40 * (grip_width - last_grip_width)
-                if self.grip_close_bonus and self.object_between_grippers(obs_by_name):
-                    # ~ +4.0 reward for fully open to closed around block, spread out over a few steps
-                    bonus = 80 * (last_grip_width - grip_width)
-                    if self.grip_open_bonus:
-                        bonus *= 1.5  # cancel out grip_open_bonus
-                    reward += bonus
+        # Considerations:
+        # - We could give rewards based on gripper width. But that would add a bias to rewards which might mask the
+        #   bonuses for e.g. moving in the right direction/ending the episode early - and that would confuse the
+        #   oracle demonstrator. So we give rewards based on /changes/ in gripper width.
+        # - The reward should be reasonably large (e.g. +2 instead of +1) so that the oracle demonstrator always
+        #   closes the gripper before trying to move the block.
+        if self.last_obs_by_name is not None:
+            last_grip_width = np.sum(self.last_obs_by_name['gripper_state'])
+            grip_width = np.sum(obs_by_name['gripper_state'])
+            if self.grip_open_bonus and not self.object_between_grippers(obs_by_name):
+                # ~ +2.0 reward for fully closed to fully open, spread out over a few steps
+                reward += 20 * (grip_width - last_grip_width)
+            if self.grip_close_bonus:
+                if self.object_between_grippers(obs_by_name):
+                    # ~ +2.0 reward for fully open to closed around block, spread out over a few steps
+                    reward += 40 * (last_grip_width - grip_width)
+                elif self.object_between_grippers(self.last_obs_by_name):
+                    # Penalise moving away from block
+                    # (Value must be chosen carefully so that agent can't reward hack
+                    #  by partially closing on block, moving away from block, opening
+                    #  grippers, and repeating)
+                    reward += -3
 
         if self.early_termination and np.linalg.norm(obs_by_name['goal_rel_object']) < 0.03:
-            reward += 10
+            reward += 1
             done = True
 
         self.last_obs_by_name = obs_by_name
@@ -207,37 +179,25 @@ class FetchPickAndPlaceRewardWrapper(Wrapper):
 
         return obs, reward, done, info
 
-    def render(self, mode='human', **kwargs):
-        if not self.debug or mode != 'rgb_array':
-            return self.env.render(mode, **kwargs)
-
-        im = self.env.render(mode='rgb_array')
-        if self.last_obs_by_name is not None:
-            im = draw_dict_on_image(im,
-                                    {
-                                        'object_between_grippers': self.object_between_grippers(self.last_obs_by_name),
-                                        'object_rel_pos': self.last_obs_by_name['object_rel_pos'],
-                                        'object_rel_pos norm': np.linalg.norm(self.last_obs_by_name['object_rel_pos']),
-                                        'raw_action': self.last_raw_action,
-                                        'action': self.last_action
-                                    })
-        return im
-
     def reset(self):
         self.last_obs_by_name = None
         return self.env.reset()
 
 
-class FetchStatsWrapper(SaveEpisodeStats):
+class FetchStatsWrapper(CollectEpisodeStats):
     def __init__(self, env):
         assert isinstance(env, FlattenDictWrapper)
         assert env.observation_space.shape == (28,)
-        SaveEpisodeStats.__init__(self, env)
+        CollectEpisodeStats.__init__(self, env)
         self.stats = {}
         self.last_stats = {}
         self.aligned_proportion = None
         self.gripping_proportion = None
         self.successes = deque(maxlen=25)  # for 5 initial positions, 5 samples of each position
+        self.partial_success = False
+        self.partial_successes = deque(maxlen=25)
+        self.block_to_target_dict_list = deque(maxlen=10)
+        self.successes_near_end = deque(maxlen=25)
         self.last_obs = None
 
     def reset(self):
@@ -254,6 +214,19 @@ class FetchStatsWrapper(SaveEpisodeStats):
             if len(self.successes) == self.successes.maxlen:
                 self.stats['success_rate'] = self.successes.count(True) / len(self.successes)
 
+            self.stats['success_partial'] = float(self.partial_success)
+            self.partial_successes.append(self.partial_success)
+            if len(self.partial_successes) == self.partial_successes.maxlen:
+                self.stats['success_partial_rate'] = self.partial_successes.count(True) / len(self.partial_successes)
+
+            if any([d < 0.05 for d in self.block_to_target_dict_list]):
+                self.successes_near_end.append(True)
+            else:
+                self.successes_near_end.append(False)
+            self.stats['success_near_end'] = float(self.successes_near_end[-1])
+            if len(self.successes_near_end) == self.successes_near_end.maxlen:
+                self.stats['success_near_end_rate'] = self.successes_near_end.count(True) / len(self.successes_near_end)
+
         self.last_stats = dict(self.stats)
         self.stats['gripper_to_block_cumulative_distance'] = 0
         self.stats['block_to_target_cumulative_distance'] = 0
@@ -262,6 +235,7 @@ class FetchStatsWrapper(SaveEpisodeStats):
         self.stats['block_to_target_min_distance'] = float('inf')
         self.aligned_proportion = RunningProportion()
         self.gripping_proportion = RunningProportion()
+        self.partial_success = False
 
         return self.env.reset()
 
@@ -283,7 +257,11 @@ class FetchStatsWrapper(SaveEpisodeStats):
         grippers_closed = np.sum(obs_by_name['gripper_state']) < 0.05
         gripping_block = aligned_with_block and grippers_closed
         self.gripping_proportion.update(float(gripping_block))
-        self.stats['ep_frac_gripping_block'] = self.gripping_proportion.v
+        self.stats['ep_frac_gripping_block']  = self.gripping_proportion.v
+
+        self.block_to_target_dict_list.append(b2t_dist)
+        if b2t_dist < 0.05:
+            self.partial_success = True
 
         return obs, reward, done, info
 
@@ -312,11 +290,11 @@ class FixedGoal(Wrapper):
 
 class FixedBlockInitialPositions(Wrapper):
     all_initial_block_positions = [
-        np.array([1.46192226, 0.9513729]),
-        np.array([1.18499211, 0.94554907]),
-        np.array([1.15782761, 0.45436904]),
-        np.array([1.4359836, 0.50284814]),
-        np.array([1.34399605, 0.69795044])
+        np.array([1.42, 0.84]),  # front right
+        np.array([1.24, 0.90]),  # back right
+        np.array([1.24, 0.57]),  # back left
+        np.array([1.40, 0.60]),  # front left
+        np.array([1.34, 0.70])   # middle
     ]
 
     def __init__(self, env, n_initial_block_positions):
@@ -353,6 +331,7 @@ class RandomInitialPosition(Wrapper):
         self.env.reset(**kwargs)
         cur_pos = self.env.unwrapped.sim.data.get_site_xpos('robot0:grip')
         gripper_target = cur_pos + np.random.uniform(low=-0.2, high=0.2, size=cur_pos.shape)
+        gripper_target[2] = np.clip(gripper_target[2], 0.5, float('inf'))
         self.env.unwrapped.sim.data.set_mocap_pos('robot0:mocap', gripper_target)
         for _ in range(10):
             self.env.unwrapped.sim.step()

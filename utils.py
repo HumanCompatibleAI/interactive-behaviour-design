@@ -1,21 +1,29 @@
+import code
+import faulthandler
 import glob
 import gzip
+import json
 import lzma
+import multiprocessing
+import os
 import pickle
 import queue
+import random
+import signal
 import subprocess
 import sys
+import tempfile
 import time
+import traceback
 from collections import deque
 from functools import partial
 from multiprocessing import Queue
+from os import path as osp
 from threading import Thread
 
 import cv2
 import numpy as np
-import os
-import random
-import tempfile
+import tensorflow as tf
 from gym import Wrapper, Env
 from gym.envs.atari import AtariEnv
 from gym.envs.box2d import LunarLander
@@ -24,7 +32,6 @@ from gym.envs.robotics import FetchEnv
 from gym.envs.robotics.robot_env import RobotEnv
 from gym.spaces import Box, Discrete
 from gym.wrappers.monitoring.video_recorder import ImageEncoder
-from os import path as osp
 
 import global_variables
 from wrappers.dummy_env import DummyEnv
@@ -135,6 +142,9 @@ def unwrap_to(wrapped_env: Wrapper, class_name: type, n_before=0):
 
 def find_latest_checkpoint(ckpt_dir, name):
     meta_paths = glob.glob(os.path.join(ckpt_dir, name + '*.meta'))
+    if not meta_paths:
+        raise Exception(f"Couldn't find checkpoint matching '{name}'")
+    meta_paths = sorted(meta_paths, key=lambda f: os.path.getmtime(f))
     ckpt_names = [path.replace('.meta', '') for path in meta_paths]
     if not ckpt_names:
         raise Exception(f"Couldn't find checkpoint matching '{name}'")
@@ -462,3 +472,54 @@ class RunningProportion:
     def update(self, v):
         self.v = ((self.v * self.n) + v) / (self.n + 1)
         self.n += 1
+
+
+def load_cpu_config(log_dir, name):
+    with open(os.path.join(log_dir, 'cpus.json'), 'r') as f:
+        cpus = json.load(f)[name]
+    # This specifically needs to be done before starting the TensorFlow execution engine so that child threads
+    # have their affinity also set.
+    os.sched_setaffinity(0, cpus)
+    # The first session created in a process seems to set the options for the execution engine used for all subsequent
+    # session in that process. So this should be called before anything else.
+    dummy_sess = tf.Session(config=tf.ConfigProto(inter_op_parallelism_threads=len(cpus),
+                                                  intra_op_parallelism_threads=len(cpus)))
+    dummy_sess.close()
+
+
+def save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus):
+    d = {'main': main_cpus,
+         'rollouters': rollouter_cpus,
+         'drlhp_training': drlhp_training_cpus}
+    with open(os.path.join(log_dir, 'cpus.json'), 'w') as f:
+        json.dump(d, f)
+
+
+def configure_cpus(log_dir, cpus):
+    if cpus is None:
+        all_cpus = list(range(multiprocessing.cpu_count()))
+    else:
+        a, b = map(int, cpus.split('-'))
+        all_cpus = list(range(a, b))
+    rollouter_cpus = [all_cpus.pop() for _ in range(4)]
+    drlhp_training_cpus = [all_cpus.pop() for _ in range(4)]
+    main_cpus = all_cpus
+    save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus)
+
+
+# https://stackoverflow.com/a/133384/7832197
+
+def debug(sig, frame):
+    """Interrupt running process, and provide a python prompt for
+    interactive debugging."""
+    d = {'_frame': frame}  # Allow access to frame object.
+    d.update(frame.f_globals)  # Unless shadowed by global
+    d.update(frame.f_locals)
+
+    faulthandler.dump_traceback(all_threads=True)
+    i = code.InteractiveConsole(d)
+    i.interact('Entering shell')
+
+
+def register_debug_handler():
+    signal.signal(signal.SIGUSR1, debug)  # Register handler

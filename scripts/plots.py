@@ -30,7 +30,7 @@ from matplotlib.pyplot import close, fill_between
 
 matplotlib.use('Agg')
 
-from pylab import plot, xlabel, ylabel, figure, legend, savefig, grid, ylim, xlim
+from pylab import plot, xlabel, ylabel, figure, legend, savefig, grid, ylim, xlim, ticklabel_format
 
 
 # Event-reading utils
@@ -92,12 +92,10 @@ class TestInterpolateValues(unittest.TestCase):
 
 # Plotting helper functions
 
-def smooth_values(values, smoothing):
-    smoothed_values = []
-    last = values[0]
-    for v in values:
-        smoothed_values.append(smoothing * last + (1 - smoothing) * v)
-        last = smoothed_values[-1]
+def smooth_values(values, window_size):
+    window = np.ones(window_size)
+    actual_window_sizes = np.convolve(np.ones(len(values)), window, 'same')
+    smoothed_values = np.convolve(values, window, 'same') / actual_window_sizes
     return smoothed_values
 
 
@@ -130,33 +128,37 @@ def interpolate_steps(timestamp_value_tuples, timestamp_step_tuples):
 
 def find_training_start(run_dir):
     # The auto train script exits once training has started properly
-    return os.path.getmtime(os.path.join(run_dir, 'auto_train.log'))
+    train_log_path = os.path.join(run_dir, 'auto_train.log')
+    if os.path.exists(train_log_path):
+        return os.path.getmtime(train_log_path)
+    else:
+        raise Exception()
 
 
-M = namedtuple('M', 'tag name smoothing fillsmoothing')
+M = namedtuple('M', 'tag name window_size fill_window_size')
 
 
 def detect_metrics(env_name, train_env_key):
     metrics = []
     if env_name == 'Lunar Lander':
-        metrics.append(M(f'{train_env_key}/reward_sum', 'Reward', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/crash_rate', 'Crash rate', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/successful_landing_rate', 'Successful landing rate', 0.95, 0.95))
+        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
+        metrics.append(M(f'{train_env_key}/crashes', 'Crash rate', 100, 100))
+        metrics.append(M(f'{train_env_key}/successful_landing_rate', 'Successful landing rate', 100, 100))
     if env_name == 'Seaquest':
-        metrics.append(M(f'{train_env_key}/reward_sum', 'Reward', 0.9, 0.9))
-        metrics.append(M(f'{train_env_key}/n_diver_pickups', 'Diver pickups per episode', 0.99, None))
+        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
+        metrics.append(M(f'{train_env_key}/n_diver_pickups', 'Diver pickups per episode', 500, 500))
+    if env_name == 'Breakout':
+        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
+    if env_name == 'Enduro':
+        metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
     if env_name == 'Fetch':
-        metrics.append(M(f'{train_env_key}/reward_sum_post_wrappers', 'Reward', 0.95, 0.9))
-        metrics.append(M(f'{train_env_key}/gripper_to_block_cumulative_distance', 'Distance from gripper to block',
-                         0.99, 0.95))
-        metrics.append(M(f'{train_env_key}/block_to_target_cumulative_distance', 'Distance from block to target',
-                         0.99, 0.99))
-        metrics.append(
-            M(f'{train_env_key}/block_to_target_min_distance', 'Minimum distance from block to target', 0.95, 0.95))
-        metrics.append(
-            M(f'{train_env_key}/ep_frac_aligned_with_block', 'Fraction of episode aligned with block', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/ep_frac_gripping_block', 'Fraction of episode gripping block', 0.95, 0.95))
-        metrics.append(M(f'{train_env_key}/success_rate', 'Success rate', 0.95, 0.95))
+        metrics.append(M(f'{train_env_key}/reward_sum_post_wrappers', 'Episode reward', 100, 100))
+        metrics.append(M(f'{train_env_key}/gripper_to_block_cumulative_distance', 'Cumulative distance from gripper to block', 100, 100))
+        metrics.append(M(f'{train_env_key}/block_to_target_cumulative_distance', 'Cumulative distance from block to target', 100, 100))
+        metrics.append(M(f'{train_env_key}/block_to_target_min_distance', 'Minimum distance from block to target', 100, 100))
+        metrics.append(M(f'{train_env_key}/ep_frac_aligned_with_block', 'Fraction of episode aligned with block', 100, 100))
+        metrics.append(M(f'{train_env_key}/ep_frac_gripping_block', 'Fraction of episode gripping block', 100, 100))
+        metrics.append(M(f'{train_env_key}/success_rate', 'Success rate', 100, 100))
     return metrics
 
 
@@ -215,7 +217,7 @@ class TestDownsample(unittest.TestCase):
         np.testing.assert_array_equal(ys_downsampled, [3, 11.5, 20])
 
 
-def plot_averaged(xs_list, ys_list, smoothing, fillsmoothing, color, label):
+def plot_averaged(xs_list, ys_list, window_size, fill_window_size, color, label):
     # Interpolate all data to have common x values
     all_xs = set([x for xs in xs_list for x in xs])
     all_xs = sorted(list(all_xs))
@@ -235,23 +237,25 @@ def plot_averaged(xs_list, ys_list, smoothing, fillsmoothing, color, label):
     assert all([len(ys) == len(all_xs) for ys in ys_list])
 
     # Downsample /before/ smoothing so that we get the same level of smoothness no matter how dense the data
-    plot_width_pixels = 1500  # determined by manually checking the figure
-    xs_downsampled = None
-    ys_downsampled_list = []
-    for ys in ys_list:
-        xs_downsampled, ys_downsampled = downsample(all_xs, ys, plot_width_pixels)
-        assert len(ys_downsampled) == len(xs_downsampled)
-        ys_downsampled_list.append(ys_downsampled)
+    # plot_width_pixels = 1500  # determined by manually checking the figure
+    # xs_downsampled = None
+    # ys_downsampled_list = []
+    # for ys in ys_list:
+    #     xs_downsampled, ys_downsampled = downsample(all_xs, ys, plot_width_pixels)
+    #     xs_downsampled, ys_downsampled = all_xs, ys
+    #     assert len(ys_downsampled) == len(xs_downsampled)
+    #     ys_downsampled_list.append(ys_downsampled)
 
-    mean_ys = np.mean(ys_downsampled_list, axis=0)  # Average across seeds
-    smoothed_mean_ys = smooth_values(mean_ys, smoothing=smoothing)
-    plot(xs_downsampled, smoothed_mean_ys, color=color, label=label, alpha=0.9)
+    mean_ys = np.mean(ys_list, axis=0)  # Average across seeds
+    smoothed_mean_ys = smooth_values(mean_ys, window_size)
+    plot(all_xs, smoothed_mean_ys, color=color, label=label, alpha=0.9)
 
-    if fillsmoothing is not None:
-        std = np.std(ys_downsampled_list, axis=0)
-        lower = smooth_values(smoothed_mean_ys - std, fillsmoothing)
-        upper = smooth_values(smoothed_mean_ys + std, fillsmoothing)
-        fill_between(xs_downsampled, lower, upper, color=color, alpha=0.2)
+    if fill_window_size is not None:
+        std = np.std(ys_list, axis=0)
+        smoothed_std = np.array(smooth_values(std, fill_window_size))
+        lower = smoothed_mean_ys - smoothed_std
+        upper = smoothed_mean_ys + smoothed_std
+        fill_between(all_xs, lower, upper, color=color, alpha=0.2)
         min_val, max_val = np.min(lower), np.max(upper)
     else:
         min_val, max_val = np.min(smoothed_mean_ys), np.max(smoothed_mean_ys)
@@ -262,7 +266,7 @@ def plot_averaged(xs_list, ys_list, smoothing, fillsmoothing, color, label):
 
 
 def parse_run_name(run_dir):
-    match = re.search(r'([^-]*)-([\d])-([^_]*)_', run_dir)  # e.g. fetch-0-drlhp_foobar
+    match = re.search(r'([^-]*)-([\d]*)-([^_]*)_', run_dir)  # e.g. fetch-0-drlhp_foobar
     if match is None:
         raise Exception(f"Couldn't parse run name '{run_dir}'")
     env_shortname = match.group(1)
@@ -273,6 +277,8 @@ def parse_run_name(run_dir):
         'fetchpp': 'Fetch',
         'fetch': 'Fetch',
         'lunarlander': 'Lunar Lander',
+        'enduro': 'Enduro',
+        'breakout': 'Breakout',
         'seaquest': 'Seaquest'
     }
     env_name = env_shortname_to_env_name[env_shortname]
@@ -282,8 +288,13 @@ def parse_run_name(run_dir):
 
 
 def filter_pretraining_events(run_dir, events):
-    training_start_timestamp = find_training_start(run_dir)
-    for tag in events:
+    try:
+        training_start_timestamp = find_training_start(run_dir)
+    except:
+        # For runs where we didn't pretrain
+        return
+    tags = list(events.keys())
+    for tag in tags:
         events[tag] = [(t, v) for t, v in events[tag] if t >= training_start_timestamp]
         if not events[tag]:
             del events[tag]
@@ -301,12 +312,70 @@ def get_values_by_step(events, metric, max_steps):
     return steps, values
 
 
+def get_values_by_prefs(events, metric):
+    steps, values = interpolate_steps(events[metric.tag], events['pref_db/added_prefs'])
+    return steps, values
+
+def get_values_by_demos(events, metric):
+    steps, values = interpolate_steps(events[metric.tag], events['demonstrations/added_demonstrations'])
+    return steps, values
+
+
 def get_values_by_time(events, metric, max_hours):
     timestamps, values = zip(*events[metric.tag])
     if max_hours:
         values = np.extract(np.array(timestamps) < max_hours, values)
         timestamps = np.extract(np.array(timestamps) < max_hours, timestamps)
     return timestamps, values
+
+
+def add_steps_to_bc_run(events_by_env_name_by_run_type_by_seed, max_steps):
+    # BC runs don't actually interact with the environment, so don't log n_total_steps.
+    # But we still want BC results to appear on the graphs by steps.
+    # So let's fake the step values.
+    #
+    # We want to create step values so that we effectively take the first section of the BC metrics and stretch it to
+    # fill the space up to max_steps. We shouldn't take /all/ the data, because the other runs might run for longer
+    # than max_steps; there we might be taking 3/4 or 4/5 of the data, so if we took all the BC data, we would give
+    # BC an unfair advantage. To be conservative, we should find the worst-case fraction of the other runs we take
+    # (i.e. prefer 1/4 to 3/4), and take the same amount of BC data.
+
+    for env_name in events_by_env_name_by_run_type_by_seed.keys():
+        if 'BC' not in events_by_env_name_by_run_type_by_seed[env_name]:
+            continue
+        # Find non-BC run that we keep the least of
+        min_frac = float('inf')
+        events_with_min_frac = None
+        for run_type in ['DRLHP', 'DRLHPD', 'SDRLHP', 'SDRLHPNP', 'SDRLHP-BC', 'RL']:
+            if run_type not in events_by_env_name_by_run_type_by_seed[env_name]:
+                continue
+            for seed in events_by_env_name_by_run_type_by_seed[env_name][run_type].keys():
+                events: dict = events_by_env_name_by_run_type_by_seed[env_name][run_type][seed][0]
+                last_n_steps = events['policy_master/n_total_steps'][-1][1]
+                frac = max_steps / last_n_steps
+                if frac < min_frac:
+                    min_frac = frac
+                    events_with_min_frac = events
+
+        # Find timestamp corresponding to max_steps
+        steps = [tup[1] for tup in events_with_min_frac['policy_master/n_total_steps']]
+        i = np.argmin(np.abs(np.array(steps) - max_steps))
+        i = int(i)
+        timestamp_for_max_steps = events_with_min_frac['policy_master/n_total_steps'][i][0]
+
+        # Create fake steps such that we reach max_steps at that timestamp
+        for events, _ in events_by_env_name_by_run_type_by_seed[env_name]['BC'].values():
+            fake_steps = [(timestamp, timestamp / timestamp_for_max_steps * max_steps)
+                          for timestamp, value in events['policy_master/n_updates']]
+            events['policy_master/n_total_steps'] = fake_steps
+
+
+def drop_first_event(events):
+    """
+    Not sure why, but the first value is sometimes 0 or inf. Let's drop it.
+    """
+    for key in events:
+        events[key] = events[key][1:]
 
 
 def main():
@@ -327,23 +396,39 @@ def main():
         os.remove(f)
 
     events_by_env_name_by_run_type_by_seed = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-    for run_dir in os.scandir(args.runs_dir):
+    for run_dir in [path for path in os.scandir(args.runs_dir) if os.path.isdir(path.path)]:
         print(f"Reading events for {run_dir.name}...")
         events = read_all_events(run_dir.path)
-        env_name, run_type, seed = parse_run_name(run_dir.name)
-        if run_type in ['DRLHP', 'SDRLHP', 'SDRLHP-BC']:
+        try:
+            env_name, run_type, seed = parse_run_name(run_dir.name)
+        except Exception as e:
+            print(e)
+            continue
+        if run_type in ['DRLHP', 'DRLHPD', 'SDRLHP', 'SDRLHP-BC', 'SDRLHPNP']:
             filter_pretraining_events(run_dir.path, events)
+        drop_first_event(events)
         make_timestamps_relative_hours(events)
         events_by_env_name_by_run_type_by_seed[env_name][run_type][seed] = (events, run_dir.name)
+
+    if args.max_steps:
+        add_steps_to_bc_run(events_by_env_name_by_run_type_by_seed, args.max_steps)
+
+    time_values_fn = partial(get_values_by_time, max_hours=args.max_hours)
+    step_values_fn = partial(get_values_by_step, max_steps=args.max_steps)
+    prefs_values_fn = get_values_by_prefs
+    demos_values_fn = get_values_by_demos
 
     for env_name, events_by_run_type_by_seed in events_by_env_name_by_run_type_by_seed.items():
         print(f"Plotting {env_name}...")
         metrics = detect_metrics(env_name, args.train_env_key)
         for value_fn, x_type, x_label, x_lim in [
-            (partial(get_values_by_time, max_hours=args.max_hours), 'time', 'Hours', args.max_hours),
-            (partial(get_values_by_step, max_steps=args.max_steps), 'step', 'Steps', args.max_steps)]:
+            (time_values_fn, 'time', 'Hours', args.max_hours),
+            (step_values_fn, 'step', 'Total environment steps', args.max_steps),
+            (prefs_values_fn, 'prefs', 'Prefs', None),
+            (demos_values_fn, 'demos', 'Demos', None)]:
             for metric_n, metric in enumerate(metrics):
                 figure(metric_n)
+                ticklabel_format(axis='x', style='scientific', scilimits=(0, 0))
                 all_min_y = float('inf')
                 all_max_y = -float('inf')
                 for run_type_n, (run_type, events_by_seed) in enumerate(events_by_run_type_by_seed.items()):
@@ -358,8 +443,9 @@ def main():
                             xs, ys = value_fn(events, metric)
                             xs_list.append(xs)
                             ys_list.append(ys)
-                        min_y, max_y = plot_averaged(xs_list, ys_list, metric.smoothing, metric.fillsmoothing, color,
-                                                     run_type)
+                        min_y, max_y = plot_averaged(xs_list, ys_list,
+                                                     metric.window_size, metric.fill_window_size,
+                                                     color, run_type)
                         all_max_y = max_y if max_y > all_max_y else all_max_y
                         all_min_y = min_y if min_y < all_min_y else all_min_y
                     except KeyError:

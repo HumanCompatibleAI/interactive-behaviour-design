@@ -1,44 +1,76 @@
 import json
 import multiprocessing
-import sys
-import pysnooper
 
 import os
 import pickle
 import queue
+import sys
 import time
 from typing import Dict
 
+import gym
 import numpy as np
 from cloudpickle import cloudpickle
+from gym.spaces import seed
 from gym.utils import atomic_write
 from tensorflow.python.framework.errors_impl import NotFoundError
 
 import global_variables
 from global_constants import ROLLOUT_FPS
+from global_variables import RolloutMode, RolloutRandomness
 from rollouts import CompressedRollout
 from utils import EnvState, get_noop_action, save_video, make_small_change, \
-    find_latest_checkpoint, set_env_state
+    find_latest_checkpoint, load_cpu_config
 from wrappers.util_wrappers import ResetMode
 
 
+def save_global_variables():
+    d = {}
+    k: str
+    for k, v in global_variables.__dict__.items():
+        if k.startswith('_'):
+            continue
+        if k[0].isupper():
+            continue
+        if 'lock' in str(v).lower():
+            continue
+        d[k] = v
+    return d
+
+
+def restore_global_variables(d):
+    for k, v in d.items():
+        setattr(global_variables, k, v)
+
+
 class RolloutWorker:
-    def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue):
+    def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n, gv_dict):
         # Workers shouldn't take up precious GPU memory
         os.environ["CUDA_VISIBLE_DEVICES"] = ''
+        load_cpu_config(log_dir, 'rollouters')
+
+        np.random.seed(worker_n)
+        # Important so that different workers get different actions from env.action_space.sample()
+        gym.spaces.seed(worker_n)
+
+        restore_global_variables(gv_dict)
         # Since we're in our own process, this lock isn't actually needed,
         # but other stuff expects this to be initialised
         global_variables.env_creation_lock = multiprocessing.Lock()
         make_policy_fn = cloudpickle.loads(make_policy_fn_pickle)
-        self.policy = make_policy_fn(name='rolloutworker')
+        # Each worker should seed its policy differently so that when we're doing multiple rollouts from one policy
+        # with rollout_randomness=sample, we really do get different rollouts from each worker
+        self.policy = make_policy_fn(name='rolloutworker', seed=worker_n)
+        self.worker_n = worker_n
         self.env_state_queue = env_state_queue
         self.rollout_queue = rollout_queue
         self.checkpoint_dir = os.path.join(log_dir, 'checkpoints')
         self.rollouts_dir = os.path.join(log_dir, 'demonstrations')
+        self.last_action = None
         env = None
 
         while True:
-            policy_name, env_state, noise, rollout_len_frames, show_frames, group_serial = env_state_queue.get()
+            policy_name, env_state, noise, rollout_len_frames, show_frames, group_serial, deterministic = env_state_queue.get()
 
             if env is not None:
                 if hasattr(env.unwrapped, 'close'):
@@ -52,7 +84,7 @@ class RolloutWorker:
             else:
                 self.load_policy_checkpoint(policy_name)
                 self.rollout(policy_name, env, env_state.obs, group_serial,
-                             noise, rollout_len_frames, show_frames)
+                             noise, rollout_len_frames, show_frames, deterministic)
             # is sometimes slow to flush in processes; be more proactive so output is less confusing
             sys.stdout.flush()
 
@@ -91,27 +123,19 @@ class RolloutWorker:
 
         self.rollout_queue.put((group_serial, rollout_hash))
 
-    def rollout(self, policy_name, env, obs, group_serial, noise, rollout_len_frames, show_frames):
+    def rollout(self, policy_name, env, obs, group_serial, noise, rollout_len_frames, show_frames, deterministic):
         obses = []
         frames = []
         actions = []
         rewards = []
         done = False
+        self.last_action = None
         for _ in range(rollout_len_frames):
             obses.append(np.copy(obs))
             frames.append(env.render(mode='rgb_array'))
-
-            if 'LunarLander' in str(env):
-                deterministic = False  # Lunar Lander primitives don't work well if deterministic?
-            else:
-                deterministic = (policy_name != 'random')
             action = self.policy.step(obs, name=policy_name, deterministic=deterministic)
             if noise:
-                assert env.action_space.dtype in [np.int64, np.float32]
-                if env.action_space.dtype == np.float32:
-                    action += 0.3 * env.action_space.sample()
-                elif env.action_space.dtype == np.int64 and np.random.rand() < 0.5:
-                    action = env.action_space.sample()
+                action = self.get_noisy_action(action, env)
             actions.append(action)
             obs, reward, done, info = env.step(action)
             # Fetch environments return numpy float reward which is not serializable
@@ -165,6 +189,27 @@ class RolloutWorker:
 
         self.rollout_queue.put((group_serial, rollout_hash))
 
+    def get_noisy_action(self, action, env):
+        assert env.action_space.dtype in [np.int64, np.float32]
+        if env.action_space.dtype == np.float32:
+            action += 0.3 * env.action_space.sample()
+        elif env.action_space.dtype == np.int64:
+            if np.random.rand() < global_variables.rollout_random_action_prob:
+                if global_variables.rollout_randomness == RolloutRandomness.random_action:
+                    action = env.action_space.sample()
+                elif global_variables.rollout_randomness == RolloutRandomness.correlated_random_action:
+                    if self.last_action and np.random.rand() < global_variables.rollout_random_correlation:
+                        action = self.last_action
+                    else:
+                        action = env.action_space.sample()
+                else:
+                    raise Exception("Invalid noise mode " + str(global_variables.rollout_randomness))
+                self.last_action = action
+            else:
+                self.last_action = None
+        return action
+
+
 class PolicyRollouter:
     cur_rollouts: Dict[str, CompressedRollout]
 
@@ -189,11 +234,14 @@ class PolicyRollouter:
         self.ctx = multiprocessing.get_context('spawn')
         self.env_state_queue = self.ctx.Queue()
         self.rollout_queue = self.ctx.Queue()
-        for _ in range(16):
+        gv = save_global_variables()
+        for n in range(16):
             self.ctx.Process(target=RolloutWorker, args=(cloudpickle.dumps(make_policy_fn),
                                                          log_dir,
                                                          self.env_state_queue,
-                                                         self.rollout_queue)).start()
+                                                         self.rollout_queue,
+                                                         n,
+                                                         gv)).start()
 
     def generate_rollouts_from_reset(self, policies, softmax_temp):
         env_state = self.get_reset_state()
@@ -209,11 +257,39 @@ class PolicyRollouter:
         n_rollouts = 0
         rollout_len_frames = int(self.rollout_len_seconds * ROLLOUT_FPS)
         show_frames = int(self.show_from_end_seconds * ROLLOUT_FPS)
-        for policy_name in policy_names:
-            noise = (last_policy_name == 'redo')
-            self.env_state_queue.put((policy_name, env_state, noise,
-                                      rollout_len_frames, show_frames, group_serial))
+
+        if global_variables.rollout_mode == RolloutMode.primitives:
+            for policy_name in policy_names:
+                noise = (last_policy_name == 'redo')
+                if 'LunarLander' in str(self.env):
+                    deterministic = False  # Lunar Lander primitives don't work well if deterministic
+                else:
+                    deterministic = (policy_name != 'random')
+                self.env_state_queue.put((policy_name, env_state, noise,
+                                          rollout_len_frames, show_frames, group_serial, deterministic))
+                n_rollouts += 1
+        elif global_variables.rollout_mode == RolloutMode.cur_policy:
+            if global_variables.rollout_randomness == RolloutRandomness.sample_action:
+                deterministic = False
+                noise = False
+            elif global_variables.rollout_randomness == RolloutRandomness.random_action or global_variables.rollout_randomness == RolloutRandomness.correlated_random_action:
+                deterministic = True
+                noise = True
+            else:
+                raise Exception('Invalid rollout randomness', global_variables.rollout_randomness)
+            for _ in range(global_variables.n_cur_policy):
+                self.env_state_queue.put((policy_names[0], env_state, noise,
+                                          rollout_len_frames, show_frames, group_serial, deterministic))
+                n_rollouts += 1
+            # Also add a trajectory sampled directly from the policy
+            noise = False
+            deterministic = True
+            self.env_state_queue.put((policy_names[0], env_state, noise,
+                                      rollout_len_frames, show_frames, group_serial, deterministic))
             n_rollouts += 1
+        else:
+            raise Exception("Invalid rollout mode", global_variables.rollout_mode)
+
         if self.redo_policy:
             self.env_state_queue.put(('redo', env_state, None, None, None, group_serial))
             n_rollouts += 1

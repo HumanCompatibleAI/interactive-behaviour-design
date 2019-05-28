@@ -143,4 +143,4 @@ class RolloutsByHash:
             open_f = open
         with open_f(path, 'rb') as f:
             self.dict = pickle.load(f)
-            print("Loaded {} demonstration rollouts".format(len(self.dict)))
+            print("\tLoaded {} demonstration rollouts".format(len(self.dict)))

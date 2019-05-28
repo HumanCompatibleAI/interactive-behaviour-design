@@ -50,7 +50,7 @@ def get_rollout_groups_for_trajectory():
     rollout_dict = {} #metadata filename : chosen rollout hash
     for rgwchr in rollout_groups_with_chosen_rollout:
         metadata_filename = rgwchr.split(',')[0]
-        chosen_rollout_hash = rgwchr.split(',')[1]
+        chosen_rollout_hash = rgwchr.split(',')[3]
         rollout_dict[metadata_filename] = chosen_rollout_hash
         rollout_group_to_trajectory[metadata_filename] = trajectory_name
 

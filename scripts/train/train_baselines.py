@@ -12,7 +12,7 @@ import baselines
 from baselines import logger
 from baselines.run import main as baselines_run_main
 
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from wrappers import fetch_pick_and_place_register
 from wrappers import lunar_lander_reward
 from wrappers import seaquest_reward

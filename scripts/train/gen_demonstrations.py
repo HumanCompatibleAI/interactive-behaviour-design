@@ -10,12 +10,12 @@ import time
 import uuid
 
 import requests
-from sacred import Experiment
 
-sys.path.insert(1, os.path.join(sys.path[0], '..'))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from wrappers.fetch_pick_and_place_register import register
 from utils import save_args
 
-ex = Experiment('foo')
+register()
 
 
 def get_args():
@@ -24,7 +24,6 @@ def get_args():
     parser.add_argument('run_name')
     parser.add_argument('log_dir')
     parser.add_argument('--n_demos', type=int)
-    parser.add_argument('--disable_redo', action='store_true')
     parser.add_argument('--tmux_sess')
     parser.add_argument('--time', default=str(int(time.time())))
     args = parser.parse_args()
@@ -38,7 +37,6 @@ def get_args():
     return args
 
 
-@ex.main
 def main():
     args = get_args()
     os.makedirs(args.log_dir, exist_ok=True)
@@ -55,14 +53,24 @@ def main():
     port = get_open_port()
     base_url = f'http://localhost:{port}'
 
-    start_app(base_url, args.env_id, port, args.log_dir, args.tmux_sess, args.disable_redo)
+    start_app(base_url, args.env_id, port, args.log_dir, args.tmux_sess)
 
     wait_for_demonstration_rollouts(base_url)
     start_oracle(base_url, args.tmux_sess, args.log_dir)
 
 
-def start_app(base_url, env_id, port, log_dir, tmux_sess, disable_redo):
-    cmd = f'python -u run.py {env_id} --n_envs 1 --port {port} --log_dir {log_dir} --no_render_demonstrations'
+def start_app(base_url, env_id, port, log_dir, tmux_sess):
+    if 'Fetch' in env_id:
+        disable_redo = True
+        if 'Repeat1' in env_id:
+            rollout_len_seconds = 0.5
+        elif 'Repeat3' in env_id:
+            rollout_len_seconds = 0.15
+        else:
+            raise Exception()
+    else:
+        raise Exception()
+    cmd = f'python -u run.py {env_id} --n_envs 1 --port {port} --log_dir {log_dir} --rollout_length_seconds {rollout_len_seconds}'
     if not disable_redo:
         cmd += ' --redo_policy'
     if 'Seaquest' in env_id:
