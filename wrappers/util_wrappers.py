@@ -462,17 +462,14 @@ class VecSaveSegments(CustomVecEnvWrapper):
         frames = self.venv.get_images()
 
         for n in range(self.num_envs):
-            # When done, SubprocVecEnv automatically resets the environment,
-            # and we don't want the frame from the resetted environment in this segment
-            if not dones[n]:
-                self.segment_frames[n].append(frames[n])
-                self.segment_obses[n].append(np.copy(obses[n]))
-                self.segment_rewards[n].append(rewards[n])
+            self.segment_frames[n].append(frames[n])
+            self.segment_obses[n].append(np.copy(obses[n]))
+            self.segment_rewards[n].append(rewards[n])
 
-            # We could get unlucky and get a 'done' just after we've reset the segment,
-            # so we need to be careful about the segment being empty
-            if (dones[n] and len(self.segment_obses[n]) > 0) or \
-                    len(self.segment_obses[n]) == global_constants.FRAMES_PER_SEGMENT:
+            segment_full = len(self.segment_obses[n]) == global_constants.FRAMES_PER_SEGMENT
+            # We could get unlucky and get a 'done' just after we've reset the segment
+            segment_done = dones[n] and len(self.segment_obses[n]) > 0
+            if segment_full or segment_done:
                 self._pad_segment(n)
                 tuple = (self.segment_obses[n], self.segment_rewards[n], self.segment_frames[n])
                 try:
