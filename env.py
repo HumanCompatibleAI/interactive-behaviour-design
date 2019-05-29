@@ -91,12 +91,12 @@ def make_envs(env_id, num_env, seed, log_dir,
                     if not render_segments:
                         env = DummyRender(env)
                     env = SaveSegments(env, segments_queue)
-                elif global_variables.segment_save_mode == 'multi_env':
-                    # Segments are saved by VecSaveSegments after SubprocVecEnv
-                    if not render_segments:
-                        env = DummyRender(env)
                 if save_states:
                     env = SaveMidStateWrapper(env, reset_state_receiver_queue)
+
+            if env_type == 'train' and global_variables.segment_save_mode == 'multi_env' and not render_segments:
+                # Segments are saved by VecSaveSegments after SubprocVecEnv
+                env = DummyRender(env)
 
             if env_type == 'test':
                 test_log_dir = os.path.join(log_dir, 'test_env')
