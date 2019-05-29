@@ -23,7 +23,7 @@ import global_constants
 from baselines import logger
 from classifier_collection import ClassifierCollection
 from drlhp.reward_predictor import RewardPredictor
-from subproc_vec_env_custom import CustomSubprocVecEnv, CustomVecEnvWrapper
+from subproc_vec_env_custom import SubprocVecEnvNoAutoReset, CustomVecEnvWrapper
 from utils import unwrap_to, EnvState, TimerContext
 from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 
@@ -437,7 +437,7 @@ class DummyRender(Wrapper):
 
 class VecSaveSegments(CustomVecEnvWrapper):
     def __init__(self, venv, segment_queue: multiprocessing.Queue):
-        assert isinstance(venv, CustomSubprocVecEnv)
+        assert isinstance(venv, SubprocVecEnvNoAutoReset)
         super().__init__(venv)
         self.queue = segment_queue
         self.segment_frames = [None] * self.num_envs

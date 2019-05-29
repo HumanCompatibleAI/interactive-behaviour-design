@@ -10,7 +10,7 @@ import numpy as np
 from gym import Env
 
 import global_constants
-from subproc_vec_env_custom import CustomSubprocVecEnv
+from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -118,9 +118,9 @@ class TestVecSaveSegments(unittest.TestCase):
     def test(self):
         segments_queue = multiprocessing.Queue()
         n_envs = 3
-        venv = CustomSubprocVecEnv([lambda n=n: StateBoundaryWrapper(DummyEnv(global_constants.FRAMES_PER_SEGMENT - 1 + n,
-                                                                              step_offset=(n * 100)))
-                                    for n in range(n_envs)])
+        venv = SubprocVecEnvNoAutoReset([lambda n=n: StateBoundaryWrapper(DummyEnv(global_constants.FRAMES_PER_SEGMENT - 1 + n,
+                                                                                   step_offset=(n * 100)))
+                                         for n in range(n_envs)])
         venv = VecSaveSegments(venv, segments_queue)
 
         for n in range(n_envs):

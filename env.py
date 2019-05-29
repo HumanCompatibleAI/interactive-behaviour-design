@@ -10,7 +10,7 @@ from gym.wrappers import Monitor, TimeLimit
 import global_variables
 from a2c.common import gym
 from global_constants import ROLLOUT_FPS
-from subproc_vec_env_custom import CustomSubprocVecEnv
+from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import unwrap_to
 from wrappers.atari_generic import make_atari_env_with_preprocessing
 from wrappers.lunar_lander_stateful import LunarLanderStateful
@@ -104,7 +104,7 @@ def make_envs(env_id, num_env, seed, log_dir,
 
         return _thunk
 
-    train_env = CustomSubprocVecEnv([make_env_fn('train', i) for i in range(num_env)])
+    train_env = SubprocVecEnvNoAutoReset([make_env_fn('train', i) for i in range(num_env)])
     test_env = make_env_fn('test')()
     demo_env = make_env_fn('demo')()
 

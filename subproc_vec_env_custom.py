@@ -38,7 +38,7 @@ def worker(remote, parent_remote, env_fn_wrapper):
         env.close()
 
 
-class CustomSubprocVecEnv(VecEnv):
+class SubprocVecEnvNoAutoReset(VecEnv):
     """
     VecEnv that runs multiple environments in parallel in subproceses and communicates with them via pipes.
     Recommended to use when num_envs > 1 and step() can be a bottleneck.

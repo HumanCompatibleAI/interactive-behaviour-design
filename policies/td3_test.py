@@ -14,7 +14,7 @@ from gym.wrappers import FlattenDictWrapper, Monitor
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from policies.base_policy import PolicyTrainMode
 from policies.td3 import TD3Policy, LockedReplayBuffer
-from subproc_vec_env_custom import CustomDummyVecEnv, CustomSubprocVecEnv
+from subproc_vec_env_custom import CustomDummyVecEnv, SubprocVecEnvNoAutoReset
 from wrappers.fetch_pick_and_place_register import register
 from wrappers.fetch_pick_and_place import RandomInitialPosition
 from wrappers.util_wrappers import SaveEpisodeStats
@@ -162,8 +162,8 @@ class TestTD3(unittest.TestCase):
     def run_td3_rl(self, env_id, n_envs, n_epochs, hyperparams):
         tmp_dir = tempfile.mkdtemp()
         print("Logging to", tmp_dir)
-        train_env = CustomSubprocVecEnv(env_fns=[lambda env_n=env_n: self.env_fn(env_id=env_id, seed=env_n)
-                                                 for env_n in range(n_envs)])
+        train_env = SubprocVecEnvNoAutoReset(env_fns=[lambda env_n=env_n: self.env_fn(env_id=env_id, seed=env_n)
+                                                      for env_n in range(n_envs)])
         test_env = self.env_fn(env_id=env_id, seed=n_envs)
         # test_env = Monitor(test_env, tmp_dir, video_callable=lambda n: True)
 
@@ -272,7 +272,7 @@ class TestReplayBufferVecEnv(unittest.TestCase):
         self.compare_buffers(replay_buffers_correct[0], replay_buffers_correct[1])
 
         # Check 2: confirm that the replay buffer using SubprocVecEnv is exactly the same
-        env = CustomSubprocVecEnv([env_fn])
+        env = SubprocVecEnvNoAutoReset([env_fn])
         replay_buffer_test = get_replay_buffer(env, env_id)
         self.compare_buffers(replay_buffers_correct[0], replay_buffer_test)
         env.close()

@@ -16,7 +16,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from policies.td3 import TD3Policy
 from policies.base_policy import PolicyTrainMode
 from policies.td3_test import gen_demonstrations, Oracle
-from subproc_vec_env_custom import CustomSubprocVecEnv
+from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import get_git_rev
 from wrappers.fetch_pick_and_place_register import register
 from wrappers.util_wrappers import SaveEpisodeStats
@@ -86,9 +86,9 @@ def main():
         return env
 
     n_envs = 19
-    train_env = CustomSubprocVecEnv(env_fns=[lambda env_n=env_n: env_fn(seed=((args.seed * n_envs) + env_n),
-                                                                        log_dir=args.log_dir)
-                                             for env_n in range(n_envs)])
+    train_env = SubprocVecEnvNoAutoReset(env_fns=[lambda env_n=env_n: env_fn(seed=((args.seed * n_envs) + env_n),
+                                                                             log_dir=args.log_dir)
+                                                  for env_n in range(n_envs)])
 
     obs_space = train_env.observation_space
     act_space = train_env.action_space
