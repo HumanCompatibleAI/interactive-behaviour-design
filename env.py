@@ -107,9 +107,9 @@ def make_envs(env_id, num_env, seed, log_dir,
 
         return _thunk
 
-    if policy_type == PPOPolicy:
+    if issubclass(policy_type, PPOPolicy):
         SubprocVecEnv = SubprocVecEnvBaselines
-    elif policy_type == TD3Policy:
+    elif issubclass(policy_type, TD3Policy):
         SubprocVecEnv = SubprocVecEnvNoAutoReset
     else:
         raise Exception(f"Unsure which SubprocVecEnv to use for policy type '{policy_type}")
