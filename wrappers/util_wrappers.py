@@ -490,7 +490,7 @@ class VecSaveSegments(VecEnvWrapperSingleReset):
     def reset(self):
         for n in range(self.num_envs):
             self._reset_segment(n)
-        return super().reset()
+        return self.venv.reset()
 
 
 class SaveSegments(Wrapper):
