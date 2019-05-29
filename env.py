@@ -9,7 +9,10 @@ from gym.wrappers import Monitor, TimeLimit
 
 import global_variables
 from a2c.common import gym
+from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as SubprocVecEnvBaselines
 from global_constants import ROLLOUT_FPS
+from policies.ppo import PPOPolicy
+from policies.td3 import TD3Policy
 from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import unwrap_to
 from wrappers.atari_generic import make_atari_env_with_preprocessing
@@ -50,7 +53,7 @@ def make_envs(env_id, num_env, seed, log_dir,
               segments_queue: multiprocessing.Queue,
               render_segments,
               render_every_nth_episode,
-              save_states):
+              save_states, policy_type):
     def make_env_fn(env_type, env_n=0):
 
         def _thunk():
@@ -104,7 +107,13 @@ def make_envs(env_id, num_env, seed, log_dir,
 
         return _thunk
 
-    train_env = SubprocVecEnvNoAutoReset([make_env_fn('train', i) for i in range(num_env)])
+    if policy_type == PPOPolicy:
+        SubprocVecEnv = SubprocVecEnvBaselines
+    elif policy_type == TD3Policy:
+        SubprocVecEnv = SubprocVecEnvNoAutoReset
+    else:
+        raise Exception(f"Unsure which SubprocVecEnv to use for policy type '{policy_type}")
+    train_env = SubprocVecEnv([make_env_fn('train', i) for i in range(num_env)])
     test_env = make_env_fn('test')()
     demo_env = make_env_fn('demo')()
 

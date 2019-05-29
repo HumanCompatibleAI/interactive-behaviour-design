@@ -21,9 +21,10 @@ from gym.core import ObservationWrapper, Wrapper
 
 import global_constants
 from baselines import logger
+from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as SubprocVecEnvBaselines
 from classifier_collection import ClassifierCollection
 from drlhp.reward_predictor import RewardPredictor
-from subproc_vec_env_custom import SubprocVecEnvNoAutoReset, CustomVecEnvWrapper
+from subproc_vec_env_custom import SubprocVecEnvNoAutoReset, VecEnvWrapperSingleReset
 from utils import unwrap_to, EnvState, TimerContext
 from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 
@@ -58,7 +59,7 @@ class DrawClassifierPredictionWrapper(ObservationWrapper):
         return obs
 
 
-class VecLogRewards(CustomVecEnvWrapper):
+class VecLogRewards(VecEnvWrapperSingleReset):
     def __init__(self, venv, log_dir, postfix=None):
         super().__init__(venv)
         self.episode_reward_sum = 0
@@ -435,9 +436,9 @@ class DummyRender(Wrapper):
         return self.env.reset()
 
 
-class VecSaveSegments(CustomVecEnvWrapper):
+class VecSaveSegments(VecEnvWrapperSingleReset):
     def __init__(self, venv, segment_queue: multiprocessing.Queue):
-        assert isinstance(venv, SubprocVecEnvNoAutoReset)
+        assert isinstance(venv, (SubprocVecEnvNoAutoReset, SubprocVecEnvBaselines))
         super().__init__(venv)
         self.queue = segment_queue
         self.segment_frames = [None] * self.num_envs
@@ -485,6 +486,11 @@ class VecSaveSegments(CustomVecEnvWrapper):
         # even if the previous policy hadn't finished the episode
         self._reset_segment(env_n)
         return super().reset_one_env(env_n)
+
+    def reset(self):
+        for n in range(self.num_envs):
+            self._reset_segment(n)
+        return super().reset()
 
 
 class SaveSegments(Wrapper):

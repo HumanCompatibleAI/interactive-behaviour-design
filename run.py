@@ -43,6 +43,8 @@ from policy_rollouter import PolicyRollouter
 from reward_switcher import RewardSelector
 from rollouts import RolloutsByHash
 from segments import monitor_segments_dir_loop, write_segments_loop
+from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as SubprocVecEnvBaselines
+from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import find_latest_checkpoint, MemoryProfiler, configure_cpus, \
     load_cpu_config, unwrap_to, register_debug_handler
 from web_app.app import run_web_app
@@ -102,36 +104,6 @@ def main():
         raise Exception(
             "Due to fork restrictions on macOS core libraries, macOS is not supported")
 
-    # Create env and wrappers
-    segments_dir = osp.join(log_dir, 'segments')
-    experience_dir = osp.join(log_dir, 'experience')
-    [os.makedirs(d) for d in [segments_dir, experience_dir]]
-    reset_state_cache = ResetStateCache(experience_dir)
-    training_reset_mode_value = multiprocessing.Value('i', ResetMode.USE_ENV_RESET.value)
-    save_state_from_proportion_through_episode_value = multiprocessing.Value('d', 0.5)
-    max_episode_steps_value = multiprocessing.Value('i', 100000)
-    segments_queue = Queue(maxsize=1)
-    obs_queue = Queue()
-    train_env, test_env, demo_env = make_envs(env_id=args.env,
-                                              num_env=args.n_envs, seed=args.seed,
-                                              log_dir=log_dir,
-                                              reset_state_server_queue=reset_state_cache.queue_to_training,
-                                              reset_state_receiver_queue=reset_state_cache.queue_from_training,
-                                              reset_mode_value=training_reset_mode_value,
-                                              episode_obs_queue=obs_queue,
-                                              segments_queue=segments_queue,
-                                              render_segments=args.render_segments,
-                                              render_every_nth_episode=args.render_every_nth_episode,
-                                              save_states=(not args.no_save_states))
-
-    reset_state_cache.start_saver_receiver()
-
-    global_variables.env_creation_lock = threading.Lock()
-
-    if args.no_render_demonstrations:
-        demo_env = DummyRender(demo_env)
-    demo_env.reset()
-
     dummy_env = gym.make(args.env)
     if isinstance(dummy_env.unwrapped, (MujocoEnv, LunarLander)):
         classifier_network = mlp
@@ -157,6 +129,37 @@ def main():
     if args.rstd is not None:
         reward_predictor_std = args.rstd
         print("Overriding reward predictor std:", reward_predictor_std)
+
+    # Create env and wrappers
+    segments_dir = osp.join(log_dir, 'segments')
+    experience_dir = osp.join(log_dir, 'experience')
+    [os.makedirs(d) for d in [segments_dir, experience_dir]]
+    reset_state_cache = ResetStateCache(experience_dir)
+    training_reset_mode_value = multiprocessing.Value('i', ResetMode.USE_ENV_RESET.value)
+    save_state_from_proportion_through_episode_value = multiprocessing.Value('d', 0.5)
+    max_episode_steps_value = multiprocessing.Value('i', 100000)
+    segments_queue = Queue(maxsize=1)
+    obs_queue = Queue()
+    train_env, test_env, demo_env = make_envs(env_id=args.env,
+                                              num_env=args.n_envs, seed=args.seed,
+                                              log_dir=log_dir,
+                                              reset_state_server_queue=reset_state_cache.queue_to_training,
+                                              reset_state_receiver_queue=reset_state_cache.queue_from_training,
+                                              reset_mode_value=training_reset_mode_value,
+                                              episode_obs_queue=obs_queue,
+                                              segments_queue=segments_queue,
+                                              render_segments=args.render_segments,
+                                              render_every_nth_episode=args.render_every_nth_episode,
+                                              save_states=(not args.no_save_states),
+                                              policy_type=policy_type)
+
+    reset_state_cache.start_saver_receiver()
+
+    global_variables.env_creation_lock = threading.Lock()
+
+    if args.no_render_demonstrations:
+        demo_env = DummyRender(demo_env)
+    demo_env.reset()
 
     # So that the function can be pickled without having to pickle the env itself
     obs_space = train_env.observation_space
@@ -350,8 +353,13 @@ def main():
     reward_selector = RewardSelector(classifier, reward_predictor)
     global_variables.reward_selector = reward_selector
 
-    for n in range(train_env.num_envs):
-        train_env.reset_one_env(n)
+    if isinstance(train_env.unwrapped, SubprocVecEnvNoAutoReset):
+        for n in range(train_env.num_envs):
+            train_env.reset_one_env(n)
+    elif isinstance(train_env.unwrapped, SubprocVecEnvBaselines):
+        train_env.reset()
+    else:
+        raise RuntimeError("train_env is neither SubprocVecEnvNoAutoReset nor SubprocVecEnvBaselines")
 
     time.sleep(5)  # Give time for processes to start
     mp = MemoryProfiler(pid=-1, log_path=os.path.join(log_dir, f'memory-self.txt'))
