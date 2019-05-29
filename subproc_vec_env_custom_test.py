@@ -4,7 +4,7 @@ import numpy as np
 from gym import Env
 
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as BaselinesSubprocVecEnv
-from subproc_vec_env_custom import CustomSubprocVecEnv as CustomSubprocVecEnv
+from subproc_vec_env_custom import SubprocVecEnvNoAutoReset as CustomSubprocVecEnv
 
 
 class DummyEnv(Env):
@@ -48,7 +48,7 @@ def manual_check():
 
     print()
 
-    e = CustomSubprocVecEnv([lambda: DummyEnv()])
+    e = SubprocVecEnvNoAutoReset([lambda: DummyEnv()])
     for _ in range(2):
         print(e.reset())
         dones = [False]
@@ -60,7 +60,7 @@ def manual_check():
 
 class Test(unittest.TestCase):
     def test_sync(self):
-        e = CustomSubprocVecEnv([lambda: DummyEnv(max_steps=10)] * 2)
+        e = SubprocVecEnvNoAutoReset([lambda: DummyEnv(max_steps=10)] * 2)
         obses_list = []
         for _ in range(2):
             obses_list.append(e.reset())
@@ -73,7 +73,7 @@ class Test(unittest.TestCase):
         np.testing.assert_array_equal(obses_list, expected)
 
     def test_async(self):
-        e = CustomSubprocVecEnv([lambda: DummyEnv(max_steps=2), lambda: DummyEnv(max_steps=3)])
+        e = SubprocVecEnvNoAutoReset([lambda: DummyEnv(max_steps=2), lambda: DummyEnv(max_steps=3)])
         obses1 = []
         obses2 = []
         o1, o2 = e.reset()

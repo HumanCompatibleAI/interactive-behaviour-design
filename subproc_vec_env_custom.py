@@ -38,7 +38,7 @@ def worker(remote, parent_remote, env_fn_wrapper):
         env.close()
 
 
-class CustomSubprocVecEnv(VecEnv):
+class SubprocVecEnvNoAutoReset(VecEnv):
     """
     VecEnv that runs multiple environments in parallel in subproceses and communicates with them via pipes.
     Recommended to use when num_envs > 1 and step() can be a bottleneck.
@@ -133,9 +133,6 @@ class CustomDummyVecEnv(VecEnv):
         return np.array([self.obs]), np.array([self.reward]), np.array([self.done]), np.array([self.info])
 
 
-class CustomVecEnvWrapper(VecEnvWrapper):
-    def reset(self):
-        raise RuntimeError("CustomVecEnvWrapper should never receive reset()")
-
+class VecEnvWrapperSingleReset(VecEnvWrapper):
     def reset_one_env(self, env_n):
         return self.venv.reset_one_env(env_n)

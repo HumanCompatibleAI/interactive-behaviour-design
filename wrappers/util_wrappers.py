@@ -21,9 +21,10 @@ from gym.core import ObservationWrapper, Wrapper
 
 import global_constants
 from baselines import logger
+from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as SubprocVecEnvBaselines
 from classifier_collection import ClassifierCollection
 from drlhp.reward_predictor import RewardPredictor
-from subproc_vec_env_custom import CustomSubprocVecEnv, CustomVecEnvWrapper
+from subproc_vec_env_custom import SubprocVecEnvNoAutoReset, VecEnvWrapperSingleReset
 from utils import unwrap_to, EnvState, TimerContext
 from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 
@@ -58,7 +59,7 @@ class DrawClassifierPredictionWrapper(ObservationWrapper):
         return obs
 
 
-class VecLogRewards(CustomVecEnvWrapper):
+class VecLogRewards(VecEnvWrapperSingleReset):
     def __init__(self, venv, log_dir, postfix=None):
         super().__init__(venv)
         self.episode_reward_sum = 0
@@ -435,9 +436,9 @@ class DummyRender(Wrapper):
         return self.env.reset()
 
 
-class VecSaveSegments(CustomVecEnvWrapper):
+class VecSaveSegments(VecEnvWrapperSingleReset):
     def __init__(self, venv, segment_queue: multiprocessing.Queue):
-        assert isinstance(venv, CustomSubprocVecEnv)
+        assert isinstance(venv, (SubprocVecEnvNoAutoReset, SubprocVecEnvBaselines))
         super().__init__(venv)
         self.queue = segment_queue
         self.segment_frames = [None] * self.num_envs
@@ -462,17 +463,14 @@ class VecSaveSegments(CustomVecEnvWrapper):
         frames = self.venv.get_images()
 
         for n in range(self.num_envs):
-            # When done, SubprocVecEnv automatically resets the environment,
-            # and we don't want the frame from the resetted environment in this segment
-            if not dones[n]:
-                self.segment_frames[n].append(frames[n])
-                self.segment_obses[n].append(np.copy(obses[n]))
-                self.segment_rewards[n].append(rewards[n])
+            self.segment_frames[n].append(frames[n])
+            self.segment_obses[n].append(np.copy(obses[n]))
+            self.segment_rewards[n].append(rewards[n])
 
-            # We could get unlucky and get a 'done' just after we've reset the segment,
-            # so we need to be careful about the segment being empty
-            if (dones[n] and len(self.segment_obses[n]) > 0) or \
-                    len(self.segment_obses[n]) == global_constants.FRAMES_PER_SEGMENT:
+            segment_full = len(self.segment_obses[n]) == global_constants.FRAMES_PER_SEGMENT
+            # We could get unlucky and get a 'done' just after we've reset the segment
+            segment_done = dones[n] and len(self.segment_obses[n]) > 0
+            if segment_full or segment_done:
                 self._pad_segment(n)
                 tuple = (self.segment_obses[n], self.segment_rewards[n], self.segment_frames[n])
                 try:
@@ -483,20 +481,27 @@ class VecSaveSegments(CustomVecEnvWrapper):
         return obses, rewards, dones, infos
 
     def reset_one_env(self, env_n):
-        if self.segment_frames[env_n]:
-            # We should have seen 'done' during 'step'
-            raise RuntimeError("segment_frames[{0}] not empty on env[{0}] reset".format(env_n))
+        # Shouldn't we have seen 'done' before reset, making this call unnecessary?
+        # Not necessarily: if we've just switched policy, that policy is going to want to reset the environment,
+        # even if the previous policy hadn't finished the episode
+        self._reset_segment(env_n)
         return super().reset_one_env(env_n)
+
+    def reset(self):
+        for n in range(self.num_envs):
+            self._reset_segment(n)
+        return super().reset()
 
 
 class SaveSegments(Wrapper):
     def __init__(self, env, segment_queue: multiprocessing.Queue):
         Wrapper.__init__(self, env)
-        self.queue = segment_queue
-        self.segment_frames = None
-        self.segment_obses = None
-        self.segment_rewards = None
-        self._reset_segment()
+        raise RuntimeError("Error: SaveSegments has not yet been updated with fixes from VecSaveSegments")
+        # self.queue = segment_queue
+        # self.segment_frames = None
+        # self.segment_obses = None
+        # self.segment_rewards = None
+        # self._reset_segment()
 
     def _reset_segment(self):
         self.segment_frames = []

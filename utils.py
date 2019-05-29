@@ -9,6 +9,7 @@ import os
 import pickle
 import queue
 import random
+import re
 import signal
 import subprocess
 import sys
@@ -140,16 +141,24 @@ def unwrap_to(wrapped_env: Wrapper, class_name: type, n_before=0):
     return envs[0]
 
 
-def find_latest_checkpoint(ckpt_dir, name):
-    meta_paths = glob.glob(os.path.join(ckpt_dir, name + '*.meta'))
+def find_latest_checkpoint(ckpt_prefix):
+    meta_paths = glob.glob(ckpt_prefix + '*.meta')
     if not meta_paths:
-        raise Exception(f"Couldn't find checkpoint matching '{name}'")
-    meta_paths = sorted(meta_paths, key=lambda f: os.path.getmtime(f))
-    ckpt_names = [path.replace('.meta', '') for path in meta_paths]
-    if not ckpt_names:
-        raise Exception(f"Couldn't find checkpoint matching '{name}'")
-    last_ckpt_name = ckpt_names[-1]
-    return last_ckpt_name
+        raise Exception(f"Couldn't find checkpoint matching '{ckpt_prefix}*'")
+    meta_path_timestample_tuples = []
+    for p in meta_paths:
+        # The oldest checkpoint could have been deleted since when we globbed
+        if not os.path.exists(p):
+            continue
+        meta_path_timestample_tuples.append((p, os.path.getmtime(p)))
+    meta_path_timestample_tuples.sort(key=lambda tup: tup[1])
+    ckpt_paths = [meta_path.replace('.meta', '') for meta_path, _ in meta_path_timestample_tuples]
+    if len(ckpt_paths) == 1:
+        return ckpt_paths[0]
+    else:
+        # Return the second-latest checkpoint to maximize the chance of successful restoration
+        # (in case e.g. the very latest one is still being written to)
+        return ckpt_paths[-2]
 
 
 class CompressedAttributes:

@@ -11,7 +11,7 @@ from cloudpickle import cloudpickle
 from drlhp.pref_db import PrefDBTestTrain
 from drlhp.reward_predictor import RewardPredictor
 from global_constants import SYNC_REWARD_PREDICTOR_EVERY_N_SECONDS
-from utils import load_cpu_config
+from utils import load_cpu_config, find_latest_checkpoint
 
 
 def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
@@ -25,12 +25,11 @@ def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
     while True:
         time.sleep(SYNC_REWARD_PREDICTOR_EVERY_N_SECONDS)
         try:
-            reward_predictor.load(ckpt_path)
+            latest_ckpt_path = find_latest_checkpoint(ckpt_path)
+            reward_predictor.load(latest_ckpt_path)
             n_successful_loads += 1
             logger.logkv('reward_predictor_load_loop/n_loads', n_successful_loads)
         except:
-            # In case the training loop changes the checkpoint while we're trying
-            # to load it
             print("Exception while loading reward predictor checkpoint:")
             traceback.print_exc()
 

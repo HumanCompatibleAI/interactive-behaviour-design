@@ -17,7 +17,7 @@ from baselines.common.vec_env.vec_normalize import VecNormalize
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from policies.td3 import TD3Policy, DemonstrationsBuffer
-from subproc_vec_env_custom import CustomSubprocVecEnv
+from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import get_git_rev
 from wrappers.fetch_pick_and_place_register import register
 from wrappers.wrappers import LogEpisodeStats
@@ -156,8 +156,8 @@ def main():
         return env
 
     n_envs = 19
-    train_env = CustomSubprocVecEnv(env_fns=[lambda n=n: env_fn(seed=(n_envs * args.seed + n), log_dir=args.log_dir)
-                                             for n in range(n_envs)])
+    train_env = SubprocVecEnvNoAutoReset(env_fns=[lambda n=n: env_fn(seed=(n_envs * args.seed + n), log_dir=args.log_dir)
+                                                  for n in range(n_envs)])
     obs_space = train_env.observation_space
     act_space = train_env.action_space
 
@@ -207,7 +207,7 @@ def main():
     last_cycle_n = None
     while policy.cycle_n < 1000:
         if args.mode == 'bc':
-            policy.train_bc()
+            policy.train_bc_only()
         elif args.mode == 'rbc':
             policy.train()
         else:
