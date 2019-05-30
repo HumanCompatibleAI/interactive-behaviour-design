@@ -214,7 +214,7 @@ def main():
         frames_save_dir = None
     else:
         frames_save_dir = experience_dir
-    classifier_data_buffer = ClassifierDataBuffer(video_dir=experience_dir,
+    classifier_data_buffer = ClassifierDataBuffer(video_dir=os.path.join(log_dir, 'train_env'),
                                                   save_dir=frames_save_dir)
     classifier_data_buffer.start_saving_obs_from_queue(obs_queue)
 
