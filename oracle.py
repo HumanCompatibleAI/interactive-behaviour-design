@@ -146,6 +146,7 @@ def choose_segment_for_demonstration(segment_dict):
 def demonstrate(url):
     response = requests.get(url + '/get_rollouts')
     response.raise_for_status()
+    print(response.json)  # TODO debugging, deleteme
     group_name, demonstrations_dict = response.json()
     best_hash, best_policy_name = choose_segment_for_demonstration(demonstrations_dict)
     if best_hash is None:
