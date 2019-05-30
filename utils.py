@@ -24,6 +24,7 @@ from threading import Thread
 
 import cv2
 import numpy as np
+import psutil
 import tensorflow as tf
 from gym import Wrapper, Env
 from gym.envs.atari import AtariEnv
@@ -357,26 +358,39 @@ class MemoryProfiler:
         self.t.start()
 
     def stop(self):
-        self.cmd_queue.put(self.STOP_CMD)
-        self.t.join()
+        if self.t.is_alive():
+            self.cmd_queue.put(self.STOP_CMD)
+            self.t.join()
         self.t = None
 
     def profile(self):
         import memory_profiler
         f = open(self.log_path, 'w+')
         while True:
-            # 5 samples, 1 second apart
-            memory_profiler.memory_usage(self.pid, stream=f, timeout=5, interval=1,
-                                         include_children=self.include_children)
+            # 1 sample
+            try:
+                memory_profiler.memory_usage(self.pid, stream=f, timeout=None, interval=0.1,
+                                             include_children=self.include_children)
+            except:
+                # E.g. if the process has stopped existing since when we checked
+                f.close()
+                break
+
             f.flush()
+            time.sleep(5)
 
             try:
                 cmd = self.cmd_queue.get(timeout=0.1)
+            except queue.Empty:
+                pass
+            else:
                 if cmd == self.STOP_CMD:
                     f.close()
                     break
-            except queue.Empty:
-                pass
+
+            if not psutil.pid_exists(self.pid):
+                f.close()
+                break
 
 
 def sample_demonstration_batch(demonstration_rollouts, batch_size=32):

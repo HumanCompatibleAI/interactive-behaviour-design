@@ -214,7 +214,7 @@ def main():
         frames_save_dir = None
     else:
         frames_save_dir = experience_dir
-    classifier_data_buffer = ClassifierDataBuffer(video_dir=experience_dir,
+    classifier_data_buffer = ClassifierDataBuffer(video_dir=os.path.join(log_dir, 'train_env'),
                                                   save_dir=frames_save_dir)
     classifier_data_buffer.start_saving_obs_from_queue(obs_queue)
 
@@ -362,9 +362,9 @@ def main():
         raise RuntimeError("train_env is neither SubprocVecEnvNoAutoReset nor SubprocVecEnvBaselines")
 
     time.sleep(5)  # Give time for processes to start
-    mp = MemoryProfiler(pid=-1, log_path=os.path.join(log_dir, f'memory-self.txt'))
+    mp = MemoryProfiler(pid=os.getpid(), log_path=os.path.join(log_dir, f'memory-self.txt'))
     mp.start()
-    mp = MemoryProfiler(pid=-1, include_children=True,
+    mp = MemoryProfiler(pid=os.getpid(), include_children=True,
                         log_path=os.path.join(log_dir, f'memory-self-with-children.txt'))
     mp.start()
     current_process = psutil.Process()

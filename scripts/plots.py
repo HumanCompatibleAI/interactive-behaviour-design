@@ -4,16 +4,15 @@
 Plot metrics by time and by step, plotting a solid line showing the mean of all seeds and a shaded region
 showing one standard error between seeds.
 
-# Run me with --runs_dir pointing to a directory that looks like:
+# Run me with --runs_dir pointing to a directory containing runs like:
 #   fetch-0-drlhp_foobar
 # where 'fetch' is the environment name, '0' is the seed, 'drlhp' is the run type, and foobar is ignored
 """
 
-# TODOs; error regions too smoothed; lines sometimes start low then increase?; negative success rate
-
 import argparse
 import fnmatch
 import glob
+import locale
 import multiprocessing
 import os
 import re
@@ -26,11 +25,19 @@ import matplotlib
 import numpy as np
 import scipy.stats
 import tensorflow as tf
-from matplotlib.pyplot import close, fill_between
+from matplotlib import colors
+from matplotlib.pyplot import close, fill_between, title
+from tensorflow.python.util import deprecation
 
 matplotlib.use('Agg')
 
 from pylab import plot, xlabel, ylabel, figure, legend, savefig, grid, ylim, xlim, ticklabel_format
+
+deprecation._PRINT_DEPRECATION_WARNINGS = False
+
+# Get thousands separated by commas
+locale.format_string = partial(locale.format_string, grouping=True)
+locale.setlocale(locale.LC_ALL, 'en_GB.utf8')
 
 
 # Event-reading utils
@@ -59,7 +66,7 @@ def read_events_file(events_filename):
 
 def read_all_events(directory):
     events_files = find_files_matching_pattern('events.out.tfevents*', directory)
-    pool = multiprocessing.Pool(processes=32)
+    pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
     events_in_each_file = pool.map(read_events_file, events_files)
     all_events = {}
     for events in events_in_each_file:
@@ -99,31 +106,31 @@ def smooth_values(values, window_size):
     return smoothed_values
 
 
-def interpolate_steps(timestamp_value_tuples, timestamp_step_tuples):
-    step_timestamps, steps = zip(*timestamp_step_tuples)
-    value_timestamps, values = zip(*timestamp_value_tuples)
+def interpolate_to_common_xs(timestamp_y_tuples, timestamp_x_tuples):
+    x_timestamps, xs = zip(*timestamp_x_tuples)
+    y_timestamps, ys = zip(*timestamp_y_tuples)
 
-    if len(timestamp_step_tuples) < len(timestamp_value_tuples):
-        # Use step timestamps for interpolation
-        steps = steps
-        values = interpolate_values(timestamp_value_tuples, step_timestamps)
-    elif len(timestamp_value_tuples) < len(timestamp_step_tuples):
-        # Use value timestamps for interpolation
-        steps = interpolate_values(timestamp_step_tuples, value_timestamps)
-        values = values
+    if len(timestamp_x_tuples) < len(timestamp_y_tuples):
+        # Use x timestamps for interpolation
+        xs = xs
+        ys = interpolate_values(timestamp_y_tuples, x_timestamps)
+    elif len(timestamp_y_tuples) < len(timestamp_x_tuples):
+        # Use y timestamps for interpolation
+        xs = interpolate_values(timestamp_x_tuples, y_timestamps)
+        ys = ys
     else:
         pass
 
     # interpolate_values uses NaN to signal "couldn't interpolate this value"
     # (because we didn't have data at the beginning or end); let's remove those points
     drop_idxs = []
-    for i in range(len(steps)):
-        if np.isnan(steps[i]):
+    for i in range(len(xs)):
+        if np.isnan(xs[i]):
             drop_idxs.append(i)
-    steps = [steps[i] for i in range(len(steps)) if i not in drop_idxs]
-    values = [values[i] for i in range(len(values)) if i not in drop_idxs]
+    xs = [xs[i] for i in range(len(xs)) if i not in drop_idxs]
+    ys = [ys[i] for i in range(len(ys)) if i not in drop_idxs]
 
-    return steps, values
+    return xs, ys
 
 
 def find_training_start(run_dir):
@@ -152,13 +159,11 @@ def detect_metrics(env_name, train_env_key):
     if env_name == 'Enduro':
         metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
     if env_name == 'Fetch':
-        metrics.append(M(f'{train_env_key}/reward_sum_post_wrappers', 'Episode reward', 100, 100))
-        metrics.append(M(f'{train_env_key}/gripper_to_block_cumulative_distance', 'Cumulative distance from gripper to block', 100, 100))
-        metrics.append(M(f'{train_env_key}/block_to_target_cumulative_distance', 'Cumulative distance from block to target', 100, 100))
-        metrics.append(M(f'{train_env_key}/block_to_target_min_distance', 'Minimum distance from block to target', 100, 100))
-        metrics.append(M(f'{train_env_key}/ep_frac_aligned_with_block', 'Fraction of episode aligned with block', 100, 100))
-        metrics.append(M(f'{train_env_key}/ep_frac_gripping_block', 'Fraction of episode gripping block', 100, 100))
-        metrics.append(M(f'{train_env_key}/success_rate', 'Success rate', 100, 100))
+        metrics.append(M(f'env_test/ep_frac_aligned_with_block', 'Fraction of episode aligned with block', 100, 100))
+        metrics.append(M(f'env_test/ep_frac_gripping_block', 'Fraction of episode gripping block', 100, 100))
+        metrics.append(M(f'env_test/success_rate', 'Success rate (end of episode)', 10, 10))
+        metrics.append(M(f'env_test/success_near_end_rate', 'Success rate (near end of episode)', 10, 10))
+        metrics.append(M(f'env_test/success_partial_rate', 'Success rate (anywhere in episode)', 10, 10))
     return metrics
 
 
@@ -218,6 +223,11 @@ class TestDownsample(unittest.TestCase):
 
 
 def plot_averaged(xs_list, ys_list, window_size, fill_window_size, color, label):
+    # for ys in ys_list:
+    #     if len(ys) < window_size:
+    #         print(f"Error: window_size={window_size} but we only have {len(ys)} values", file=sys.stderr)
+    #         exit(1)
+
     # Interpolate all data to have common x values
     all_xs = set([x for xs in xs_list for x in xs])
     all_xs = sorted(list(all_xs))
@@ -247,7 +257,10 @@ def plot_averaged(xs_list, ys_list, window_size, fill_window_size, color, label)
     #     ys_downsampled_list.append(ys_downsampled)
 
     mean_ys = np.mean(ys_list, axis=0)  # Average across seeds
-    smoothed_mean_ys = smooth_values(mean_ys, window_size)
+    if len(ys_list[0]) > window_size:
+        smoothed_mean_ys = smooth_values(mean_ys, window_size)
+    else:
+        smoothed_mean_ys = mean_ys
     plot(all_xs, smoothed_mean_ys, color=color, label=label, alpha=0.9)
 
     if fill_window_size is not None:
@@ -304,24 +317,26 @@ def filter_pretraining_events(run_dir, events):
                                              for t, step in events['policy_master/n_total_steps']]
 
 
-def get_values_by_step(events, metric, max_steps):
-    steps, values = interpolate_steps(events[metric.tag], events['policy_master/n_total_steps'])
+def get_values_by_step(events, metric, run_type, max_steps):
+    steps, values = interpolate_to_common_xs(events[metric.tag], events['policy_master/n_total_steps'])
     if max_steps:
         values = np.extract(np.array(steps) < max_steps, values)
         steps = np.extract(np.array(steps) < max_steps, steps)
     return steps, values
 
 
-def get_values_by_prefs(events, metric):
-    steps, values = interpolate_steps(events[metric.tag], events['pref_db/added_prefs'])
-    return steps, values
+def get_values_by_n_human_interactions(events, metric, run_type):
+    if run_type == 'DRLHP':
+        n_interactions_tag = 'pref_db/added_prefs'
+    elif run_type in ['SDRLHP', 'SDRLHPNP', 'BC']:
+        n_interactions_tag = 'demonstrations/added_demonstrations'
+    else:
+        raise Exception(f"Unsure which tag represents no. human interactions for run type '{run_type}'")
+    xs, ys = interpolate_to_common_xs(events[metric.tag], events[n_interactions_tag])
+    return xs, ys
 
-def get_values_by_demos(events, metric):
-    steps, values = interpolate_steps(events[metric.tag], events['demonstrations/added_demonstrations'])
-    return steps, values
 
-
-def get_values_by_time(events, metric, max_hours):
+def get_values_by_time(events, metric, run_type, max_hours):
     timestamps, values = zip(*events[metric.tag])
     if max_hours:
         values = np.extract(np.array(timestamps) < max_hours, values)
@@ -386,6 +401,7 @@ def main():
     parser.add_argument('--max_steps', type=float)
     parser.add_argument('--max_hours', type=float)
     parser.add_argument('--train_env_key', default='env_train')
+    parser.add_argument('--individual_seeds', action='store_true')
     args = parser.parse_args()
 
     if args.test:
@@ -414,43 +430,50 @@ def main():
         add_steps_to_bc_run(events_by_env_name_by_run_type_by_seed, args.max_steps)
 
     time_values_fn = partial(get_values_by_time, max_hours=args.max_hours)
-    step_values_fn = partial(get_values_by_step, max_steps=args.max_steps)
-    prefs_values_fn = get_values_by_prefs
-    demos_values_fn = get_values_by_demos
+    steps_value_fn = partial(get_values_by_step, max_steps=args.max_steps)
 
     for env_name, events_by_run_type_by_seed in events_by_env_name_by_run_type_by_seed.items():
         print(f"Plotting {env_name}...")
         metrics = detect_metrics(env_name, args.train_env_key)
         for value_fn, x_type, x_label, x_lim in [
             (time_values_fn, 'time', 'Hours', args.max_hours),
-            (step_values_fn, 'step', 'Total environment steps', args.max_steps),
-            (prefs_values_fn, 'prefs', 'Prefs', None),
-            (demos_values_fn, 'demos', 'Demos', None)]:
+            (steps_value_fn, 'steps', 'Total environment steps', args.max_steps),
+            (get_values_by_n_human_interactions, 'interactions', 'No. human interactions', None)
+        ]:
             for metric_n, metric in enumerate(metrics):
+                print(f"Metric '{metric.tag}'")
                 figure(metric_n)
-                ticklabel_format(axis='x', style='scientific', scilimits=(0, 0))
+                ticklabel_format(axis='x', style='scientific', scilimits=(0, 5), useLocale=True)
                 all_min_y = float('inf')
                 all_max_y = -float('inf')
                 for run_type_n, (run_type, events_by_seed) in enumerate(events_by_run_type_by_seed.items()):
-                    try:
-                        color = f"C{run_type_n}"
-                        xs_list = []
-                        ys_list = []
-                        for events, run_dir in events_by_seed.values():
-                            if metric.tag not in events:
-                                print(f"Error: couldn't find metric '{metric.tag}' in run '{run_dir}'", file=sys.stderr)
-                                exit(1)
-                            xs, ys = value_fn(events, metric)
-                            xs_list.append(xs)
-                            ys_list.append(ys)
-                        min_y, max_y = plot_averaged(xs_list, ys_list,
-                                                     metric.window_size, metric.fill_window_size,
-                                                     color, run_type)
-                        all_max_y = max_y if max_y > all_max_y else all_max_y
-                        all_min_y = min_y if min_y < all_min_y else all_min_y
-                    except KeyError:
-                        # BC runs don't store steps
+                    if run_type == 'BC' and value_fn in [steps_value_fn]:
                         continue
+                    if run_type == 'RL' and value_fn in [get_values_by_n_human_interactions]:
+                        continue
+                    print(f"Run type '{run_type}'")
+                    color = colors.to_rgba(f"C{run_type_n}")
+                    xs_list = []
+                    ys_list = []
+                    for seed, (events, run_dir) in events_by_seed.items():
+                        if metric.tag not in events:
+                            print(f"Error: couldn't find metric '{metric.tag}' in run '{run_dir}'", file=sys.stderr)
+                            exit(1)
+                        xs, ys = value_fn(events, metric, run_type)
+                        print(f"Seed {seed}:", np.array(xs).shape, np.array(ys).shape)
+                        xs_list.append(xs)
+                        ys_list.append(ys)
+
+                    if args.individual_seeds:
+                        individual_run_opacities = np.linspace(0.3, 1.0, len(xs_list))
+                        for n in range(len(xs_list)):
+                            plot(xs_list[n], ys_list[n], color=color, linewidth=0.5, alpha=individual_run_opacities[n])
+                    all_min_y = min(all_min_y, np.min([np.min(ys) for ys in ys_list]))
+                    all_max_y = max(all_max_y, np.max([np.max(ys) for ys in ys_list]))
+
+                    plot_averaged(xs_list, ys_list,
+                                  metric.window_size, metric.fill_window_size,
+                                  color, run_type)
 
                 if all_min_y == float('inf'):
                     # If we didn't plot anything because we were plotting by steps and none of the runs logged steps
@@ -462,10 +485,15 @@ def main():
                 xlim(left=0)
                 if x_lim is not None:
                     xlim(right=x_lim)
+                y_range = all_max_y - all_min_y
+                all_min_y -= y_range / 10
+                all_max_y += y_range / 10
                 ylim([all_min_y, all_max_y])
+                title(env_name)
 
                 escaped_env_name = env_name.replace(' ', '_').lower()
-                escaped_metric_name = metric.name.replace(' ', '_').replace('.', '').lower()
+                escaped_metric_name = metric.name.replace(' ', '_').replace('.', '').replace('(', '').replace(')',
+                                                                                                              '').lower()
                 fig_filename = '{}_{}_by_{}.png'.format(escaped_env_name, escaped_metric_name, x_type)
                 savefig(fig_filename, dpi=300, bbox_inches='tight')
             close('all')

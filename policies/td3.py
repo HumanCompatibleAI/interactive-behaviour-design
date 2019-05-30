@@ -299,31 +299,34 @@ class TD3Policy(Policy):
 
         t2 = time.time()
 
-        done = [False]
-        obs = self.obs1
+        obses = self.obs1
         # Generate reset states for demonstrations
         # (We only care about the first environment, because that's the one from which reset states are generated)
         # TODO: we should be generating reset states from the test environment
-        while not done[0]:
-            obs, reward, done, info = self.train_env.step(self.train_step(obs))
-        self.obs1 = np.array([self.train_env.reset_one_env(n)
-                              for n in range(self.train_env.num_envs)])
+        while True:
+            obses, reward, dones, info = self.train_env.step(self.train_step(obses))
+            for i in range(self.n_envs):
+                if dones[i]:
+                    self.obs1[i] = self.train_env.reset_one_env(i)
+            if dones[0]:
+                break
 
         t3 = time.time()
 
+        t4 = None
         if self.cycle_n % self.cycles_per_epoch == 0:
             self.epoch_n += 1
             self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
+            t4 = time.time()
             self.test_agent()
-
-        t4 = time.time()
 
         train_time_ms = (t2 - t1) * 1000
         env_time_ms = (t3 - t2) * 1000
-        test_time_ms = (t4 - t3) * 1000
         self.logger.logkv(f'policy_{self.name}/bc_train_time_ms', train_time_ms)
         self.logger.logkv(f'policy_{self.name}/train_env_time_ms', env_time_ms)
-        self.logger.logkv(f'policy_{self.name}/test_env_time_ms', test_time_ms)
+        if t4 is not None:
+            test_time_ms = (t4 - t3) * 1000
+            self.logger.logkv(f'policy_{self.name}/test_env_time_ms', test_time_ms)
 
         return np.mean(loss_bc_pi_l)
 

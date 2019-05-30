@@ -68,6 +68,7 @@ def get_rollouts():
     rollout_groups = get_metadatas()
     if not rollout_groups:
         if n_rollouts_in_progress.value == 0:
+            print("Error: No rollouts in progress?")  # TODO debugging; deleteme
             return json.dumps([])
         else:
             print("Waiting for rollouts...")
@@ -80,6 +81,7 @@ def get_rollouts():
         try:
             rollout_hashes = json.load(f)
         except Exception as e:
+            print(os.listdir(_demonstration_rollouts_dir))  # TODO debugging; deletemd
             print(f"Exception while trying to read {rollout_group}")
             raise e
     rollouts = {}
@@ -194,6 +196,7 @@ def choose_rollout():
         with open(group_filename, 'r') as f:
             rollout_group_hash_strs = json.load(f)
     except Exception as e:
+        print(f"Exception while trying to read '{group_filename}':")  # TODO debugging; deleteme
         return e
     if not chosen_rollout_hash_str in rollout_group_hash_strs \
             and chosen_rollout_hash_str != 'none' and chosen_rollout_hash_str != 'equal':
@@ -219,6 +222,7 @@ def choose_rollout():
         shutil.move(vid_name, trajectory_dir)
 
     n_rollouts_in_progress.value += 1
+    print("No. rollouts in progress:", n_rollouts_in_progress)  # TODO debugging; deleteme
     Thread(target=lambda: process_choice_and_generate_new_rollouts(rollouts, chosen_rollout_hash_str,
                                                                    group_name, trajectory_dir, trajectory_serial,
                                                                    policy_names, softmax_temp)).start()
