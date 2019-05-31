@@ -505,8 +505,9 @@ def load_cpu_config(log_dir, name):
     os.sched_setaffinity(0, cpus)
     # The first session created in a process seems to set the options for the execution engine used for all subsequent
     # session in that process. So this should be called before anything else.
-    dummy_sess = tf.Session(config=tf.ConfigProto(inter_op_parallelism_threads=len(cpus),
-                                                  intra_op_parallelism_threads=len(cpus)))
+    config = tf.ConfigProto(inter_op_parallelism_threads=len(cpus), intra_op_parallelism_threads=len(cpus))
+    config.gpu_options.allow_growth = True
+    dummy_sess = tf.Session(config=config)
     dummy_sess.close()
 
 
