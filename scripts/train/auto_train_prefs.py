@@ -31,10 +31,7 @@ def get_args():
     parser.add_argument('--n_initial_demos', type=int, default=10)
     parser.add_argument('--pretrain_reward_predictor_seconds', type=int, default=1200)
     parser.add_argument('--tmux_sess')
-    if os.path.exists('/efs'):
-        default_log_dir = '/efs'
-    else:
-        default_log_dir = 'runs'
+    default_log_dir = 'runs'
     parser.add_argument('--log_dir', default=default_log_dir)
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--disable_redo', action='store_true')
