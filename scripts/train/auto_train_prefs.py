@@ -117,8 +117,7 @@ def main():
             start_reward_predictor_training(base_url, args.pretrain_reward_predictor_seconds)
     else:
         raise Exception()
-    if args.segment_generation == 'demonstrations':
-        configure_env_resets(base_url)
+    configure_env_resets(base_url)
     start_training(base_url, args.training_mode, args.segment_generation)
 
 
