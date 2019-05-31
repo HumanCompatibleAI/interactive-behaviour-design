@@ -276,11 +276,12 @@ class TD3Policy(Policy):
         # Logging will be taken care of by the environment itself (see env.py)
         # Why do the env reset in this funny way? Because we need to end with a reset to trigger
         # SaveEpisodeStats to save the stats from the final episode.
+        # (FYI: test_env is a SubprocVecEnv - see env.py for the reason)
         for _ in range(self.test_rollouts_per_epoch):
             obs, done = self.last_test_obs, False
             while not done:
-                obs, _, done, _ = self.test_env.step(self.step(obs, deterministic=True))
-            self.last_test_obs = self.test_env.reset()
+                _, _, [done], _ = self.test_env.step(self.step(obs, deterministic=True))
+            self.last_test_obs = self.test_env.reset()[0]
 
     def train_bc_only(self):
         t1 = time.time()
@@ -575,7 +576,7 @@ class TD3Policy(Policy):
 
     def set_test_env(self, env, log_dir):
         self.test_env = env
-        self.last_test_obs = self.test_env.reset()
+        self.last_test_obs = self.test_env.reset()[0]
 
     def use_demonstrations(self, demonstrations: RolloutsByHash):
         def f():
