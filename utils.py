@@ -66,7 +66,7 @@ class TimerContext(object):
             duration *= 1e3
         else:
             units = "s"
-        print("'{}' took {:.1f} {}".format(self.name, duration, units))
+        print("'{}' took {:.1f} {} ({})".format(self.name, duration, units, time.time()))
 
 
 class LogTime:
