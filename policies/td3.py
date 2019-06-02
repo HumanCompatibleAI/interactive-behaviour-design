@@ -318,8 +318,8 @@ class TD3Policy(Policy):
         if self.cycle_n % self.cycles_per_epoch == 0:
             self.epoch_n += 1
             self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
-            t4 = time.time()
             self.test_agent()
+            t4 = time.time()
 
         train_time_ms = (t2 - t1) * 1000
         env_time_ms = (t3 - t2) * 1000
