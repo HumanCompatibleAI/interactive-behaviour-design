@@ -12,13 +12,15 @@ import numpy as np
 from cloudpickle import cloudpickle
 from gym.spaces import seed
 from gym.utils import atomic_write
+from gym.wrappers import TimeLimit
 from tensorflow.python.framework.errors_impl import NotFoundError
 
 import global_variables
 from global_constants import ROLLOUT_FPS
 from global_variables import RolloutMode, RolloutRandomness
 from rollouts import CompressedRollout
-from utils import EnvState, get_noop_action, save_video, make_small_change, find_latest_checkpoint, load_cpu_config
+from utils import EnvState, get_noop_action, save_video, make_small_change, find_latest_checkpoint, load_cpu_config, \
+    unwrap_to
 from wrappers.util_wrappers import ResetMode
 
 
@@ -331,13 +333,17 @@ class PolicyRollouter:
         elif self.reset_mode_value.value == ResetMode.FROM_STATE_CACHE.value:
             while True:
                 try:
-                    reset_state = self.reset_state_queue.get(block=True,
-                                                             timeout=0.1)  # type: EnvState
+                    reset_state = self.reset_state_queue.get(block=True, timeout=0.1)  # type: EnvState
                     print("Demonstrating from state", reset_state.step_n)
                     break
                 except queue.Empty:
                     print("Waiting for demonstrations reset state...")
                     time.sleep(1.0)
+            env = reset_state.env
+            time_limit = unwrap_to(env, TimeLimit)
+            time_limit._episode_started_at = time.time()
+            time_limit._elapsed_steps = 0
+            reset_state = EnvState(env, reset_state.obs, reset_state.done, reset_state.step_n, reset_state.birthtime)
             return reset_state
         else:
             raise Exception("Invalid demonstration reset mode:", self.reset_mode_value.value)
