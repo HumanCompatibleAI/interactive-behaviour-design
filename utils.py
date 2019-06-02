@@ -148,10 +148,11 @@ def find_latest_checkpoint(ckpt_prefix):
         raise Exception(f"Couldn't find checkpoint matching '{ckpt_prefix}*'")
     meta_path_timestample_tuples = []
     for p in meta_paths:
-        # The oldest checkpoint could have been deleted since when we globbed
-        if not os.path.exists(p):
+        try:
+            meta_path_timestample_tuples.append((p, os.path.getmtime(p)))
+        except FileNotFoundError:
+            # One of the checkpoints got deleted since when we globbed; no big deal
             continue
-        meta_path_timestample_tuples.append((p, os.path.getmtime(p)))
     meta_path_timestample_tuples.sort(key=lambda tup: tup[1])
     ckpt_paths = [meta_path.replace('.meta', '') for meta_path, _ in meta_path_timestample_tuples]
     if len(ckpt_paths) == 1:
