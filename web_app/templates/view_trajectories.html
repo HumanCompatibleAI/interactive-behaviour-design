@@ -207,7 +207,6 @@
             let nVidsSent = Object.keys(rolloutDict).length;
             let $videos = $('#videos');
             while ($('#videos video').length > nVidsSent) {
-                $('#videoFrames video').last().remove();
                 $('#videos video').last().remove();
                 $('#labels div').last().remove();
             }
@@ -217,7 +216,6 @@
             }
 
             let rolloutHashes = [];
-            let $videoFrames = $('#videoFrames');
             var i;
             for (i = 0; i < sortedRolloutDict.length; i++) {
                 let rollout = sortedRolloutDict[i];
@@ -229,15 +227,6 @@
                 vid.src = '/get_video?trajectory=' + getCurrTrajectory() + '&filename=' + rolloutVidFilename;
                 vid.load();
                 vid.playbackRate = 2.0;
-
-                let vidFrame = $videoFrames.children()[i];
-                vidFrame.src = '/get_video?trajectory=' + getCurrTrajectory() + '&filename=' + rolloutVidFilename;
-                vidFrame.load();
-                vidFrame.onloadeddata = function(v) {
-                    return function () {
-                        v.currentTime = v.duration;
-                    }
-                }(vidFrame);
 
                 let label = $('#labels').children()[i];
                 let rolloutName = rolloutDict[rolloutHash][0];
@@ -270,12 +259,6 @@
             controls: true
         });
         $video.appendTo($('#videos'));
-        let $videoFrame = $('<video />', {
-            type: 'video/mp4',
-            width: '400px',
-            controls: false
-        });
-        $videoFrame.appendTo($('#videoFrames'));
     }
 
     function addLabel() {
@@ -343,8 +326,6 @@ The chosen rollout for each rollout group is highlighted in green
     <label for="rollout_select">Rollout group:</label>
     <select id="rollout_select" class="selectors" onchange="updateRolloutVideos()">
     </select>
-</div>
-<div id="videoFrames">
 </div>
 <div id="videos">
 </div>
