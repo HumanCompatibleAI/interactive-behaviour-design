@@ -280,7 +280,7 @@ class TD3Policy(Policy):
         for _ in range(self.test_rollouts_per_epoch):
             obs, done = self.last_test_obs, False
             while not done:
-                _, _, [done], _ = self.test_env.step(self.step(obs, deterministic=True))
+                _, _, [done], _ = self.test_env.step([self.step(obs, deterministic=True)])
             self.last_test_obs = self.test_env.reset()[0]
 
     def train_bc_only(self):
@@ -575,6 +575,7 @@ class TD3Policy(Policy):
                               for n in range(self.train_env.num_envs)])
 
     def set_test_env(self, env, log_dir):
+        assert env.unwrapped.num_envs == 1, env.unwrapped.num_envs
         self.test_env = env
         self.last_test_obs = self.test_env.reset()[0]
 

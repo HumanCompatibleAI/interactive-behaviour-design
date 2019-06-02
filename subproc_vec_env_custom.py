@@ -71,6 +71,8 @@ class SubprocVecEnvNoAutoReset(VecEnv):
         VecEnv.__init__(self, len(env_fns), observation_space, action_space)
 
     def step_async(self, actions):
+        shape = np.array(actions).shape
+        assert shape == (self.num_envs,) + self.action_space.shape, shape
         self._assert_not_closed()
         for remote, action in zip(self.remotes, actions):
             remote.send(('step', action))
