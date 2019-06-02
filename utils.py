@@ -49,8 +49,10 @@ def acquire_lock(env_lock, instigator):
 
 
 class TimerContext(object):
-    def __init__(self, name):
+    def __init__(self, name, stdout=True):
         self.name = name
+        self.stdout = stdout
+        self.duration_s = None
 
     def __enter__(self):
         self.t_start = time.time()
@@ -58,6 +60,7 @@ class TimerContext(object):
     def __exit__(self, type, value, traceback):
         t_end = time.time()
         duration = t_end - self.t_start
+        self.duration_s = duration
         if duration < 1e-3:
             units = "us"
             duration *= 1e6
@@ -66,7 +69,8 @@ class TimerContext(object):
             duration *= 1e3
         else:
             units = "s"
-        print("'{}' took {:.1f} {} ({})".format(self.name, duration, units, time.time()))
+        if self.stdout:
+            print("'{}' took {:.1f} {} ({})".format(self.name, duration, units, time.time()))
 
 
 class LogTime:
