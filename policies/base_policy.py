@@ -32,6 +32,7 @@ class Policy:
         self.training_enabled = False
         self.train_thread = None
         self.demonstration_rollouts = None
+        self.n_total_steps = 0
 
     def init_logger(self, log_dir):
         if self.logger is None:

@@ -51,6 +51,10 @@
 
     function updateVideos() {
         $.get('/get_rollouts', function (data) {
+            if (data === 'No rollouts available') {
+                alert('No rollouts available; refresh to try again');
+                return
+            }
             let parsedData = JSON.parse(data);
             if (parsedData.length === 0) {
                 return;

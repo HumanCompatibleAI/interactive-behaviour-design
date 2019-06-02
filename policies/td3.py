@@ -385,9 +385,9 @@ class TD3Policy(Policy):
             self.logger.logkv(f'policy_{self.name}/replay_buffer_ptr', self.replay_buffer.ptr)
             self.logger.logkv(f'policy_{self.name}/replay_buffer_demo_ptr', self.demonstrations_buffer.ptr)
             self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
-            n_total_steps = self.n_serial_steps * self.n_envs
-            self.logger.logkv(f'policy_{self.name}/n_total_steps', n_total_steps)
-            self.logger.measure_rate(f'policy_{self.name}/n_total_steps', n_total_steps,
+            self.n_total_steps = self.n_serial_steps * self.n_envs
+            self.logger.logkv(f'policy_{self.name}/n_total_steps', self.n_total_steps)
+            self.logger.measure_rate(f'policy_{self.name}/n_total_steps', self.n_total_steps,
                                      f'policy_{self.name}/n_total_steps_per_second')
 
             if self.cycle_n and self.cycle_n % self.cycles_per_epoch == 0:

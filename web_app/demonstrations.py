@@ -13,6 +13,7 @@ from typing import Dict
 import easy_tf_log
 from flask import request, render_template, send_from_directory, Blueprint
 
+import global_variables
 from rollouts import CompressedRollout
 from utils import concatenate_and_write_videos_to
 from web_app import web_globals
@@ -36,6 +37,7 @@ trajectory_for_group_dict = {}
 logger = easy_tf_log.Logger()
 logger.set_log_dir(_demonstration_rollouts_dir)
 episode_stats_logger = None
+n_rl_steps_at_last_pref = None
 
 
 @demonstrations_app.route('/demonstrate', methods=['GET'])
@@ -63,8 +65,21 @@ def generate_rollouts():
     return ""
 
 
+def get_n_rl_steps():
+    if _policies.cur_policy is None:
+        return None
+    return _policies.policies[_policies.cur_policy].n_total_steps
+
+
 @demonstrations_app.route('/get_rollouts', methods=['GET'])
 def get_rollouts():
+    global n_rl_steps_at_last_pref
+    n_rl_steps = get_n_rl_steps()
+    if n_rl_steps is not None and n_rl_steps_at_last_pref is not None:  # Maybe we haven't started training yet
+        n_rl_steps_since_last_pref = n_rl_steps - n_rl_steps_at_last_pref
+        if n_rl_steps_since_last_pref < global_variables.min_n_rl_steps_per_pref:
+            return 'No rollouts available'
+
     rollout_groups = get_metadatas()
     if not rollout_groups:
         if n_rollouts_in_progress.value == 0:
@@ -173,6 +188,8 @@ def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollo
 
 @demonstrations_app.route('/choose_rollout', methods=['GET'])
 def choose_rollout():
+    global n_rl_steps_at_last_pref
+
     group_name = request.args['group']
     chosen_rollout_hash_str = request.args['hash']
     policies_str = request.args['policies']
@@ -224,6 +241,10 @@ def choose_rollout():
     Thread(target=lambda: process_choice_and_generate_new_rollouts(rollouts, chosen_rollout_hash_str,
                                                                    group_name, trajectory_dir, trajectory_serial,
                                                                    policy_names, softmax_temp)).start()
+
+    n_rl_steps_at_last_pref = get_n_rl_steps()
+    if n_rl_steps_at_last_pref is not None:
+        logger.logkv('demonstrations/n_rl_steps_at_last_pref', n_rl_steps_at_last_pref)
 
     return ""
 

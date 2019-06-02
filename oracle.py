@@ -21,6 +21,14 @@ class NoMasterPolicyError(Exception):
     pass
 
 
+class NoRolloutsError(Exception):
+    pass
+
+
+class NoSegmentsError(Exception):
+    pass
+
+
 class RateLimiter:
     def __init__(self, interval_seconds, decay_rate, get_timesteps_fn):
         self.initial_rate = 1 / interval_seconds
@@ -96,6 +104,8 @@ def compare(url):
     response = requests.get(url + '/get_comparison')
     response.raise_for_status()
     segment_dict = response.json()
+    if segment_dict == 'No rollouts available':
+        raise NoRolloutsError
     if not segment_dict:
         raise Exception("Empty segment dictionary")
     best_hash, _ = choose_best_segment(segment_dict)
@@ -190,18 +200,22 @@ def main():
                 print("{:.1f} seconds since last interaction".format(t_since_last))
                 logger.logkv('oracle/label_interval', t_since_last)
                 logger.logkv('oracle/label_rate', 1 / t_since_last)
-            last_interaction_time = time.time()
+            last_interaction_time = None
+
             try:
                 if args.segment_generation == 'demonstrations':
                     demonstrate(args.url)
                 elif args.segment_generation == 'drlhp':
                     compare(args.url)
+            except (NoRolloutsError, NoSegmentsError):
+                time.sleep(1.0)
             except:
                 traceback.print_exc()
                 time.sleep(1.0)
             else:
                 n += 1
                 print(f"Simulated {n} interactions")
+                last_interaction_time = time.time()
                 rate_limiter.sleep()
 
         print("Resting for {} minutes".format(rest_mins))
