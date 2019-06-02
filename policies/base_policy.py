@@ -24,7 +24,9 @@ Other stuff like runners and loggers are started later on when needed.
 class Policy:
     def __init__(self, name, env_id, obs_space, ac_space, n_envs, seed=0):
         self.name = name
-        self.train_mode = PolicyTrainMode.R_ONLY
+        # Important that this starts out as NO_TRAINING so that we don't make the policy step counter
+        # non-None when we're only pre-training, so that the preference rate limiter doesn't kick in
+        self.train_mode = PolicyTrainMode.NO_TRAINING
         self.bc_coef = DEFAULT_BC_COEF
         self.n_updates = 0
         self.log_interval = 20
@@ -32,7 +34,7 @@ class Policy:
         self.training_enabled = False
         self.train_thread = None
         self.demonstration_rollouts = None
-        self.n_total_steps = 0
+        self.n_total_steps = None
 
     def init_logger(self, log_dir):
         if self.logger is None:

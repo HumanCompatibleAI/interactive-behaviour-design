@@ -5,12 +5,18 @@ import pickle
 import random
 from itertools import combinations
 
-from web_app import web_globals
-from web_app.utils import add_pref, nocache
-
+import easy_tf_log
 from flask import Blueprint, render_template, request, send_from_directory
 
+import global_variables
+from web_app import web_globals
+from web_app.utils import add_pref, nocache, get_n_rl_steps
+
 comparisons_app = Blueprint('comparisons', __name__)
+logger = easy_tf_log.Logger()
+logger.set_log_dir(web_globals._segments_dir)
+n_rl_steps_at_last_pref = None
+labelled_seg_hashes = set()
 
 
 def get_segment(hash):
@@ -19,9 +25,23 @@ def get_segment(hash):
     return rollout
 
 
+def log_pct_labelled():
+    global labelled_seg_hashes
+    with open(os.path.join(web_globals._segments_dir, 'all_segment_hashes.txt'), 'r') as f:
+        all_seg_hashes = set(f.read().strip().split('\n'))
+    # Check that all labelled_seg_hashes are in all_seg_hashes
+    # I.e. that all_seg_hashes is a superset of labelled_seg_hashes
+    assert len(labelled_seg_hashes - all_seg_hashes) == 0
+    pct_labelled = 100 * len(labelled_seg_hashes) / len(all_seg_hashes)
+    logger.logkv('pct_segs_labelled', pct_labelled)
+
+
 def mark_compared(hash1, hash2, preferred):
     with open(os.path.join(web_globals._segments_dir, 'compared_segments.txt'), 'a') as f:
         f.write(f'{hash1} {hash2} {preferred}\n')
+    labelled_seg_hashes.add(hash1)
+    labelled_seg_hashes.add(hash2)
+    log_pct_labelled()
 
 
 def already_compared(hash1, hash2):
@@ -63,12 +83,19 @@ def get_segment_video():
 
 @comparisons_app.route('/get_comparison', methods=['GET'])
 def get_comparison():
+    global n_rl_steps_at_last_pref
+    n_rl_steps = get_n_rl_steps()
+    if n_rl_steps is not None and n_rl_steps_at_last_pref is not None:  # Maybe we haven't started training yet
+        n_rl_steps_since_last_pref = n_rl_steps - n_rl_steps_at_last_pref
+        if n_rl_steps_since_last_pref < global_variables.min_n_rl_steps_per_pref:
+            return 'No segments available'
+
     try:
         sampled_hashes = sample_seg_pair()
     except IndexError as e:
         msg = str(e)
         print(msg)
-        return(json.dumps({}))
+        return (json.dumps({}))
     segments = {}
     for hash in sampled_hashes:
         segments[hash] = get_segment(hash)
@@ -81,6 +108,8 @@ def get_comparison():
 
 @comparisons_app.route('/prefer_segment', methods=['POST'])
 def choose_segment():
+    global n_rl_steps_at_last_pref
+
     hash1 = request.form['hash1']
     hash2 = request.form['hash2']
     pref = json.loads(request.form['pref'])
@@ -105,5 +134,9 @@ def choose_segment():
         return f"Error: invalid preference '{pref}'"
 
     mark_compared(hash1, hash2, chosen_segment_n)
+
+    n_rl_steps_at_last_pref = get_n_rl_steps()
+    if n_rl_steps_at_last_pref is not None:
+        logger.logkv('comparisons/n_rl_steps_at_last_pref', n_rl_steps_at_last_pref)
 
     return ""

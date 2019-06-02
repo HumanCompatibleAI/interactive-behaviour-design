@@ -7,7 +7,7 @@ import numpy as np
 from flask import make_response
 
 from rollouts import CompressedRollout
-from web_app.web_globals import _demonstration_rollouts, _pref_db, experience_dir
+from web_app.web_globals import _demonstration_rollouts, _pref_db, experience_dir, _policies
 from web_app.web_globals import _policies
 
 logger = easy_tf_log.Logger()
@@ -55,3 +55,9 @@ def add_pref(rollout1: CompressedRollout, rollout2: CompressedRollout, pref):
     logger.logkv('pref_db/added_prefs', add_pref.added_prefs)
 
 add_pref.added_prefs = 0
+
+
+def get_n_rl_steps():
+    if _policies.cur_policy is None:
+        return None
+    return _policies.policies[_policies.cur_policy].n_total_steps

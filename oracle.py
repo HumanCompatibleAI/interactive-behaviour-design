@@ -103,9 +103,9 @@ def choose_best_segment(segment_dict):
 def compare(url):
     response = requests.get(url + '/get_comparison')
     response.raise_for_status()
-    segment_dict = response.json()
-    if segment_dict == 'No rollouts available':
+    if response.text == 'No segments available':
         raise NoRolloutsError
+    segment_dict = response.json()
     if not segment_dict:
         raise Exception("Empty segment dictionary")
     best_hash, _ = choose_best_segment(segment_dict)
@@ -156,6 +156,9 @@ def choose_segment_for_demonstration(segment_dict):
 def demonstrate(url):
     response = requests.get(url + '/get_rollouts')
     response.raise_for_status()
+    if response.text == 'No segments available':
+        raise NoRolloutsError
+
     print(response.json)  # TODO debugging, deleteme
     group_name, demonstrations_dict = response.json()
     best_hash, best_policy_name = choose_segment_for_demonstration(demonstrations_dict)

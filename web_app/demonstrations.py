@@ -17,7 +17,7 @@ import global_variables
 from rollouts import CompressedRollout
 from utils import concatenate_and_write_videos_to
 from web_app import web_globals
-from web_app.utils import nocache, add_pref
+from web_app.utils import nocache, add_pref, get_n_rl_steps
 from web_app.web_globals import _demonstration_rollouts, experience_dir, _policies, \
     _policy_rollouter, _demonstration_rollouts_dir, _reset_state_cache
 from wrappers.util_wrappers import SaveEpisodeStats
@@ -63,12 +63,6 @@ def generate_rollouts():
     trajectory_for_group_dict[group_serial] = trajectory_serial
 
     return ""
-
-
-def get_n_rl_steps():
-    if _policies.cur_policy is None:
-        return None
-    return _policies.policies[_policies.cur_policy].n_total_steps
 
 
 @demonstrations_app.route('/get_rollouts', methods=['GET'])

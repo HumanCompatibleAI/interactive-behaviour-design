@@ -5,6 +5,7 @@ import shutil
 import time
 
 import easy_tf_log
+from gym.utils import atomic_write
 
 import global_variables
 from rollouts import CompressedRollout
@@ -60,3 +61,12 @@ def write_segments_loop(queue, dir):
         segment.vid_filename = os.path.basename(vid_filename)
         with open(base_name + '.pkl', 'wb') as f:
             pickle.dump(segment, f)
+        # Needs to be atomic because it's read asynchronously by comparisons.py
+        p = os.path.join(dir, 'all_segment_hashes.txt')
+        if os.path.exists(p):
+            with open(p, 'r') as f:
+                all_segments = f.read()
+        else:
+            all_segments = ''
+        with atomic_write.atomic_write(p) as f:
+            f.write(all_segments + str(segment.hash) + '\n')

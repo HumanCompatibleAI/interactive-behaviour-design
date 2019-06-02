@@ -331,6 +331,15 @@ class TD3Policy(Policy):
         return np.mean(loss_bc_pi_l)
 
     def train(self):
+        if self.train_mode == PolicyTrainMode.NO_TRAINING:
+            # Just run the environment to e.g. generate segments for DRLHP
+            action = self.get_noise()
+            _, _, dones, _ = self.train_env.step(action)
+            for n, done in enumerate(dones):
+                if done:
+                    self.train_env.reset_one_env(n)
+            return
+
         if self.train_mode == PolicyTrainMode.BC_ONLY:
             self.train_bc_only()
             return
