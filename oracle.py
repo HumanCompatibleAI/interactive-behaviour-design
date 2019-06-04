@@ -156,7 +156,7 @@ def choose_segment_for_demonstration(segment_dict):
 def demonstrate(url):
     response = requests.get(url + '/get_rollouts')
     response.raise_for_status()
-    if response.text == 'No segments available':
+    if response.text == 'No rollouts available':
         raise NoRolloutsError
 
     print(response.json)  # TODO debugging, deleteme
