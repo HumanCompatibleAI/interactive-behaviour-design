@@ -24,7 +24,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('env_id')
     parser.add_argument('training_mode', choices=['reward_only', 'bc_only', 'reward_plus_bc'])
-    parser.add_argument('segment_generation', choices=['demonstrations', 'drlhp', 'demonstrations-drlhp', 'sdrlhpnp'])
+    parser.add_argument('segment_generation', choices=['demonstrations', 'drlhp', 'demonstrations-drlhp', 'sdrlhpnp', 'sdrlhpnp-drlhp'])
     parser.add_argument('run_name')
     parser.add_argument('--n_envs', type=int, default=16)
     parser.add_argument('--n_initial_prefs', type=int, default=500)
@@ -95,7 +95,7 @@ def main():
             # from initial demonstrations
             start_reward_predictor_training(base_url, args.pretrain_reward_predictor_seconds)
         add_master_policy(base_url)
-    elif args.segment_generation == 'demonstrations-drlhp':
+    elif args.segment_generation in ['demonstrations-drlhp', 'sdrlhpnp-drlhp']:
         add_master_policy(base_url)
         wait_for_demonstration_rollouts(base_url)
         wait_for_drlhp_segments(base_url)
@@ -136,7 +136,7 @@ def start_kill_oracle_after_n_interactions_thread(n, log_dir, oracle_window_name
 
 def start_app(base_url, env_id, n_envs, port, seed, log_dir, tmux_sess, disable_redo, extra_args, segment_generation, gpus):
     cmd = f'python -u run.py {env_id} --n_envs {n_envs} --port {port} --log_dir {log_dir} --seed {seed}'
-    if segment_generation == 'sdrlhpnp':
+    if segment_generation in ['sdrlhpnp', 'sdrlhpnp-drlhp']:
         cmd += ' --rollout_mode cur_policy'
     else:
         if not disable_redo:
