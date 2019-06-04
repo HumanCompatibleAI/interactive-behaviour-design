@@ -26,6 +26,7 @@ from tensorflow.python.client import device_lib
 
 import global_variables
 from a2c.policies import mlp, nature_cnn
+from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as SubprocVecEnvBaselines
 from basicfetch import basicfetch
 from checkpointer import Checkpointer
 from classifier_buffer import ClassifierDataBuffer
@@ -39,17 +40,16 @@ from params import parse_args
 from policies.fetch import FetchAction, FetchTD3Policy
 from policies.policy_collection import PolicyCollection
 from policies.ppo import PPOPolicy
+from policies.td3_test import Oracle
 from policy_rollouter import PolicyRollouter
 from reward_switcher import RewardSelector
-from rollouts import RolloutsByHash
+from rollouts import RolloutsByHash, CompressedRollout
 from segments import monitor_segments_dir_loop, write_segments_loop
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as SubprocVecEnvBaselines
 from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import find_latest_checkpoint, MemoryProfiler, configure_cpus, \
-    load_cpu_config, unwrap_to, register_debug_handler
+    load_cpu_config, register_debug_handler
 from web_app.app import run_web_app
 from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro
-from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
     VecSaveSegments
 
@@ -188,6 +188,25 @@ def main():
                            **kwargs)
 
     demonstration_rollouts = RolloutsByHash(maxlen=args.demonstrations_buffer_len)
+
+    if args.generate_expert_demonstrations:
+        if 'Fetch' not in args.env:
+            raise Exception(f"Unsure how to generate expert demonstrations for env '{args.env}'")
+        print("Generating expert demonstrations...")
+        oracle = Oracle(mode='smooth')
+        for _ in range(20):
+            obses, actions = [], []
+            obs, done = demo_env.reset(), False
+            while not done:
+                action = oracle.get_action(obs)
+                obses.append(obs)
+                actions.append(action)
+                obs, _, done, _ = demo_env.step(action)
+            oracle.reset()
+            # noinspection PyTypeChecker
+            rollout = CompressedRollout(obses=obses, actions=actions,
+                                        final_env_state=None, rewards=None, frames=None)
+            demonstration_rollouts[rollout.hash] = rollout
 
     policies = PolicyCollection(make_policy, log_dir, demonstration_rollouts, args.seed, test_env)
     if args.add_manual_fetch_policies:

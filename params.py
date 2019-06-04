@@ -58,6 +58,7 @@ def parse_args():
     parser.add_argument('--no_save_states', action='store_true')
     parser.add_argument('--cpus')
     parser.add_argument('--policy_args')
+    parser.add_argument('--generate_expert_demonstrations', action='store_true')
     args = parser.parse_args()
 
     global_variables.segment_save_mode = args.segment_save_mode
