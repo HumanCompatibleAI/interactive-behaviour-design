@@ -74,11 +74,11 @@ for seed in seeds:
         if 'Enduro' in env_id:
             np_args += '--cur_policy_randomness correlated_random_action --rollout_random_action_prob 1.0 --rollout_random_correlation 0.99'
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_only sdrlhp {run_name}-sdrlhpnp --seed {seed} --disable_redo --extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}'")
+              f"{env_id} reward_only sdrlhpnp {run_name}-sdrlhpnp --seed {seed} --disable_redo --extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}'")
 
         # SDRLHP-NP with label rate decay
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_only sdrlhp {run_name}-sdrlhpnpd --seed {seed} --disable_redo --extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' --decay_label_rate")
+              f"{env_id} reward_only sdrlhpnp {run_name}-sdrlhpnpd --seed {seed} --disable_redo --extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' --decay_label_rate")
 
         if 'lunarlander' in env_shortname or 'fetch' in env_shortname:
             redo = '--disable_redo'
@@ -94,4 +94,4 @@ for seed in seeds:
 
         # Behavioral cloning on rollouts from SDRLHP-NP
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} bc_only sdrlhp {run_name}-bcnp --seed {seed} --disable_redo --extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}'")
+              f"{env_id} bc_only sdrlhpnp {run_name}-bcnp --seed {seed} --disable_redo --extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}'")

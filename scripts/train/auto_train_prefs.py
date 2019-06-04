@@ -24,7 +24,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('env_id')
     parser.add_argument('training_mode', choices=['reward_only', 'bc_only', 'reward_plus_bc'])
-    parser.add_argument('segment_generation', choices=['demonstrations', 'drlhp', 'demonstrations-drlhp', 'sdrlhp'])
+    parser.add_argument('segment_generation', choices=['demonstrations', 'drlhp', 'demonstrations-drlhp', 'sdrlhpnp'])
     parser.add_argument('run_name')
     parser.add_argument('--n_envs', type=int, default=16)
     parser.add_argument('--n_initial_prefs', type=int, default=500)
@@ -103,7 +103,7 @@ def main():
         start_oracle(base_url, 'demonstrations', args.tmux_sess, args.log_dir, args.min_label_interval_seconds, args.decay_label_rate)
         wait_for_initial_demonstrations(base_url, args.n_initial_demos)
         start_reward_predictor_training(base_url, args.pretrain_reward_predictor_seconds)
-    elif args.segment_generation == 'sdrlhp':
+    elif args.segment_generation == 'sdrlhpnp':
         # The master policy itself also generates segments here
         add_master_policy(base_url)
         wait_for_demonstration_rollouts(base_url)
@@ -136,7 +136,7 @@ def start_kill_oracle_after_n_interactions_thread(n, log_dir, oracle_window_name
 
 def start_app(base_url, env_id, n_envs, port, seed, log_dir, tmux_sess, disable_redo, extra_args, segment_generation, gpus):
     cmd = f'python -u run.py {env_id} --n_envs {n_envs} --port {port} --log_dir {log_dir} --seed {seed}'
-    if segment_generation == 'sdrlhp':
+    if segment_generation == 'sdrlhpnp':
         cmd += ' --rollout_mode cur_policy'
     else:
         if not disable_redo:
@@ -197,7 +197,7 @@ def wait_for_drlhp_segments(base_url):
 
 
 def start_oracle(base_url, segment_generation, tmux_sess, log_dir, min_label_interval_seconds, decay_label_rate):
-    if segment_generation == 'sdrlhp':
+    if segment_generation == 'sdrlhpnp':
         segment_generation = 'demonstrations'
     decay_arg = '--decay_label_rate' if decay_label_rate else ''
     cmd = (f'python -u oracle.py {base_url} {segment_generation} --seconds_per_label {min_label_interval_seconds} --log_dir {log_dir} {decay_arg}'
