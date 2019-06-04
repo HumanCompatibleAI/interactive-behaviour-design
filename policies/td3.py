@@ -281,7 +281,7 @@ class TD3Policy(Policy):
         for _ in range(self.test_rollouts_per_epoch):
             obs, done = self.last_test_obs, False
             while not done:
-                _, _, [done], _ = self.test_env.step([self.step(obs, deterministic=True)])
+                [obs], _, [done], _ = self.test_env.step([self.step(obs, deterministic=True)])
             self.last_test_obs = self.test_env.reset()[0]
 
     def train_bc_only(self):
