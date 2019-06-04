@@ -24,7 +24,7 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('env_id')
     parser.add_argument('training_mode', choices=['reward_only', 'bc_only', 'reward_plus_bc'])
-    parser.add_argument('segment_generation', choices=['demonstrations', 'drlhp', 'both', 'sdrlhp'])
+    parser.add_argument('segment_generation', choices=['demonstrations', 'drlhp', 'demonstrations-drlhp', 'sdrlhp'])
     parser.add_argument('run_name')
     parser.add_argument('--n_envs', type=int, default=16)
     parser.add_argument('--n_initial_prefs', type=int, default=500)
@@ -95,7 +95,7 @@ def main():
             # from initial demonstrations
             start_reward_predictor_training(base_url, args.pretrain_reward_predictor_seconds)
         add_master_policy(base_url)
-    elif args.segment_generation == 'both':
+    elif args.segment_generation == 'demonstrations-drlhp':
         add_master_policy(base_url)
         wait_for_demonstration_rollouts(base_url)
         wait_for_drlhp_segments(base_url)
