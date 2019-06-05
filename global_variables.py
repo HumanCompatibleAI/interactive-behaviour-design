@@ -27,8 +27,5 @@ n_cur_policy = None  # type: int
 # should acquire this lock before attempting the creation.
 env_creation_lock = None
 reward_selector = None
-# Let's about for about 5000 interactions in 10 hours
-# Assuming 800 steps per second, that's 5000 interactions in 10 * 60 * 60 * 800 = 30M steps
-# So one preference ever 5e3/3e7 = 6000 steps
-min_n_rl_steps_per_pref = 6e3
+min_n_rl_steps_per_pref = None
 frames_per_segment = None
