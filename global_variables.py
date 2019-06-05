@@ -31,3 +31,4 @@ reward_selector = None
 # Assuming 800 steps per second, that's 5000 interactions in 10 * 60 * 60 * 800 = 30M steps
 # So one preference ever 5e3/3e7 = 6000 steps
 min_n_rl_steps_per_pref = 6e3
+frames_per_segment = None

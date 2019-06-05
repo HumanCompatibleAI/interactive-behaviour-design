@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 import os
 from os import path as osp
 
+import global_constants
 import global_variables
 from global_variables import RolloutMode, RolloutRandomness
 from baselines import logger
@@ -69,6 +70,7 @@ def parse_args():
     global_variables.rollout_mode = RolloutMode[args.rollout_mode]
     global_variables.rollout_randomness = RolloutRandomness[args.cur_policy_randomness]
     global_variables.n_cur_policy = args.n_cur_policy
+    global_variables.frames_per_segment = int(args.rollout_length_seconds * global_constants.ROLLOUT_FPS)
 
     if args.render_every_nth_episode is None:
         if 'Fetch' in args.env:

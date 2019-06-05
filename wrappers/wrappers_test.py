@@ -9,7 +9,6 @@ import unittest
 import numpy as np
 from gym import Env
 
-import global_constants
 from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -118,14 +117,14 @@ class TestVecSaveSegments(unittest.TestCase):
     def test(self):
         segments_queue = multiprocessing.Queue()
         n_envs = 3
-        venv = SubprocVecEnvNoAutoReset([lambda n=n: StateBoundaryWrapper(DummyEnv(global_constants.FRAMES_PER_SEGMENT - 1 + n,
+        venv = SubprocVecEnvNoAutoReset([lambda n=n: StateBoundaryWrapper(DummyEnv(global_variables.frames_per_segment - 1 + n,
                                                                                    step_offset=(n * 100)))
                                          for n in range(n_envs)])
         venv = VecSaveSegments(venv, segments_queue)
 
         for n in range(n_envs):
             venv.reset_one_env(n)
-        for _ in range(3 * global_constants.FRAMES_PER_SEGMENT):
+        for _ in range(3 * global_variables.frames_per_segment):
             obses, rews, dones, infos = venv.step([0] * venv.num_envs)
             for n in range(n_envs):
                 if dones[n]:

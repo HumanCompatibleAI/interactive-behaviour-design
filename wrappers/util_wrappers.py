@@ -8,8 +8,6 @@ from collections import deque
 from enum import Enum
 from functools import partial
 from multiprocessing import Queue
-
-from gym.wrappers import TimeLimit
 from os import path as osp
 from threading import Thread, Lock
 from typing import Dict
@@ -18,12 +16,12 @@ import cv2
 import easy_tf_log
 import numpy as np
 from gym.core import ObservationWrapper, Wrapper
+from gym.wrappers import TimeLimit
 
-import global_constants
+import global_variables
 from baselines import logger
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as SubprocVecEnvBaselines
 from classifier_collection import ClassifierCollection
-from drlhp.reward_predictor import RewardPredictor
 from subproc_vec_env_custom import SubprocVecEnvNoAutoReset, VecEnvWrapperSingleReset
 from utils import unwrap_to, EnvState, TimerContext
 from wrappers.state_boundary_wrapper import StateBoundaryWrapper
@@ -453,7 +451,7 @@ class VecSaveSegments(VecEnvWrapperSingleReset):
         self.segment_rewards[n] = []
 
     def _pad_segment(self, n):
-        while len(self.segment_obses[n]) < global_constants.FRAMES_PER_SEGMENT:
+        while len(self.segment_obses[n]) < global_variables.frames_per_segment:
             self.segment_frames[n].append(self.segment_frames[n][-1])
             self.segment_obses[n].append(self.segment_obses[n][-1])
             self.segment_rewards[n].append(self.segment_rewards[n][-1])
@@ -467,7 +465,7 @@ class VecSaveSegments(VecEnvWrapperSingleReset):
             self.segment_obses[n].append(np.copy(obses[n]))
             self.segment_rewards[n].append(rewards[n])
 
-            segment_full = len(self.segment_obses[n]) == global_constants.FRAMES_PER_SEGMENT
+            segment_full = len(self.segment_obses[n]) == global_variables.frames_per_segment
             # We could get unlucky and get a 'done' just after we've reset the segment
             segment_done = dones[n] and len(self.segment_obses[n]) > 0
             if segment_full or segment_done:
@@ -509,7 +507,7 @@ class SaveSegments(Wrapper):
         self.segment_rewards = []
 
     def _pad_segment(self):
-        while len(self.segment_obses) < global_constants.FRAMES_PER_SEGMENT:
+        while len(self.segment_obses) < global_variables.frames_per_segment:
             self.segment_frames.append(self.segment_frames[-1])
             self.segment_obses.append(self.segment_obses[-1])
             self.segment_rewards.append(self.segment_rewards[-1])
@@ -519,7 +517,7 @@ class SaveSegments(Wrapper):
         self.segment_frames.append(self.env.render(mode='rgb_array'))
         self.segment_obses.append(np.copy(obs))
         self.segment_rewards.append(reward)
-        if done or len(self.segment_obses) == global_constants.FRAMES_PER_SEGMENT:
+        if done or len(self.segment_obses) == global_variables.frames_per_segment:
             self._pad_segment()
             tuple = (self.segment_obses, self.segment_rewards, self.segment_frames)
             try:
