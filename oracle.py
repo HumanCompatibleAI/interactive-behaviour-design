@@ -198,13 +198,6 @@ def main():
     last_interaction_time = None
     while True:
         while not work_timer.done():
-            if last_interaction_time:
-                t_since_last = time.time() - last_interaction_time
-                print("{:.1f} seconds since last interaction".format(t_since_last))
-                logger.logkv('oracle/label_interval', t_since_last)
-                logger.logkv('oracle/label_rate', 1 / t_since_last)
-            last_interaction_time = None
-
             try:
                 if args.segment_generation == 'demonstrations':
                     demonstrate(args.url)
@@ -212,15 +205,23 @@ def main():
                     compare(args.url)
             except (NoRolloutsError, NoSegmentsError):
                 time.sleep(1.0)
+                continue
             except:
                 traceback.print_exc()
                 time.sleep(1.0)
+                continue
             else:
                 n += 1
                 print(f"Simulated {n} interactions")
+                if last_interaction_time is not None:
+                    t_since_last = time.time() - last_interaction_time
+                    print("{:.1f} seconds since last interaction".format(t_since_last))
+                    logger.logkv('oracle/label_interval', t_since_last)
+                    logger.logkv('oracle/label_rate', 1 / t_since_last)
                 last_interaction_time = time.time()
                 rate_limiter.sleep()
 
+        last_interaction_time = None
         print("Resting for {} minutes".format(rest_mins))
         time.sleep(rest_mins * 60)
         work_timer.reset()
