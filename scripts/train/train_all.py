@@ -44,9 +44,7 @@ for seed in seeds:
             run_name += '-test'
 
         if 'Fetch' in env_id:
-            # The speed of the Fetch subpolicies is set assuming Repeat1
-            assert 'Repeat1' in env_id
-            rollout_length_seconds = 0.15
+            rollout_length_seconds = 1.0
         elif 'Breakout' in env_id:
             # Long enough to stretch from hitting the ball to the ball bouncing off a block
             rollout_length_seconds = 1.5
