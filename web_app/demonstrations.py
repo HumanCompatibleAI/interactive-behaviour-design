@@ -71,6 +71,8 @@ def get_rollouts():
     n_rl_steps = get_n_rl_steps()
     if n_rl_steps is not None and n_rl_steps_at_last_pref is not None:  # Maybe we haven't started training yet
         n_rl_steps_since_last_pref = n_rl_steps - n_rl_steps_at_last_pref
+        logger.logkv('interaction_limit/n_rl_steps', n_rl_steps)
+        logger.logkv('interaction_limit/n_rl_steps_since_last_pref', n_rl_steps_since_last_pref)
         if n_rl_steps_since_last_pref < global_variables.min_n_rl_steps_per_pref:
             return 'No rollouts available'
 
@@ -238,7 +240,7 @@ def choose_rollout():
 
     n_rl_steps_at_last_pref = get_n_rl_steps()
     if n_rl_steps_at_last_pref is not None:
-        logger.logkv('demonstrations/n_rl_steps_at_last_pref', n_rl_steps_at_last_pref)
+        logger.logkv('interaction_limit/n_rl_steps_at_last_pref', n_rl_steps_at_last_pref)
 
     return ""
 
