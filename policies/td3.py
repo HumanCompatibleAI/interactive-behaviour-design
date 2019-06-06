@@ -12,12 +12,13 @@ import tensorflow as tf
 from spinup.algos.td3 import core
 from spinup.algos.td3.core import get_vars
 
+import global_variables
 from baselines.common.running_stat import RunningStat
 from baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise
 from utils import TimerContext
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from policies.base_policy import Policy, PolicyTrainMode
+from policies.base_policy import Policy, PolicyTrainMode, EpisodeRewardLogger
 from rollouts import RolloutsByHash
 
 SQIL_REWARD = 5
@@ -265,6 +266,7 @@ class TD3Policy(Policy):
         self.monitor_q_a = []
         self.test_rollouts_per_epoch = test_rollouts_per_epoch
         self.last_test_obs = None
+        self.reward_logger = None
 
         self.reset_noise()
 
@@ -330,6 +332,12 @@ class TD3Policy(Policy):
 
         return np.mean(loss_bc_pi_l)
 
+    def process_rewards(self, obses, env_rewards):
+        assert obses.shape == (self.train_env.num_envs,) + self.train_env.observation_space.shape
+        assert env_rewards.shape == (self.train_env.num_envs,)
+        reward_selector_rewards = global_variables.reward_selector.rewards(obses, env_rewards)
+        return reward_selector_rewards
+
     def train(self):
         if self.train_mode == PolicyTrainMode.NO_TRAINING:
             # Just run the environment to e.g. generate segments for DRLHP
@@ -360,6 +368,10 @@ class TD3Policy(Policy):
         # Step the env
         obs2, reward, done, _ = self.train_env.step(action)
         self.n_serial_steps += 1
+
+        # Maybe replace rewards with e.g. predicted rewards
+        reward = self.process_rewards(obs2, reward)
+        self.reward_logger.log([reward], [done])
 
         # Store experience to replay buffer
         for i in range(self.n_envs):
@@ -581,6 +593,7 @@ class TD3Policy(Policy):
         self.train_env = env
         self.obs1 = np.array([self.train_env.reset_one_env(n)
                               for n in range(self.train_env.num_envs)])
+        self.reward_logger = EpisodeRewardLogger(log_dir, n_steps=1, n_envs=self.n_envs)
 
     def set_test_env(self, env, log_dir):
         assert env.unwrapped.num_envs == 1, env.unwrapped.num_envs

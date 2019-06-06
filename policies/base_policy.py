@@ -4,6 +4,7 @@ from enum import Enum
 from threading import Thread
 
 import easy_tf_log
+import numpy as np
 
 from global_constants import DEFAULT_BC_COEF
 from rollouts import RolloutsByHash
@@ -91,3 +92,24 @@ class PolicyTrainMode(Enum):
     SQIL_ONLY = 4
     R_PLUS_SQIL = 5
     NO_TRAINING = 6
+
+
+class EpisodeRewardLogger():
+    def __init__(self, log_dir, n_steps, n_envs):
+        self.logger = easy_tf_log.Logger(os.path.join(log_dir, 'processed_reward_logger'))
+        self.n_steps = n_steps
+        self.n_envs = n_envs
+        self.reward = 0
+
+    def log(self, mb_rewards, mb_dones):
+        mb_rewards = np.array(mb_rewards)
+        mb_dones = np.array(mb_dones)
+        assert mb_rewards.shape == (self.n_steps, self.n_envs)
+        assert mb_dones.shape == (self.n_steps, self.n_envs)
+        mb_rewards_env0 = mb_rewards[:, 0]
+        mb_dones_env0 = mb_dones[:, 0]
+        for n in range(len(mb_rewards)):
+            self.reward += mb_rewards_env0[n]
+            if mb_dones_env0[n]:
+                self.logger.logkv('processed_reward', self.reward)
+                self.reward = 0
