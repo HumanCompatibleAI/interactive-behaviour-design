@@ -465,6 +465,23 @@ class VecSaveSegments(VecEnvWrapperSingleReset):
             self.segment_obses[n].append(np.copy(obses[n]))
             self.segment_rewards[n].append(rewards[n])
 
+            # SubprocVecEnvBaselines automatically reset the environment when done.
+            # So the last obs and frame we'll have received will actually be from the first
+            # step after reset, making for confusing videos.
+            #
+            # We deal with it by chopping off that last step from the segment and replacing
+            # it with the second-to-last step.
+            if dones[n] and isinstance(self.venv, SubprocVecEnvBaselines):
+                if len(self.segment_obses[n]) < 2:
+                    # We got a 'done' right at the start of the segment; the only frame we have is the one from the
+                    # first step of the next episode.
+                    #
+                    # In this case, don't save anything, and continue to the next env.
+                    self._reset_segment(n)
+                    continue
+                self.segment_obses[n][-1] = self.segment_obses[n][-2]
+                self.segment_frames[n][-1] = self.segment_frames[n][-2]
+
             segment_full = len(self.segment_obses[n]) == global_variables.frames_per_segment
             # We could get unlucky and get a 'done' just after we've reset the segment
             segment_done = dones[n] and len(self.segment_obses[n]) > 0
