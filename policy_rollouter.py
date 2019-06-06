@@ -16,6 +16,7 @@ from gym.wrappers import TimeLimit
 from tensorflow.python.framework.errors_impl import NotFoundError
 
 import global_variables
+from baselines.common.distributions import OrnsteinUhlenbeckActionNoise
 from global_constants import ROLLOUT_FPS
 from global_variables import RolloutMode, RolloutRandomness
 from rollouts import CompressedRollout
@@ -67,6 +68,7 @@ class RolloutWorker:
         self.checkpoint_dir = os.path.join(log_dir, 'checkpoints')
         self.rollouts_dir = os.path.join(log_dir, 'demonstrations')
         self.last_action = None
+        self.ou_noise = None
         env = None
 
         while True:
@@ -78,6 +80,10 @@ class RolloutWorker:
                     # Otherwise it leaks memory.
                     env.unwrapped.close()
             env = env_state.env
+
+            mu = np.zeros(env.action_space.shape)
+            sigma = 0.2 * np.ones(env.action_space.shape)
+            self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma)
 
             if policy_name == 'redo':
                 self.redo_rollout(env, env_state, group_serial)
@@ -191,7 +197,9 @@ class RolloutWorker:
     def get_noisy_action(self, action, env):
         assert env.action_space.dtype in [np.int64, np.float32]
         if env.action_space.dtype == np.float32:
-            action += 0.3 * env.action_space.sample()
+            noise = self.ou_noise()
+            action += noise
+            action = np.clip(action, env.action_space.low[0], env.action_space.high[0])
         elif env.action_space.dtype == np.int64:
             if np.random.rand() < global_variables.rollout_random_action_prob:
                 if global_variables.rollout_randomness == RolloutRandomness.random_action:
