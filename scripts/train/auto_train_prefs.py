@@ -82,7 +82,8 @@ def main():
         oracle_window_name = start_oracle(base_url, args.segment_generation, args.tmux_sess, args.log_dir,
                                           args.min_label_interval_seconds, args.decay_label_rate)
         start_kill_oracle_after_n_interactions_thread(args.max_interactions, args.log_dir, oracle_window_name)
-        wait_for_initial_preferences(base_url, args.n_initial_prefs)
+        if not args.no_pretrain:
+            wait_for_initial_preferences(base_url, args.n_initial_prefs)
         start_reward_predictor_training(base_url)
         if not args.no_pretrain:
             time.sleep(args.pretrain_reward_predictor_seconds)
@@ -92,7 +93,8 @@ def main():
         oracle_window_name = start_oracle(base_url, args.segment_generation, args.tmux_sess, args.log_dir,
                                           args.min_label_interval_seconds, args.decay_label_rate)
         start_kill_oracle_after_n_interactions_thread(args.max_interactions, args.log_dir, oracle_window_name)
-        wait_for_initial_demonstrations(base_url, args.n_initial_demos)
+        if not args.no_pretrain:
+            wait_for_initial_demonstrations(base_url, args.n_initial_demos)
         if args.training_mode in ['reward_only', 'reward_plus_bc']:
             # We assume we already have sufficient initial preferences from initial demonstrations
             start_reward_predictor_training(base_url)
@@ -105,7 +107,8 @@ def main():
         wait_for_drlhp_segments(base_url)
         start_oracle(base_url, 'drlhp', args.tmux_sess, args.log_dir, args.min_label_interval_seconds, args.decay_label_rate)
         start_oracle(base_url, 'demonstrations', args.tmux_sess, args.log_dir, args.min_label_interval_seconds, args.decay_label_rate)
-        wait_for_initial_demonstrations(base_url, args.n_initial_demos)
+        if not args.no_pretrain:
+            wait_for_initial_demonstrations(base_url, args.n_initial_demos)
         start_reward_predictor_training(base_url)
         if not args.no_pretrain:
             time.sleep(args.pretrain_reward_predictor_seconds)
@@ -116,7 +119,8 @@ def main():
         oracle_window_name = start_oracle(base_url, args.segment_generation, args.tmux_sess, args.log_dir,
                                           args.min_label_interval_seconds, args.decay_label_rate)
         start_kill_oracle_after_n_interactions_thread(args.max_interactions, args.log_dir, oracle_window_name)
-        wait_for_initial_preferences(base_url, args.n_initial_prefs)
+        if not args.no_pretrain:
+            wait_for_initial_preferences(base_url, args.n_initial_prefs)
         if args.training_mode in ['reward_only', 'reward_plus_bc']:
             # We assume we already have sufficient initial preferences from initial demonstrations
             start_reward_predictor_training(base_url)
