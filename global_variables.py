@@ -29,3 +29,4 @@ env_creation_lock = None
 reward_selector = None
 min_n_rl_steps_per_pref = None
 frames_per_segment = None
+rollout_noise_sigma = None

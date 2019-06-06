@@ -82,7 +82,7 @@ class RolloutWorker:
             env = env_state.env
 
             mu = np.zeros(env.action_space.shape)
-            sigma = 0.2 * np.ones(env.action_space.shape)
+            sigma = global_variables.rollout_noise_sigma * np.ones(env.action_space.shape)
             self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma)
 
             if policy_name == 'redo':

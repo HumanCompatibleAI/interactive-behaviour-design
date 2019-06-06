@@ -61,6 +61,7 @@ def parse_args():
     parser.add_argument('--policy_args')
     parser.add_argument('--generate_expert_demonstrations', action='store_true')
     parser.add_argument('--target_n_prefs_per_24h', type=float, default=5e3)
+    parser.add_argument('--rollout_noise_sigma', type=float, default=0.2)
     args = parser.parse_args()
 
     global_variables.segment_save_mode = args.segment_save_mode
@@ -72,6 +73,7 @@ def parse_args():
     global_variables.rollout_randomness = RolloutRandomness[args.cur_policy_randomness]
     global_variables.n_cur_policy = args.n_cur_policy
     global_variables.frames_per_segment = int(args.rollout_length_seconds * global_constants.ROLLOUT_FPS)
+    global_variables.rollout_noise_sigma = args.rollout_noise_sigma
 
     expected_steps_per_second = 800
     steps_per_24h = 24 * 60 * 60 * expected_steps_per_second
