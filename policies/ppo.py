@@ -180,7 +180,7 @@ class PPOPolicy(Policy):
                 assert actions.shape == (batch_size, n_actions), actions.shape
 
         self.is_hard_policy = False
-        if '_hardp_' in name:
+        if name is not None and '_hardp_' in name:
             self.is_hard_policy = True
             i = name.index('_hardp_')
             self.action = int(name[i + 7:])
