@@ -546,6 +546,7 @@ class TD3Policy(Policy):
 
         assert a.shape, (self.n_envs, self.act_dim)
         self.action_stats.push(a[0])
+        self.actions_log_file.write(str(a[0]) + '\n')  # TODO debugging, deleteme
 
         return a
 
@@ -594,6 +595,7 @@ class TD3Policy(Policy):
         self.obs1 = np.array([self.train_env.reset_one_env(n)
                               for n in range(self.train_env.num_envs)])
         self.reward_logger = EpisodeRewardLogger(log_dir, n_steps=1, n_envs=self.n_envs)
+        self.actions_log_file = open(os.path.join(log_dir, 'actions'), 'w')  # TODO debugging; deleteme
 
     def set_test_env(self, env, log_dir):
         assert env.unwrapped.num_envs == 1, env.unwrapped.num_envs
