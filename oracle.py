@@ -159,7 +159,7 @@ def demonstrate(url):
     if response.text == 'No rollouts available':
         raise NoRolloutsError
 
-    print(response.json)  # TODO debugging, deleteme
+    print(response.json())  # TODO debugging, deleteme
     group_name, demonstrations_dict = response.json()
     best_hash, best_policy_name = choose_segment_for_demonstration(demonstrations_dict)
     if best_hash is None:
