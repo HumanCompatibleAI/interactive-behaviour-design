@@ -9,6 +9,7 @@ parser.add_argument('--test', action='store_true')
 parser.add_argument('--gpus', default='')
 parser.add_argument('--extra_args', default='')
 parser.add_argument('--harness_extra_args', default='')
+parser.add_argument('--rollout_len_seconds', type=float)
 args = parser.parse_args()
 
 seeds = list(map(int, args.seeds.split(',')))
@@ -45,13 +46,16 @@ for seed in seeds:
         if args.test:
             run_name += '-test'
 
-        if 'Fetch' in env_id:
-            rollout_length_seconds = 1.0
-        elif 'Breakout' in env_id:
-            # Long enough to stretch from hitting the ball to the ball bouncing off a block
-            rollout_length_seconds = 1.5
+        if args.rollout_len_seconds is not None:
+            rollout_length_seconds = args.rollout_len_seconds
         else:
-            rollout_length_seconds = 1.0
+            if 'Fetch' in env_id:
+                rollout_length_seconds = 1.0
+            elif 'Breakout' in env_id:
+                # Long enough to stretch from hitting the ball to the ball bouncing off a block
+                rollout_length_seconds = 1.5
+            else:
+                rollout_length_seconds = 1.0
 
         extra_args = f"{args.extra_args} --rollout_length_seconds {rollout_length_seconds}"
 
