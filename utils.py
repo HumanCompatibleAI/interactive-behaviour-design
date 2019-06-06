@@ -49,8 +49,10 @@ def acquire_lock(env_lock, instigator):
 
 
 class TimerContext(object):
-    def __init__(self, name):
+    def __init__(self, name, stdout=True):
         self.name = name
+        self.stdout = stdout
+        self.duration_s = None
 
     def __enter__(self):
         self.t_start = time.time()
@@ -58,6 +60,7 @@ class TimerContext(object):
     def __exit__(self, type, value, traceback):
         t_end = time.time()
         duration = t_end - self.t_start
+        self.duration_s = duration
         if duration < 1e-3:
             units = "us"
             duration *= 1e6
@@ -66,7 +69,8 @@ class TimerContext(object):
             duration *= 1e3
         else:
             units = "s"
-        print("'{}' took {:.1f} {}".format(self.name, duration, units))
+        if self.stdout:
+            print("'{}' took {:.1f} {} ({})".format(self.name, duration, units, time.time()))
 
 
 class LogTime:
@@ -148,10 +152,11 @@ def find_latest_checkpoint(ckpt_prefix):
         raise Exception(f"Couldn't find checkpoint matching '{ckpt_prefix}*'")
     meta_path_timestample_tuples = []
     for p in meta_paths:
-        # The oldest checkpoint could have been deleted since when we globbed
-        if not os.path.exists(p):
+        try:
+            meta_path_timestample_tuples.append((p, os.path.getmtime(p)))
+        except FileNotFoundError:
+            # One of the checkpoints got deleted since when we globbed; no big deal
             continue
-        meta_path_timestample_tuples.append((p, os.path.getmtime(p)))
     meta_path_timestample_tuples.sort(key=lambda tup: tup[1])
     ckpt_paths = [meta_path.replace('.meta', '') for meta_path, _ in meta_path_timestample_tuples]
     if len(ckpt_paths) == 1:
@@ -505,8 +510,9 @@ def load_cpu_config(log_dir, name):
     os.sched_setaffinity(0, cpus)
     # The first session created in a process seems to set the options for the execution engine used for all subsequent
     # session in that process. So this should be called before anything else.
-    dummy_sess = tf.Session(config=tf.ConfigProto(inter_op_parallelism_threads=len(cpus),
-                                                  intra_op_parallelism_threads=len(cpus)))
+    config = tf.ConfigProto(inter_op_parallelism_threads=len(cpus), intra_op_parallelism_threads=len(cpus))
+    config.gpu_options.allow_growth = True
+    dummy_sess = tf.Session(config=config)
     dummy_sess.close()
 
 

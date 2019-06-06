@@ -18,10 +18,7 @@ def get_args():
     parser.add_argument('run_name')
     parser.add_argument('--policy_args')
     parser.add_argument('--gpus', default='')
-    if os.path.exists('/efs'):
-        default_log_dir = '/efs'
-    else:
-        default_log_dir = 'runs'
+    default_log_dir = 'runs'
     parser.add_argument('--log_dir', default=default_log_dir)
     return parser.parse_args()
 
@@ -43,7 +40,7 @@ def start_app(base_url, env, port, seed, run_name, log_dir, policy_args, gpus):
 
 args = get_args()
 git_rev = get_git_rev()
-log_dir = os.path.abspath(os.path.join(args.log_dir, f'{args.run_name}_{git_rev}'))
+log_dir = os.path.abspath(os.path.join(args.log_dir, f'{args.run_name}_{int(time.time())}_{git_rev}'))
 os.makedirs(log_dir)
 port = get_open_port()
 base_url = f'http://localhost:{port}'

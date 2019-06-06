@@ -21,6 +21,14 @@ class NoMasterPolicyError(Exception):
     pass
 
 
+class NoRolloutsError(Exception):
+    pass
+
+
+class NoSegmentsError(Exception):
+    pass
+
+
 class RateLimiter:
     def __init__(self, interval_seconds, decay_rate, get_timesteps_fn):
         self.initial_rate = 1 / interval_seconds
@@ -95,6 +103,8 @@ def choose_best_segment(segment_dict):
 def compare(url):
     response = requests.get(url + '/get_comparison')
     response.raise_for_status()
+    if response.text == 'No segments available':
+        raise NoRolloutsError
     segment_dict = response.json()
     if not segment_dict:
         raise Exception("Empty segment dictionary")
@@ -146,7 +156,10 @@ def choose_segment_for_demonstration(segment_dict):
 def demonstrate(url):
     response = requests.get(url + '/get_rollouts')
     response.raise_for_status()
-    print(response.json)  # TODO debugging, deleteme
+    if response.text == 'No rollouts available':
+        raise NoRolloutsError
+
+    print(response.json())  # TODO debugging, deleteme
     group_name, demonstrations_dict = response.json()
     best_hash, best_policy_name = choose_segment_for_demonstration(demonstrations_dict)
     if best_hash is None:
@@ -185,25 +198,30 @@ def main():
     last_interaction_time = None
     while True:
         while not work_timer.done():
-            if last_interaction_time:
-                t_since_last = time.time() - last_interaction_time
-                print("{:.1f} seconds since last interaction".format(t_since_last))
-                logger.logkv('oracle/label_interval', t_since_last)
-                logger.logkv('oracle/label_rate', 1 / t_since_last)
-            last_interaction_time = time.time()
             try:
                 if args.segment_generation == 'demonstrations':
                     demonstrate(args.url)
                 elif args.segment_generation == 'drlhp':
                     compare(args.url)
+            except (NoRolloutsError, NoSegmentsError):
+                time.sleep(1.0)
+                continue
             except:
                 traceback.print_exc()
                 time.sleep(1.0)
+                continue
             else:
                 n += 1
                 print(f"Simulated {n} interactions")
+                if last_interaction_time is not None:
+                    t_since_last = time.time() - last_interaction_time
+                    print("{:.1f} seconds since last interaction".format(t_since_last))
+                    logger.logkv('oracle/label_interval', t_since_last)
+                    logger.logkv('oracle/label_rate', 1 / t_since_last)
+                last_interaction_time = time.time()
                 rate_limiter.sleep()
 
+        last_interaction_time = None
         print("Resting for {} minutes".format(rest_mins))
         time.sleep(rest_mins * 60)
         work_timer.reset()

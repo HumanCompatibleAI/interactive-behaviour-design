@@ -17,6 +17,10 @@
 
     function updateVideos() {
         $.get('/get_comparison', function (data) {
+            if (data === 'No segments available') {
+                alert("No segments available; refresh to try again");
+                return;
+            }
             let segmentDict = JSON.parse(data);
             let nVidsSent = Object.keys(segmentDict).length;
 

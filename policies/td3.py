@@ -12,11 +12,13 @@ import tensorflow as tf
 from spinup.algos.td3 import core
 from spinup.algos.td3.core import get_vars
 
+import global_variables
 from baselines.common.running_stat import RunningStat
 from baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise
+from utils import TimerContext
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from policies.base_policy import Policy, PolicyTrainMode
+from policies.base_policy import Policy, PolicyTrainMode, EpisodeRewardLogger
 from rollouts import RolloutsByHash
 
 SQIL_REWARD = 5
@@ -264,6 +266,7 @@ class TD3Policy(Policy):
         self.monitor_q_a = []
         self.test_rollouts_per_epoch = test_rollouts_per_epoch
         self.last_test_obs = None
+        self.reward_logger = None
 
         self.reset_noise()
 
@@ -276,61 +279,75 @@ class TD3Policy(Policy):
         # Logging will be taken care of by the environment itself (see env.py)
         # Why do the env reset in this funny way? Because we need to end with a reset to trigger
         # SaveEpisodeStats to save the stats from the final episode.
+        # (FYI: test_env is a SubprocVecEnv - see env.py for the reason)
         for _ in range(self.test_rollouts_per_epoch):
             obs, done = self.last_test_obs, False
             while not done:
-                obs, _, done, _ = self.test_env.step(self.step(obs, deterministic=True))
-            self.last_test_obs = self.test_env.reset()
+                [obs], _, [done], _ = self.test_env.step([self.step(obs, deterministic=True)])
+            self.last_test_obs = self.test_env.reset()[0]
 
     def train_bc_only(self):
-        t1 = time.time()
+        bc_timer = TimerContext(name=None, stdout=False)
+        train_env_timer = TimerContext(name=None, stdout=False)
+        test_env_timer = TimerContext(name=None, stdout=False)
 
-        loss_bc_pi_l, loss_l2_l = [], []
-        for _ in range(self.batches_per_cycle):
-            bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-            feed_dict = {self.bc_x_ph: bc_batch['obs1'], self.bc_a_ph: bc_batch['acts']}
-            bc_pi_loss, l2_loss, _ = self.sess.run([self.bc_pi_loss, self.l2_loss, self.train_pi_bc_only_op], feed_dict)
-            loss_bc_pi_l.append(bc_pi_loss)
-            loss_l2_l.append(l2_loss)
-        self.logger.log_list_stats(f'policy_{self.name}/loss_bc_pi', loss_bc_pi_l)
-        self.logger.log_list_stats(f'policy_{self.name}/loss_l2', loss_l2_l)
-        self.cycle_n += 1
-        self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
+        with bc_timer:
+            loss_bc_pi_l, loss_l2_l = [], []
+            for _ in range(self.batches_per_cycle):
+                bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
+                feed_dict = {self.bc_x_ph: bc_batch['obs1'], self.bc_a_ph: bc_batch['acts']}
+                bc_pi_loss, l2_loss, _ = self.sess.run([self.bc_pi_loss, self.l2_loss, self.train_pi_bc_only_op], feed_dict)
+                loss_bc_pi_l.append(bc_pi_loss)
+                loss_l2_l.append(l2_loss)
+            self.logger.log_list_stats(f'policy_{self.name}/loss_bc_pi', loss_bc_pi_l)
+            self.logger.log_list_stats(f'policy_{self.name}/loss_l2', loss_l2_l)
+            self.cycle_n += 1
+            self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
 
-        t2 = time.time()
+        if self.cycle_n % 10 == 0:
+            with train_env_timer:
+                obses = self.obs1
+                # Generate reset states for demonstrations
+                # (We only care about the first environment, because that's the one from which reset states are generated)
+                # TODO: we should be generating reset states from the test environment
+                while True:
+                    obses, reward, dones, info = self.train_env.step(self.train_step(obses))
+                    for i in range(self.n_envs):
+                        if dones[i]:
+                            self.obs1[i] = self.train_env.reset_one_env(i)
+                    if dones[0]:
+                        break
 
-        obses = self.obs1
-        # Generate reset states for demonstrations
-        # (We only care about the first environment, because that's the one from which reset states are generated)
-        # TODO: we should be generating reset states from the test environment
-        while True:
-            obses, reward, dones, info = self.train_env.step(self.train_step(obses))
-            for i in range(self.n_envs):
-                if dones[i]:
-                    self.obs1[i] = self.train_env.reset_one_env(i)
-            if dones[0]:
-                break
-
-        t3 = time.time()
-
-        t4 = None
         if self.cycle_n % self.cycles_per_epoch == 0:
             self.epoch_n += 1
             self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
-            t4 = time.time()
-            self.test_agent()
+            with test_env_timer:
+                self.test_agent()
 
-        train_time_ms = (t2 - t1) * 1000
-        env_time_ms = (t3 - t2) * 1000
-        self.logger.logkv(f'policy_{self.name}/bc_train_time_ms', train_time_ms)
-        self.logger.logkv(f'policy_{self.name}/train_env_time_ms', env_time_ms)
-        if t4 is not None:
-            test_time_ms = (t4 - t3) * 1000
-            self.logger.logkv(f'policy_{self.name}/test_env_time_ms', test_time_ms)
+        self.logger.logkv(f'policy_{self.name}/bc_train_time_ms', bc_timer.duration_s * 1000)
+        if train_env_timer.duration_s is not None:
+            self.logger.logkv(f'policy_{self.name}/train_env_time_ms', train_env_timer.duration_s * 1000)
+        if test_env_timer.duration_s is not None:
+            self.logger.logkv(f'policy_{self.name}/test_env_time_ms', test_env_timer.duration_s * 1000)
 
         return np.mean(loss_bc_pi_l)
 
+    def process_rewards(self, obses, env_rewards):
+        assert obses.shape == (self.train_env.num_envs,) + self.train_env.observation_space.shape
+        assert env_rewards.shape == (self.train_env.num_envs,)
+        reward_selector_rewards = global_variables.reward_selector.rewards(obses, env_rewards)
+        return reward_selector_rewards
+
     def train(self):
+        if self.train_mode == PolicyTrainMode.NO_TRAINING:
+            # Just run the environment to e.g. generate segments for DRLHP
+            action = self.get_noise()
+            _, _, dones, _ = self.train_env.step(action)
+            for n, done in enumerate(dones):
+                if done:
+                    self.train_env.reset_one_env(n)
+            return
+
         if self.train_mode == PolicyTrainMode.BC_ONLY:
             self.train_bc_only()
             return
@@ -351,6 +368,10 @@ class TD3Policy(Policy):
         # Step the env
         obs2, reward, done, _ = self.train_env.step(action)
         self.n_serial_steps += 1
+
+        # Maybe replace rewards with e.g. predicted rewards
+        reward = self.process_rewards(obs2, reward)
+        self.reward_logger.log([reward], [done])
 
         # Store experience to replay buffer
         for i in range(self.n_envs):
@@ -385,9 +406,9 @@ class TD3Policy(Policy):
             self.logger.logkv(f'policy_{self.name}/replay_buffer_ptr', self.replay_buffer.ptr)
             self.logger.logkv(f'policy_{self.name}/replay_buffer_demo_ptr', self.demonstrations_buffer.ptr)
             self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
-            n_total_steps = self.n_serial_steps * self.n_envs
-            self.logger.logkv(f'policy_{self.name}/n_total_steps', n_total_steps)
-            self.logger.measure_rate(f'policy_{self.name}/n_total_steps', n_total_steps,
+            self.n_total_steps = self.n_serial_steps * self.n_envs
+            self.logger.logkv(f'policy_{self.name}/n_total_steps', self.n_total_steps)
+            self.logger.measure_rate(f'policy_{self.name}/n_total_steps', self.n_total_steps,
                                      f'policy_{self.name}/n_total_steps_per_second')
 
             if self.cycle_n and self.cycle_n % self.cycles_per_epoch == 0:
@@ -572,10 +593,12 @@ class TD3Policy(Policy):
         self.train_env = env
         self.obs1 = np.array([self.train_env.reset_one_env(n)
                               for n in range(self.train_env.num_envs)])
+        self.reward_logger = EpisodeRewardLogger(log_dir, n_steps=1, n_envs=self.n_envs)
 
     def set_test_env(self, env, log_dir):
+        assert env.unwrapped.num_envs == 1, env.unwrapped.num_envs
         self.test_env = env
-        self.last_test_obs = self.test_env.reset()
+        self.last_test_obs = self.test_env.reset()[0]
 
     def use_demonstrations(self, demonstrations: RolloutsByHash):
         def f():

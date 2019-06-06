@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 import os
 from os import path as osp
 
+import global_constants
 import global_variables
 from global_variables import RolloutMode, RolloutRandomness
 from baselines import logger
@@ -58,6 +59,8 @@ def parse_args():
     parser.add_argument('--no_save_states', action='store_true')
     parser.add_argument('--cpus')
     parser.add_argument('--policy_args')
+    parser.add_argument('--generate_expert_demonstrations', action='store_true')
+    parser.add_argument('--target_n_prefs_per_24h', type=float, default=5e3)
     args = parser.parse_args()
 
     global_variables.segment_save_mode = args.segment_save_mode
@@ -68,6 +71,12 @@ def parse_args():
     global_variables.rollout_mode = RolloutMode[args.rollout_mode]
     global_variables.rollout_randomness = RolloutRandomness[args.cur_policy_randomness]
     global_variables.n_cur_policy = args.n_cur_policy
+    global_variables.frames_per_segment = int(args.rollout_length_seconds * global_constants.ROLLOUT_FPS)
+
+    expected_steps_per_second = 800
+    steps_per_24h = 24 * 60 * 60 * expected_steps_per_second
+    steps_per_pref = int(steps_per_24h / args.target_n_prefs_per_24h)
+    global_variables.min_n_rl_steps_per_pref = steps_per_pref
 
     if args.render_every_nth_episode is None:
         if 'Fetch' in args.env:
