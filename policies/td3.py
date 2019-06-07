@@ -15,7 +15,7 @@ from spinup.algos.td3.core import get_vars
 import global_variables
 from baselines.common.running_stat import RunningStat
 from baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise
-from utils import TimerContext
+from utils import TimerContext, LimitedRunningStat
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from policies.base_policy import Policy, PolicyTrainMode, EpisodeRewardLogger
@@ -257,7 +257,7 @@ class TD3Policy(Policy):
         self.saver = None
         self.graph = graph
         self.n_initial_episodes = n_initial_episodes
-        self.action_stats = RunningStat(act_dim)
+        self.action_stats = LimitedRunningStat(act_dim, len=1000)
         self.noise_stats = RunningStat(act_dim)
         self.ckpt_n = 0
         self.l2_loss = l2_loss

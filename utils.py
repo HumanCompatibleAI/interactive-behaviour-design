@@ -552,3 +552,32 @@ def debug(sig, frame):
 
 def register_debug_handler():
     signal.signal(signal.SIGUSR1, debug)  # Register handler
+
+
+class LimitedRunningStat:
+    def __init__(self, len=10000):
+        self.values = np.array(np.zeros(len))
+        self.n_values = 0
+        self.i = 0
+
+    def push(self, x):
+        self.values[self.i] = x
+        self.i = (self.i + 1) % len(self.values)
+        if self.n_values < len(self.values):
+            self.n_values += 1
+
+    @property
+    def n(self):
+        return self.n_values
+
+    @property
+    def mean(self):
+        return np.mean(self.values[:self.n_values])
+
+    @property
+    def var(self):
+        return np.var(self.values[:self.n_values])
+
+    @property
+    def std(self):
+        return np.std(self.values[:self.n_values])
