@@ -51,21 +51,21 @@ class FetchPickAndPlaceDiscreteActions(Wrapper):
         if action == self.get_action_meanings().index('NOOP'):
             caction = [0.0, 0.0, 0.0, 0.0]
         elif action == self.get_action_meanings().index('BACKWARD'):
-            caction = [0.1, 0.0, 0.0, 0.0]
+            caction = [1.0, 0.0, 0.0, 0.0]
         elif action == self.get_action_meanings().index('FORWARD'):
-            caction = [-0.1, 0.0, 0.0, 0.0]
+            caction = [-1.0, 0.0, 0.0, 0.0]
         elif action == self.get_action_meanings().index('RIGHT'):
-            caction = [0.0, 0.1, 0.0, 0.0]
+            caction = [0.0, 1.0, 0.0, 0.0]
         elif action == self.get_action_meanings().index('LEFT'):
-            caction = [0.0, -0.1, 0.0, 0.0]
+            caction = [0.0, -1.0, 0.0, 0.0]
         elif action == self.get_action_meanings().index('UP'):
-            caction = [0.0, 0.0, 0.1, 0.0]
+            caction = [0.0, 0.0, 1.0, 0.0]
         elif action == self.get_action_meanings().index('DOWN'):
-            caction = [0.0, 0.0, -0.1, 0.0]
+            caction = [0.0, 0.0, -1.0, 0.0]
         elif action == self.get_action_meanings().index('OPEN'):
-            caction = [0.0, 0.0, 0.0, 0.1]
+            caction = [0.0, 0.0, 0.0, 1.0]
         elif action == self.get_action_meanings().index('CLOSE'):
-            caction = [0.0, 0.0, 0.0, -0.1]
+            caction = [0.0, 0.0, 0.0, -1.0]
         else:
             raise RuntimeError(action)
 
@@ -83,7 +83,7 @@ def test_play(env_id):
     print(f"Using env {env_id}")
     env = gym.make(env_id)
     env._max_episode_steps = None
-    env._max_episode_seconds = 1
+    env._max_episode_seconds = 100
     env = RandomInitialPosition(env)
     env = SaveObs(env)
     env = DrawRewards(env)
@@ -99,4 +99,4 @@ def test_play(env_id):
 
 if __name__ == '__main__':
     pp_register()
-    test_play('FetchPickAndPlace-Repeat1-ContGripper-NoGripObs-1InitialBlockPos-FixedGoal-Delta-GripperBonuses-v0')
+    test_play('FetchPickAndPlace-Repeat1-BinaryGripper-NoGripObs-1InitialBlockPos-FixedGoal-NonDelta-GripperBonuses-v0')

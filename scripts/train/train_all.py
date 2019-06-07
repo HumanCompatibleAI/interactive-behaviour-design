@@ -30,7 +30,9 @@ prefs_envs = [
     ('seaquest', 'SeaquestDeepMindDense-v0'),
     ('enduro', 'EnduroDeepMindNoSpeedo-v0'),
     ('breakout', 'BreakoutDeepMindDense-v0'),
-    ('fetchpp', 'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-Delta-GripperBonuses-v0'),
+    # Important: needs to be NonDelta because the reward predictor assumes the reward is purely a function of
+    # the current state
+    ('fetchpp', 'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-NonDelta-GripperBonuses-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
