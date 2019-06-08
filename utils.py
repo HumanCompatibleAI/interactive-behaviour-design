@@ -10,6 +10,7 @@ import pickle
 import queue
 import random
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -555,8 +556,8 @@ def register_debug_handler():
 
 
 class LimitedRunningStat:
-    def __init__(self, len=10000):
-        self.values = np.array(np.zeros(len))
+    def __init__(self, shape, len=10000):
+        self.values = np.zeros((len,) + shape)
         self.n_values = 0
         self.i = 0
 
@@ -572,11 +573,11 @@ class LimitedRunningStat:
 
     @property
     def mean(self):
-        return np.mean(self.values[:self.n_values])
+        return np.mean(self.values[:self.n_values], axis=0)
 
     @property
     def var(self):
-        return np.var(self.values[:self.n_values])
+        return np.var(self.values[:self.n_values], axis=0)
 
     @property
     def std(self):
