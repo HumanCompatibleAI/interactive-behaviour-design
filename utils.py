@@ -9,14 +9,11 @@ import os
 import pickle
 import queue
 import random
-import re
-import shutil
 import signal
 import subprocess
 import sys
 import tempfile
 import time
-import traceback
 from collections import deque
 from functools import partial
 from multiprocessing import Queue
@@ -581,4 +578,4 @@ class LimitedRunningStat:
 
     @property
     def std(self):
-        return np.std(self.values[:self.n_values])
+        return np.std(self.values[:self.n_values], axis=0)

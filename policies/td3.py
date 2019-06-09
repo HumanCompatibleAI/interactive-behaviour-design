@@ -257,7 +257,7 @@ class TD3Policy(Policy):
         self.saver = None
         self.graph = graph
         self.n_initial_episodes = n_initial_episodes
-        self.action_stats = LimitedRunningStat(act_dim, len=1000)
+        self.action_stats = LimitedRunningStat(shape=(act_dim,), len=1000)
         self.noise_stats = RunningStat(act_dim)
         self.ckpt_n = 0
         self.l2_loss = l2_loss
