@@ -19,6 +19,7 @@ import requests
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from utils import save_args, get_git_rev
 
+args = None
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -42,6 +43,7 @@ def get_args():
     parser.add_argument('--decay_label_rate', action='store_true')
     parser.add_argument('--gpus', default='')
     parser.add_argument('--no_pretrain', action='store_true')
+    parser.add_argument('--tags')
     args = parser.parse_args()
 
     args.run_name += "_" + args.time
@@ -55,6 +57,8 @@ def get_args():
 
 
 def main():
+    global args
+
     stagger = random.randint(1, 20)
     time.sleep(stagger)
 
@@ -274,6 +278,9 @@ def get_n_demos(base_url):
 
 
 def start_tmux_sess_with_cmd(sess_name, cmd, gpus):
+    global args
+    cmd = f'WANDB_TAGS={args.tags} ' + cmd
+    cmd = f'WANDB_DESCRIPTION={args.run_name} ' + cmd
     cmd = f'CUDA_VISIBLE_DEVICES="{gpus}" ' + cmd
     cmd += '; echo; read -p "Press enter to exit..."'
     cmd = ['tmux', 'new-sess', '-d', '-s', sess_name, '-n', f'{sess_name}-main', cmd]
@@ -281,7 +288,10 @@ def start_tmux_sess_with_cmd(sess_name, cmd, gpus):
 
 
 def run_in_tmux_sess(sess_name, cmd, window_name, gpus):
+    global args
     window_name += '_' + str(uuid.uuid4())[:4]
+    cmd = f'WANDB_TAGS={args.tags} ' + cmd
+    cmd = f'WANDB_DESCRIPTION={args.run_name} ' + cmd
     cmd = f'CUDA_VISIBLE_DEVICES="{gpus}" ' + cmd
     cmd += '; echo; read -p "Press enter to exit..."'
     tmux_cmd = ['tmux', 'new-window', '-ad', '-t', f'{sess_name}-main', '-n', window_name, cmd]

@@ -22,7 +22,7 @@ rl_envs = [
     ('seaquest', 'SeaquestDeepMind-v0'),
     ('enduro', 'EnduroDeepMindNoSpeedo-v0'),
     ('breakout', 'BreakoutDeepMind-v0'),
-    ('fetch', 'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-Delta-GripperBonuses-v0'),
+    ('fetchpp', 'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-Delta-GripperBonuses-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
@@ -40,7 +40,7 @@ prefs_envs = [
 for seed in seeds:
     for env_shortname, env_id in rl_envs:
         run_name = f"{env_shortname}-{seed}-rl"
-        print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} --gpus '{args.gpus}'")
+        print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} --gpus '{args.gpus}' --tags rl,{env_shortname}")
 
 for seed in seeds:
     for env_shortname, env_id in prefs_envs:
@@ -63,15 +63,18 @@ for seed in seeds:
 
         # DRLHP
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_only drlhp {run_name}-drlhp-{args.name} --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args}")
+              f"{env_id} reward_only drlhp {run_name}-drlhp-{args.name} --seed {seed} --disable_redo "
+              f"--extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args} --tags {env_shortname},drlhp")
 
         # DRLHP with label rate decay
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_only drlhp {run_name}-drlhpd-{args.name} --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' --decay_label_rate {args.harness_extra_args}")
+              f"{env_id} reward_only drlhp {run_name}-drlhpd-{args.name} --seed {seed} --disable_redo "
+              f"--extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' --decay_label_rate {args.harness_extra_args} --tags {env_shortname},drlhpd")
 
         # SDRLHP
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_only demonstrations {run_name}-sdrlhp-{args.name} --seed {seed} --disable_redo --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args}")
+              f"{env_id} reward_only demonstrations {run_name}-sdrlhp-{args.name} --seed {seed} --disable_redo "
+              f"--extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args} --tags {env_shortname},sdrlhp")
 
         # SDRLHP-NP
         np_args = ''
@@ -80,15 +83,18 @@ for seed in seeds:
         if 'Enduro' in env_id:
             np_args += '--cur_policy_randomness correlated_random_action --rollout_random_action_prob 1.0 --rollout_random_correlation 0.99'
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_only sdrlhpnp {run_name}-sdrlhpnp-{args.name} --seed {seed} --disable_redo --extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args}")
+              f"{env_id} reward_only sdrlhpnp {run_name}-sdrlhpnp-{args.name} --seed {seed} --disable_redo "
+              f"--extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args} --tags {env_shortname},sdrlhpnp")
 
         # SDRLHP-NP-DRLHP
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_only sdrlhpnp-drlhp {run_name}-sdrlhpnp-drlhp-{args.name} --seed {seed} --disable_redo --extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args}")
+              f"{env_id} reward_only sdrlhpnp-drlhp {run_name}-sdrlhpnp-drlhp-{args.name} --seed {seed} --disable_redo "
+              f"--extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args} --tags {env_shortname},sdrlhpnp-drlhp")
 
         # SDRLHP-NP with label rate decay
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_only sdrlhpnp {run_name}-sdrlhpnpd-{args.name} --seed {seed} --disable_redo --extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' --decay_label_rate {args.harness_extra_args}")
+              f"{env_id} reward_only sdrlhpnp {run_name}-sdrlhpnpd-{args.name} --seed {seed} --disable_redo "
+              f"--extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' --decay_label_rate {args.harness_extra_args} --tags {env_shortname},sdrlhpnpd")
 
         if 'lunarlander' in env_shortname or 'fetch' in env_shortname:
             redo = '--disable_redo'
@@ -96,12 +102,15 @@ for seed in seeds:
             redo = ''
         # Behavioral cloning
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} bc_only demonstrations {run_name}-bc-{args.name} --seed {seed} {redo} --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args}")
+              f"{env_id} bc_only demonstrations {run_name}-bc-{args.name} --seed {seed} {redo} "
+              f"--extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args} --tags {env_shortname},bc")
 
         # SDRLHP + behavioral cloning
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} reward_plus_bc demonstrations {run_name}-sdrlhp-bc-{args.name} --seed {seed} {redo} --extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args}")
+              f"{env_id} reward_plus_bc demonstrations {run_name}-sdrlhp-bc-{args.name} --seed {seed} {redo} "
+              f"--extra_args ' {extra_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args} --tags {env_shortname},sdrlhp-bc")
 
         # Behavioral cloning on rollouts from SDRLHP-NP
         print("python3 scripts/train/auto_train_prefs.py "
-              f"{env_id} bc_only sdrlhpnp {run_name}-bcnp-{args.name} --seed {seed} --disable_redo --extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args}")
+              f"{env_id} bc_only sdrlhpnp {run_name}-bcnp-{args.name} --seed {seed} --disable_redo "
+              f"--extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args} --tags {env_shortname},bcnp")

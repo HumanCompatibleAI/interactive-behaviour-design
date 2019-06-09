@@ -10,3 +10,6 @@
 [submodule "spinningup"]
 	path = spinningup
 	url = https://github.com/openai/spinningup.git
+[submodule "wandb"]
+	path = wandb
+	url = https://github.com/wandb/client

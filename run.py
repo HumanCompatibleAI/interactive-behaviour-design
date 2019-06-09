@@ -8,6 +8,8 @@ import os.path as osp
 import platform
 import random
 import re
+import signal
+import sys
 import threading
 import time
 from multiprocessing import Queue, Process
@@ -16,6 +18,7 @@ import gym
 import numpy as np
 import psutil
 import tensorflow as tf
+import wandb
 from cloudpickle import cloudpickle
 from gym.envs.atari import AtariEnv
 from gym.envs.box2d import LunarLander
@@ -53,6 +56,7 @@ from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lande
 from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
     VecSaveSegments
 
+run = wandb.init(project="interactive-behaviour-design", tensorboard=True, sync_tensorboard=True)
 os.environ['OMPI_MCA_btl_base_warn_component_unused'] = '0'
 os.environ['OPENAI_LOG_FORMAT'] = ''
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -94,8 +98,8 @@ def main():
     # Prevent list_local_devices taking up all GPU memory
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
-    gpu_ns = [x.name.split(':')[2] for x in device_lib.list_local_devices(session_config=config) if x.device_type == 'GPU']
-
+    gpu_ns = [x.name.split(':')[2] for x in device_lib.list_local_devices(session_config=config) if
+              x.device_type == 'GPU']
 
     np.random.seed(args.seed)
     random.seed(args.seed)
@@ -391,6 +395,10 @@ def main():
     for child in children:
         mp = MemoryProfiler(pid=child.pid, log_path=os.path.join(log_dir, f'memory-{child.pid}.txt'))
         mp.start()
+
+    os.makedirs(os.path.join(wandb.run.dir, 'media'))
+    os.symlink(os.path.join(log_dir, 'test_env'), os.path.join(wandb.run.dir, 'media', 'test_env'))
+    os.symlink(os.path.join(log_dir, 'train_env'), os.path.join(wandb.run.dir, 'media', 'train_env'))
 
     # Run
 

@@ -5,8 +5,10 @@ from argparse import ArgumentParser
 
 import requests
 
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
+from scripts.train import auto_train_prefs
 from scripts.train.auto_train_prefs import get_open_port, start_tmux_sess_with_cmd
 from utils import get_git_rev
 
@@ -20,6 +22,7 @@ def get_args():
     parser.add_argument('--gpus', default='')
     default_log_dir = 'runs'
     parser.add_argument('--log_dir', default=default_log_dir)
+    parser.add_argument('--tags')
     return parser.parse_args()
 
 
@@ -39,6 +42,7 @@ def start_app(base_url, env, port, seed, run_name, log_dir, policy_args, gpus):
 
 
 args = get_args()
+auto_train_prefs.args = args
 git_rev = get_git_rev()
 log_dir = os.path.abspath(os.path.join(args.log_dir, f'{args.run_name}_{int(time.time())}_{git_rev}'))
 os.makedirs(log_dir)
