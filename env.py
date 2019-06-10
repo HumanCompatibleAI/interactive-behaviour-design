@@ -114,6 +114,8 @@ def make_envs(env_id, num_env, seed, log_dir,
     else:
         raise Exception(f"Unsure which SubprocVecEnv to use for policy type '{policy_type}")
     train_env = SubprocVecEnv([make_env_fn('train', i) for i in range(num_env)])
+    for i, process in enumerate(train_env.ps):
+        global_variables.pids_to_proc_names[process.pid] = f'train_env_{i}'
     # Why SubprocVecEnv?
     # It looks like if we call render() in one thread then again in a different thread,
     # that second thread will just see zeros returned. This is relevant because the training

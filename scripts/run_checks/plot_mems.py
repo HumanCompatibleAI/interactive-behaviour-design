@@ -1,30 +1,37 @@
 #!/usr/bin/env python3
 
 import argparse
-import os
 import subprocess
-
 import tempfile
+from collections import namedtuple
 
 from pylab import *
 
 plt.rcParams.update({'figure.max_open_warning': 0})
 
 parser = argparse.ArgumentParser()
-parser.add_argument('mem_log', nargs='*')
+parser.add_argument('mem_logs', nargs='*')
 args = parser.parse_args()
 
+Log = namedtuple('Log', 'name values timestamps')
+
 with tempfile.TemporaryDirectory() as d:
-    for i, log in enumerate(args.mem_log):
-        log_name = os.path.basename(log)
-        print(log_name)
-        figure()
-        with open(log) as f:
+    mem_logs = []
+    for log_file in args.mem_logs:
+        log_name = os.path.basename(log_file)
+        with open(log_file, 'r') as f:
             lines = f.read().rstrip().split('\n')
-        mems = [float(l.split()[1]) for l in lines]
-        times = [float(l.split()[2]) for l in lines]
-        rtimes = [t - times[0] for t in times]
-        title(log_name)
-        plot(rtimes, mems)
-        savefig(os.path.join(d, f'{i}.png'))
-    subprocess.call(f'montage {d}/*.png -tile 6x -mode concatenate result.png', shell=True)
+        values = [float(l.split()[1]) for l in lines]
+        timestamps = [float(l.split()[2]) for l in lines]
+        relative_timestamps = [t - timestamps[0] for t in timestamps]
+        mem_logs.append(Log(log_name, values, timestamps))
+    mem_logs.sort(key=lambda log: max(log.values))
+    mem_logs = mem_logs[::-1]
+
+    for i, mem_log in enumerate(mem_logs):
+        print(mem_log.name)
+        figure()
+        title(mem_log.name)
+        plot(mem_log.timestamps, mem_log.values)
+        savefig(os.path.join(d, '{:03d}.png'.format(i)))
+    subprocess.call(f'montage {d}/*.png -tile 6x -mode concatenate memory_plots.png', shell=True)

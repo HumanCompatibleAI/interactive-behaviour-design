@@ -243,12 +243,15 @@ class PolicyRollouter:
         self.rollout_queue = self.ctx.Queue()
         gv = save_global_variables()
         for n in range(16):
-            self.ctx.Process(target=RolloutWorker, args=(cloudpickle.dumps(make_policy_fn),
-                                                         log_dir,
-                                                         self.env_state_queue,
-                                                         self.rollout_queue,
-                                                         n,
-                                                         gv)).start()
+            proc = self.ctx.Process(target=RolloutWorker,
+                                    args=(cloudpickle.dumps(make_policy_fn),
+                                          log_dir,
+                                          self.env_state_queue,
+                                          self.rollout_queue,
+                                          n,
+                                          gv))
+            proc.start()
+            global_variables.pids_to_proc_names[proc.pid] = f'rollout_worker_{n}'
 
     def generate_rollouts_from_reset(self, policies, softmax_temp):
         env_state = self.get_reset_state()
