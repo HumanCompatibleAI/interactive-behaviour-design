@@ -44,6 +44,7 @@ def get_args():
     parser.add_argument('--gpus', default='')
     parser.add_argument('--no_pretrain', action='store_true')
     parser.add_argument('--tags')
+    parser.add_argument('--group')
     args = parser.parse_args()
 
     args.run_name += "_" + args.time
@@ -280,6 +281,7 @@ def get_n_demos(base_url):
 def start_tmux_sess_with_cmd(sess_name, cmd, gpus):
     global args
     cmd = f'WANDB_TAGS={args.tags} ' + cmd
+    cmd = f'WANDB_RUN_GROUP={args.group} ' + cmd
     cmd = f'WANDB_DESCRIPTION={args.run_name} ' + cmd
     cmd = f'CUDA_VISIBLE_DEVICES="{gpus}" ' + cmd
     cmd += '; echo; read -p "Press enter to exit..."'
@@ -291,6 +293,7 @@ def run_in_tmux_sess(sess_name, cmd, window_name, gpus):
     global args
     window_name += '_' + str(uuid.uuid4())[:4]
     cmd = f'WANDB_TAGS={args.tags} ' + cmd
+    cmd = f'WANDB_RUN_GROUP={args.group} ' + cmd
     cmd = f'WANDB_DESCRIPTION={args.run_name} ' + cmd
     cmd = f'CUDA_VISIBLE_DEVICES="{gpus}" ' + cmd
     cmd += '; echo; read -p "Press enter to exit..."'
