@@ -1,17 +1,25 @@
 #!/usr/bin/env python
 
 import argparse
+import os
+import sys
 import uuid
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from utils import find_least_busy_gpu
 
 parser = argparse.ArgumentParser()
 parser.add_argument('name')
 parser.add_argument('--seeds', default='0')
 parser.add_argument('--test', action='store_true')
-parser.add_argument('--gpus', default='')
+parser.add_argument('--gpus')
 parser.add_argument('--extra_args', default='')
 parser.add_argument('--harness_extra_args', default='')
 parser.add_argument('--rollout_len_seconds', type=float)
 args = parser.parse_args()
+
+if args.gpus is None:
+    args.gpus = str(find_least_busy_gpu())
 
 seeds = list(map(int, args.seeds.split(',')))
 if args.test:
@@ -41,7 +49,8 @@ prefs_envs = [
 for seed in seeds:
     for env_shortname, env_id in rl_envs:
         run_name = f"{env_shortname}-{seed}-rl"
-        print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} --gpus '{args.gpus}' --tags rl,{env_shortname}")
+        print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} "
+              f"--gpus '{args.gpus}' --tags rl,{env_shortname}")
 
 wandb_group = str(uuid.uuid4())[:8]
 

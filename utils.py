@@ -9,6 +9,7 @@ import os
 import pickle
 import queue
 import random
+import re
 import signal
 import subprocess
 import sys
@@ -32,6 +33,7 @@ from gym.envs.robotics import FetchEnv
 from gym.envs.robotics.robot_env import RobotEnv
 from gym.spaces import Box, Discrete
 from gym.wrappers.monitoring.video_recorder import ImageEncoder
+from tensorflow.python.client import device_lib
 
 import global_variables
 from wrappers.dummy_env import DummyEnv
@@ -522,15 +524,12 @@ def save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus):
         json.dump(d, f)
 
 
-def configure_cpus(log_dir, cpus):
-    if cpus is None:
-        all_cpus = list(range(multiprocessing.cpu_count()))
-    else:
-        a, b = map(int, cpus.split('-'))
-        all_cpus = list(range(a, b))
-    rollouter_cpus = [all_cpus.pop() for _ in range(4)]
-    drlhp_training_cpus = [all_cpus.pop() for _ in range(4)]
-    main_cpus = all_cpus
+def configure_cpus(log_dir, n_gpus):
+    available_cpus = list(os.sched_getaffinity(0))
+    rollouter_cpus = [available_cpus.pop() for _ in range(4)]
+    n_drlhp_training_cpus = 1 if n_gpus > 0 else 4
+    drlhp_training_cpus = [available_cpus.pop() for _ in range(n_drlhp_training_cpus)]
+    main_cpus = available_cpus
     save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus)
 
 
@@ -579,3 +578,60 @@ class LimitedRunningStat:
     @property
     def std(self):
         return np.std(self.values[:self.n_values], axis=0)
+
+
+class NoGPUsError(Exception):
+    pass
+
+
+class NoFreeGPUsError(Exception):
+    pass
+
+
+def find_least_busy_gpu():
+    try:
+        output = subprocess.check_output(['nvidia-smi']).decode()
+        lines = output.rstrip().split('\n')
+    except FileNotFoundError:
+        raise NoGPUsError()
+    mem_usage_frac_by_gpu = []
+    next_line_is_stats = False
+    for line in lines:
+        if next_line_is_stats:
+            mem_stats = line.split('|')[2]
+            m = re.search(r'(.*)MiB / (.*)MiB', mem_stats)
+            used = float(m.group(1))
+            total = float(m.group(2))
+            print(used, total)
+            mem_usage_frac = used / total
+            mem_usage_frac_by_gpu.append(mem_usage_frac)
+        if any(g in line for g in ['TITAN', 'GeForce']):
+            next_line_is_stats = True
+        else:
+            next_line_is_stats = False
+    if not any([frac < 0.8 for frac in mem_usage_frac_by_gpu]):
+        raise NoFreeGPUsError()
+    least_busy_gpu_n = np.argmin(mem_usage_frac_by_gpu)
+    return least_busy_gpu_n
+
+
+def get_available_gpu_ns_proc(results_queue):
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True  # Prevent list_local_devices taking up all GPU memory
+    gpu_ns = [x.name.split(':')[2]
+              for x in device_lib.list_local_devices(session_config=config)
+              if x.device_type == 'GPU']
+    results_queue.put(gpu_ns)
+
+
+def get_available_gpu_ns():
+    """
+    Get available GPUs.
+
+    We have to use a separate process because otherwise we might start the TensorFlow execution engine
+    for this process - which is a problem if we haven't configured CPU binding yet.
+    """
+    ctx = multiprocessing.get_context('spawn')
+    results_queue = ctx.Queue()
+    ctx.Process(target=get_available_gpu_ns_proc, args=(results_queue,)).start()
+    return results_queue.get()

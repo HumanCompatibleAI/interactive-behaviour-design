@@ -50,7 +50,7 @@ from rollouts import RolloutsByHash, CompressedRollout
 from web_app.comparisons import monitor_segments_dir_loop, write_segments_loop
 from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import find_latest_checkpoint, MemoryProfiler, configure_cpus, \
-    load_cpu_config, register_debug_handler
+    load_cpu_config, register_debug_handler, get_available_gpu_ns
 from web_app.app import run_web_app
 from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro
 from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
@@ -89,17 +89,12 @@ def main():
     register_debug_handler()
 
     args, log_dir = parse_args()
+    assert args.n_envs == 16
     # check_env(args.env)
 
-    assert args.n_envs == 16
-    configure_cpus(log_dir, args.cpus)
+    gpu_ns = get_available_gpu_ns()
+    configure_cpus(log_dir, len(gpu_ns))
     load_cpu_config(log_dir, 'main')
-
-    # Prevent list_local_devices taking up all GPU memory
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    gpu_ns = [x.name.split(':')[2] for x in device_lib.list_local_devices(session_config=config) if
-              x.device_type == 'GPU']
 
     np.random.seed(args.seed)
     random.seed(args.seed)
@@ -325,10 +320,10 @@ def main():
                                name=name, gpu_n=gpu_n)
 
     if gpu_ns:
-        n = gpu_ns[0]
+        reward_predictor_inference_gpu_n = gpu_ns[0]
     else:
-        n = None
-    reward_predictor = make_reward_predictor_fn('inference', gpu_n=n)
+        reward_predictor_inference_gpu_n = None
+    reward_predictor = make_reward_predictor_fn('inference', gpu_n=reward_predictor_inference_gpu_n)
 
     # Reward predictor training loop
     # Loads preferences, trains, saves checkpoint
@@ -337,11 +332,11 @@ def main():
     run_drlhp_training = context.Value('B', 0)
     if gpu_ns:
         if len(gpu_ns) > 1:
-            n = gpu_ns[1]
+            reward_predictor_training_gpu_n = gpu_ns[1]
         else:
-            n = gpu_ns[0]
+            reward_predictor_training_gpu_n = gpu_ns[0]
     else:
-        n = None
+        reward_predictor_training_gpu_n = None
     drlhp_train_process = context.Process(
         target=drlhp_train_loop,
         args=(cloudpickle.dumps(make_reward_predictor_fn),
@@ -349,7 +344,7 @@ def main():
               os.path.join(ckpt_dir, pref_db_ckpt_name),
               os.path.join(ckpt_dir, reward_predictor_ckpt_name),
               log_dir,
-              n))
+              reward_predictor_training_gpu_n))
     drlhp_train_process.start()
     global_variables.pids_to_proc_names[drlhp_train_process.pid] = 'reward_predictor_training'
 

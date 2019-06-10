@@ -57,7 +57,6 @@ def parse_args():
                         default='random_action')
     parser.add_argument('--n_cur_policy', type=int, default=3)
     parser.add_argument('--no_save_states', action='store_true')
-    parser.add_argument('--cpus')
     parser.add_argument('--policy_args')
     parser.add_argument('--generate_expert_demonstrations', action='store_true')
     parser.add_argument('--target_n_prefs_per_24h', type=float, default=5e3)
