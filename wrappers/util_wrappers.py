@@ -16,6 +16,7 @@ import cv2
 import easy_tf_log
 import numpy as np
 from gym.core import ObservationWrapper, Wrapper
+from gym.spaces import Discrete, Box
 from gym.wrappers import TimeLimit
 
 import global_variables
@@ -614,3 +615,74 @@ class RepeatActions(Wrapper):
 
     def reset(self):
         return self.env.reset()
+
+
+class FetchDiscreteActions(Wrapper):
+    def __init__(self, env):
+        Wrapper.__init__(self, env)
+        self.action_space = Discrete(9)
+        self.closed = False
+
+    def get_action_meanings(self):
+        return ['NOOP',
+                'LEFT',
+                'RIGHT',
+                'FORWARD',
+                'BACKWARD',
+                'UP',
+                'DOWN',
+                'OPEN',
+                'CLOSE', ]
+
+    def get_keys_to_action(self):
+        return {
+            (ord('w'),): self.get_action_meanings().index('FORWARD'),
+            (ord('s'),): self.get_action_meanings().index('BACKWARD'),
+            (ord('a'),): self.get_action_meanings().index('LEFT'),
+            (ord('d'),): self.get_action_meanings().index('RIGHT'),
+            (ord('o'),): self.get_action_meanings().index('UP'),
+            (ord('l'),): self.get_action_meanings().index('DOWN'),
+            (ord('i'),): self.get_action_meanings().index('OPEN'),
+            (ord('k'),): self.get_action_meanings().index('CLOSE'),
+        }
+
+    def step(self, action):
+        if action == self.get_action_meanings().index('NOOP'):
+            caction = [0.0, 0.0, 0.0, 0.0]
+        elif action == self.get_action_meanings().index('BACKWARD'):
+            caction = [1.0, 0.0, 0.0, 0.0]
+        elif action == self.get_action_meanings().index('FORWARD'):
+            caction = [-1.0, 0.0, 0.0, 0.0]
+        elif action == self.get_action_meanings().index('RIGHT'):
+            caction = [0.0, 1.0, 0.0, 0.0]
+        elif action == self.get_action_meanings().index('LEFT'):
+            caction = [0.0, -1.0, 0.0, 0.0]
+        elif action == self.get_action_meanings().index('UP'):
+            caction = [0.0, 0.0, 1.0, 0.0]
+        elif action == self.get_action_meanings().index('DOWN'):
+            caction = [0.0, 0.0, -1.0, 0.0]
+        elif action == self.get_action_meanings().index('OPEN'):
+            caction = [0.0, 0.0, 0.0, 1.0]
+        elif action == self.get_action_meanings().index('CLOSE'):
+            caction = [0.0, 0.0, 0.0, -1.0]
+        else:
+            raise RuntimeError(action)
+
+        return self.env.step(caction)
+
+
+class RenderObs(ObservationWrapper):
+    def __init__(self, env):
+        ObservationWrapper.__init__(self, env)
+        im = self.env.render(mode='rgb_array')
+        self.observation_space = Box(low=0, high=255, shape=im.shape)
+
+    def observation(self, observation):
+        return self.env.render(mode='rgb_array')
+
+
+class SaveObsToInfo(Wrapper):
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        info['obs'] = np.copy(obs)
+        return obs, reward, done, info

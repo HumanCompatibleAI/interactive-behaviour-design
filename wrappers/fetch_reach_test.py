@@ -5,18 +5,15 @@ import gym
 from gym.utils.play import play
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from wrappers.fetch_pick_and_place import RandomInitialPosition
-from wrappers.fetch_pick_and_place_register import register as pp_register
-from wrappers.util_wrappers import RenderObs, SaveObsToInfo, FetchDiscreteActions
+from wrappers.fetch_reach import register as register_env
+from wrappers.util_wrappers import SaveObsToInfo, RenderObs, FetchDiscreteActions
 from wrappers.wrappers_debug import DrawRewards
 
 
-def test_play(env_id):
-    print(f"Using env {env_id}")
-    env = gym.make(env_id)
+def test_play():
+    env = gym.make('FetchReach-Custom-v0')
     env._max_episode_steps = None
     env._max_episode_seconds = None
-    env = RandomInitialPosition(env)
     env = SaveObsToInfo(env)
     env = DrawRewards(env)
     env = RenderObs(env)
@@ -29,5 +26,5 @@ def test_play(env_id):
 
 
 if __name__ == '__main__':
-    pp_register()
-    test_play('FetchPickAndPlace-Repeat1-BinaryGripper-NoGripObs-1InitialBlockPos-FixedGoal-NonDelta-GripperBonuses-v0')
+    register_env()
+    test_play()

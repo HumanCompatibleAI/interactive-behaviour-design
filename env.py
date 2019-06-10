@@ -29,12 +29,10 @@ def set_timeouts(env):
     env._max_episode_seconds = None
 
     if isinstance(env.unwrapped, FetchEnv):
-        if 'Repeat1' in env.unwrapped.spec.id:
-            max_seconds = 10
-        elif 'Repeat3' in env.unwrapped.spec.id:
+        if 'Repeat3' in env.unwrapped.spec.id:
             max_seconds = 5
         else:
-            raise Exception()
+            max_seconds = 10
     elif isinstance(env.unwrapped, AtariEnv):
         max_minutes = 5
         max_seconds = max_minutes * 60

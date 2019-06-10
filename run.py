@@ -8,8 +8,6 @@ import os.path as osp
 import platform
 import random
 import re
-import signal
-import sys
 import threading
 import time
 from multiprocessing import Queue, Process
@@ -25,7 +23,6 @@ from gym.envs.box2d import LunarLander
 from gym.envs.mujoco import MujocoEnv
 from gym.envs.robotics import FetchEnv
 from gym.envs.robotics.robot_env import RobotEnv
-from tensorflow.python.client import device_lib
 
 import global_variables
 from a2c.policies import mlp, nature_cnn
@@ -47,12 +44,13 @@ from policies.td3_test import Oracle
 from policy_rollouter import PolicyRollouter
 from reward_switcher import RewardSelector
 from rollouts import RolloutsByHash, CompressedRollout
-from web_app.comparisons import monitor_segments_dir_loop, write_segments_loop
 from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import find_latest_checkpoint, MemoryProfiler, configure_cpus, \
     load_cpu_config, register_debug_handler, get_available_gpu_ns
 from web_app.app import run_web_app
-from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro
+from web_app.comparisons import monitor_segments_dir_loop, write_segments_loop
+from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro, \
+    fetch_reach
 from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
     VecSaveSegments
 
@@ -66,6 +64,7 @@ seaquest_reward.register()
 breakout_reward.register()
 enduro.register()
 fetch_pick_and_place_register.register()
+fetch_reach.register()
 basicfetch.register()
 faulthandler.enable()
 

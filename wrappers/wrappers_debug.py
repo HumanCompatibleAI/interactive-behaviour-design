@@ -136,8 +136,9 @@ class DrawRewards(Wrapper):
 
 
 class DrawObses(Wrapper):
-    def __init__(self, env):
+    def __init__(self, env, decode_fn=None):
         self.last_obs = None
+        self.decode_fn = decode_fn
         Wrapper.__init__(self, env)
 
     def reset(self):
@@ -149,13 +150,16 @@ class DrawObses(Wrapper):
         return obs, reward, done, info
 
     def render(self, mode='human', **kwargs):
-        if mode == 'rgb_array':
+        if mode == 'rgb_array' and self.last_obs is not None:
             im = self.env.render('rgb_array')
-            im = draw_dict_on_image(im, {'obs': self.last_obs},
-                                    mode='concat')
+            if self.decode_fn:
+                d = self.decode_fn(self.last_obs)
+            else:
+                d = {'obs': self.last_obs},
+            im = draw_dict_on_image(im, d, mode='concat')
             return im
         else:
-            return self.env.render(mode)
+            return self.env.render(mode, **kwargs)
 
 
 class DrawEnvN(Wrapper):
