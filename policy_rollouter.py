@@ -242,7 +242,7 @@ class PolicyRollouter:
         self.env_state_queue = self.ctx.Queue()
         self.rollout_queue = self.ctx.Queue()
         gv = save_global_variables()
-        for n in range(16):
+        for n in range(4):
             proc = self.ctx.Process(target=RolloutWorker,
                                     args=(cloudpickle.dumps(make_policy_fn),
                                           log_dir,
