@@ -56,7 +56,7 @@ from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lande
 from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
     VecSaveSegments
 
-run = wandb.init(project="interactive-behaviour-design", tensorboard=True, sync_tensorboard=True)
+run = wandb.init(project="interactive-behaviour-design")
 os.environ['OMPI_MCA_btl_base_warn_component_unused'] = '0'
 os.environ['OPENAI_LOG_FORMAT'] = ''
 tf.logging.set_verbosity(tf.logging.ERROR)
