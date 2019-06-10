@@ -55,6 +55,10 @@ class ReplayBuffer:
                     done=self.done_buf[idxs])
 
 
+class NotEnoughDataInReplayBuffer(Exception):
+    pass
+
+
 class LockedReplayBuffer(ReplayBuffer):
     def __init__(self, obs_dim, act_dim, size):
         super().__init__(obs_dim, act_dim, size)
@@ -65,9 +69,8 @@ class LockedReplayBuffer(ReplayBuffer):
             super().store(obs, act, rew, next_obs, done)
 
     def sample_batch(self, batch_size=32):
-        while self.size == 0:
-            print("Warning: demonstrations buffer empty; waiting...")
-            time.sleep(1)
+        if self.size < batch_size:
+            raise NotEnoughDataInReplayBuffer()
         with self.lock:
             return super().sample_batch(batch_size)
 
@@ -291,18 +294,19 @@ class TD3Policy(Policy):
         train_env_timer = TimerContext(name=None, stdout=False)
         test_env_timer = TimerContext(name=None, stdout=False)
 
-        with bc_timer:
-            loss_bc_pi_l, loss_l2_l = [], []
-            for _ in range(self.batches_per_cycle):
-                bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-                feed_dict = {self.bc_x_ph: bc_batch['obs1'], self.bc_a_ph: bc_batch['acts']}
-                bc_pi_loss, l2_loss, _ = self.sess.run([self.bc_pi_loss, self.l2_loss, self.train_pi_bc_only_op], feed_dict)
-                loss_bc_pi_l.append(bc_pi_loss)
-                loss_l2_l.append(l2_loss)
-            self.logger.log_list_stats(f'policy_{self.name}/loss_bc_pi', loss_bc_pi_l)
-            self.logger.log_list_stats(f'policy_{self.name}/loss_l2', loss_l2_l)
-            self.cycle_n += 1
-            self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
+        if self.demonstrations_buffer.size >= self.batch_size:
+            with bc_timer:
+                loss_bc_pi_l, loss_l2_l = [], []
+                for _ in range(self.batches_per_cycle):
+                    bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
+                    feed_dict = {self.bc_x_ph: bc_batch['obs1'], self.bc_a_ph: bc_batch['acts']}
+                    bc_pi_loss, l2_loss, _ = self.sess.run([self.bc_pi_loss, self.l2_loss, self.train_pi_bc_only_op], feed_dict)
+                    loss_bc_pi_l.append(bc_pi_loss)
+                    loss_l2_l.append(l2_loss)
+                self.logger.log_list_stats(f'policy_{self.name}/loss_bc_pi', loss_bc_pi_l)
+                self.logger.log_list_stats(f'policy_{self.name}/loss_l2', loss_l2_l)
+                self.cycle_n += 1
+                self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
 
         if self.cycle_n % 10 == 0:
             with train_env_timer:
