@@ -47,7 +47,7 @@ from policies.td3_test import Oracle
 from policy_rollouter import PolicyRollouter
 from reward_switcher import RewardSelector
 from rollouts import RolloutsByHash, CompressedRollout
-from segments import monitor_segments_dir_loop, write_segments_loop
+from web_app.comparisons import monitor_segments_dir_loop, write_segments_loop
 from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import find_latest_checkpoint, MemoryProfiler, configure_cpus, \
     load_cpu_config, register_debug_handler

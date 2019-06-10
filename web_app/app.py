@@ -5,6 +5,9 @@ import os.path as osp
 import web_app.web_globals as web_globals
 from flask import Flask
 
+from web_app.comparisons import init_comparisons_logger
+from web_app.utils import init_web_logger
+
 
 def run_web_app(classifiers, policies, reward_selector, experience_buffer, log_dir, port,
                 pref_db, demo_env, policy_rollouter, demonstration_rollouts,
@@ -50,5 +53,8 @@ def run_web_app(classifiers, policies, reward_selector, experience_buffer, log_d
     app.register_blueprint(labelling_app)
     app.register_blueprint(demonstrations_app)
     app.register_blueprint(view_trajectories_app)
+
+    init_web_logger()
+    init_comparisons_logger()
 
     app.run(port=port)

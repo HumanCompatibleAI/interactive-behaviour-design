@@ -1,17 +1,21 @@
-import easy_tf_log
-import os
 from datetime import datetime
 from functools import wraps, update_wrapper
 
+import easy_tf_log
 import numpy as np
 from flask import make_response
 
+import web_app.web_globals as web_globals
 from rollouts import CompressedRollout
-from web_app.web_globals import _demonstration_rollouts, _pref_db, experience_dir, _policies
-from web_app.web_globals import _policies
 
-logger = easy_tf_log.Logger()
-logger.set_log_dir(experience_dir)
+logger = None
+
+
+def init_web_logger():
+    global logger
+    logger = easy_tf_log.Logger()
+    logger.set_log_dir(web_globals.experience_dir)
+
 
 def nocache(view):
     @wraps(view)
@@ -29,12 +33,12 @@ def nocache(view):
 
 
 def check_bc_losses():
-    if _policies.cur_policy is None:
+    if web_globals._policies.cur_policy is None:
         raise Exception("cur_policy is none")
-    pol = _policies[_policies.cur_policy]
+    pol = web_globals._policies[web_globals._policies.cur_policy]
     losses = dict()
-    for rollout_frames_hash in _demonstration_rollouts.keys():
-        rollout = _demonstration_rollouts[rollout_frames_hash]
+    for rollout_frames_hash in web_globals._demonstration_rollouts.keys():
+        rollout = web_globals._demonstration_rollouts[rollout_frames_hash]
         bc_loss = pol.model.check_bc_loss(rollout.frames, rollout.actions)
         losses[rollout_frames_hash.hash] = bc_loss
     return losses
@@ -49,15 +53,16 @@ def add_pref(rollout1: CompressedRollout, rollout2: CompressedRollout, pref):
     if rollout1.generating_policy is not None:
         msg += f" (policies {rollout1.generating_policy} vs. {rollout2.generating_policy})"
     print(msg)
-    _pref_db.append(rollout1.obses, rollout2.obses, pref)
+    web_globals._pref_db.append(rollout1.obses, rollout2.obses, pref)
     add_pref.added_prefs += 1
-    logger.logkv('pref_db/n_prefs', len(_pref_db.train))
+    logger.logkv('pref_db/n_prefs', len(web_globals._pref_db.train))
     logger.logkv('pref_db/added_prefs', add_pref.added_prefs)
+
 
 add_pref.added_prefs = 0
 
 
 def get_n_rl_steps():
-    if _policies.cur_policy is None:
+    if web_globals._policies.cur_policy is None:
         return None
-    return _policies.policies[_policies.cur_policy].n_total_steps
+    return web_globals._policies.policies[web_globals._policies.cur_policy].n_total_steps

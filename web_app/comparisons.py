@@ -1,22 +1,35 @@
 import glob
 import json
+import multiprocessing
 import os
 import pickle
 import random
+import shutil
+import time
 from itertools import combinations
 
 import easy_tf_log
 from flask import Blueprint, render_template, request, send_from_directory
+from gym.utils import atomic_write
 
 import global_variables
+from rollouts import CompressedRollout
+from utils import make_small_change, save_video
 from web_app import web_globals
 from web_app.utils import add_pref, nocache, get_n_rl_steps
 
 comparisons_app = Blueprint('comparisons', __name__)
-logger = easy_tf_log.Logger()
-logger.set_log_dir(web_globals._segments_dir)
+logger = None
 n_rl_steps_at_last_pref = None
 labelled_seg_hashes = set()
+segments_lock = multiprocessing.Lock()
+segments_being_compared = set()
+
+
+def init_comparisons_logger():
+    global logger
+    logger = easy_tf_log.Logger()
+    logger.set_log_dir(web_globals._segments_dir)
 
 
 def get_segment(hash):
@@ -83,7 +96,7 @@ def get_segment_video():
 
 @comparisons_app.route('/get_comparison', methods=['GET'])
 def get_comparison():
-    global n_rl_steps_at_last_pref
+    global n_rl_steps_at_last_pref, segments_lock, segments_being_compared
     n_rl_steps = get_n_rl_steps()
     if global_variables.min_n_rl_steps_per_pref != 0:
         if n_rl_steps is not None and n_rl_steps_at_last_pref is not None:  # Maybe we haven't started training yet
@@ -94,7 +107,10 @@ def get_comparison():
                 return 'No segments available'
 
     try:
-        sampled_hashes = sample_seg_pair()
+        with segments_lock:
+            sampled_hashes = sample_seg_pair()
+            segments_being_compared.add(sampled_hashes[0])
+            segments_being_compared.add(sampled_hashes[1])
     except IndexError as e:
         msg = str(e)
         print(msg)
@@ -117,6 +133,9 @@ def choose_segment():
     hash2 = request.form['hash2']
     pref = json.loads(request.form['pref'])
     print(hash1, hash2, pref)
+
+    segments_being_compared.remove(hash1)
+    segments_being_compared.remove(hash2)
 
     if pref is None:
         chosen_segment_n = 'n'
@@ -143,3 +162,73 @@ def choose_segment():
         logger.logkv('interaction_limit/n_rl_steps_at_last_pref', n_rl_steps_at_last_pref)
 
     return ""
+
+
+def prune_old_segments(segments_dir, n_to_keep):
+    global segments_being_compared
+    pkl_files = glob.glob(os.path.join(segments_dir, '*.pkl'))
+    pkl_files.sort(key=lambda fname: os.path.getmtime(fname))
+    n_to_prune = len(pkl_files) - n_to_keep
+    if n_to_prune <= 0:
+        return
+    prune_pkl_files = pkl_files[:n_to_prune]
+    prune_hashes = [str(os.path.basename(f)).split('.')[0] for f in prune_pkl_files]
+    with segments_lock:
+        for hash in prune_hashes:
+            if hash in segments_being_compared:
+                continue
+            for prune_file in glob.glob(os.path.join(segments_dir, hash + '.*')):
+                if global_variables.render_segments:
+                    archive_segment_file(segments_dir, prune_file)
+                else:
+                    os.remove(prune_file)
+
+
+def archive_segment_file(segments_dir, seg_file):
+    old_segs_dir = os.path.join(segments_dir, 'old_segs')
+    os.makedirs(old_segs_dir, exist_ok=True)
+    # It's unlikely we'll get two segments with the same ID, but not impossible
+    dst = os.path.join(old_segs_dir, os.path.basename(seg_file))
+    if os.path.exists(dst):
+        os.remove(dst)
+    shutil.move(seg_file, dst)
+
+
+def monitor_segments_dir_loop(dir, n_to_keep):
+    global segments_being_compared
+    logger = easy_tf_log.Logger()
+    logger.set_log_dir(dir)
+    while True:
+        time.sleep(5)
+        prune_old_segments(dir, n_to_keep)
+        n_segments = len(glob.glob(os.path.join(dir, '*.pkl')))
+        logger.logkv('episode_segments/n_segments', n_segments)
+        logger.logkv('episode_segments/n_segments_being_compared', len(segments_being_compared))
+
+
+def write_segments_loop(queue, dir):
+    while True:
+        obses, rewards, frames = queue.get()
+        frames = make_small_change(frames)
+        segment = CompressedRollout(final_env_state=None,
+                                    obses=obses,
+                                    rewards=rewards,
+                                    frames=frames,
+                                    vid_filename=None,
+                                    generating_policy=None,
+                                    actions=None)
+        base_name = os.path.join(dir, str(segment.hash))
+        vid_filename = base_name + '.mp4'
+        save_video(segment.frames, vid_filename)
+        segment.vid_filename = os.path.basename(vid_filename)
+        with open(base_name + '.pkl', 'wb') as f:
+            pickle.dump(segment, f)
+        # Needs to be atomic because it's read asynchronously by comparisons.py
+        p = os.path.join(dir, 'all_segment_hashes.txt')
+        if os.path.exists(p):
+            with open(p, 'r') as f:
+                all_segments = f.read()
+        else:
+            all_segments = ''
+        with atomic_write.atomic_write(p) as f:
+            f.write(all_segments + str(segment.hash) + '\n')
