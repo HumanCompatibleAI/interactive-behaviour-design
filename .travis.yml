@@ -9,11 +9,12 @@ python:
 install:
   - docker pull mrahtz/ibd:latest
 
+env:
+  - TEST_COMMAND="pipenv run python -u -m unittest discover -v -p '*_test_long.py'"
+  - TEST_COMMAND="pipenv run python -u -m unittest discover -v -p '*_test.py'"
+
 script:
   - wget -q $MUJOCO_KEY_URL -O mjkey.txt
   - |
     docker run --volume $(pwd):/interactive-behaviour-design mrahtz/ibd \
-    bash -c '
-      cd interactive-behaviour-design &&
-      pipenv run python -u -m unittest discover -v -p "*_test.py"
-    '
+        bash -c "cd interactive-behaviour-design && $TEST_COMMAND"
