@@ -13,11 +13,14 @@ from gym import Wrapper, ObservationWrapper
 from gym.spaces import Box
 from gym.utils.play import play
 
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from drlhp.reward_predictor import RewardPredictor
-from drlhp.reward_predictor_core_network import net_cnn
+from drlhp.reward_predictor_core_network import net_cnn, net_mlp
 from wrappers.seaquest_reward import register as seaquest_register
 from wrappers.breakout_reward import register as breakout_register
+from wrappers.fetch_reach import register as fetch_reach_register
+from wrappers.util_wrappers import FetchDiscreteActions
 
 
 class DrawPredictedReward(Wrapper):
@@ -75,15 +78,26 @@ args = parser.parse_args()
 
 seaquest_register()
 breakout_register()
+fetch_reach_register()
 env = gym.make(args.env_id)
-reward_predictor = RewardPredictor(network=net_cnn,
-                                   network_args={'batchnorm': False, 'dropout': 0.5},
+
+if 'Fetch' in args.env_id:
+    net = net_mlp
+    network_args = {}
+else:
+    net = net_cnn
+    network_args = {'batchnorm': False, 'dropout': 0.5}
+reward_predictor = RewardPredictor(network=net,
+                                   network_args=network_args,
                                    log_dir=tempfile.mkdtemp(),
                                    obs_shape=env.observation_space.shape,
                                    r_std=999,  # should be ignored
                                    name='test')
 reward_predictor.load(args.drlhp_ckpt)
+
 env = DrawPredictedReward(env, reward_predictor)
 env = RenderObs(env)
+if 'Fetch' in args.env_id:
+    env = FetchDiscreteActions(env)
 
-play(env, zoom=4, fps=30)
+play(env, zoom=1, fps=30)
