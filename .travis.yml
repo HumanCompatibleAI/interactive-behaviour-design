@@ -4,19 +4,16 @@ services:
   - docker
 
 python:
-  - 3.6
-
-env:
-  - DOCKER_REPO="109526153624.dkr.ecr.us-west-2.amazonaws.com/repository-0"
+  - "3.6"
 
 install:
-  - pip install awscli
-  - eval $(aws ecr get-login --region us-west-2 --no-include-email)
-  - docker pull $DOCKER_REPO:latest
+  - docker pull mrahtz/ibd:latest
 
 script:
+  - wget -q $MUJOCO_KEY_URL -O mjkey.txt
   - |
-    docker run --volume $(pwd):/interactive-behaviour-design $DOCKER_REPO \
-    bash -c 'cd interactive-behaviour-design &&
+    docker run --volume $(pwd):/interactive-behaviour-design mrahtz/ibd \
+    bash -c '
+      cd interactive-behaviour-design &&
       pipenv run python -u -m unittest discover -v -p "*_test.py"
     '

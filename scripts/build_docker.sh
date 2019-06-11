@@ -17,6 +17,6 @@ if ! git status | grep -q 'working tree clean'; then
     exit 1
 fi
 
-docker build -t ibd . --build-arg MUJOCO_KEY=$mujoco_key_url
+docker build -t ibd . --build-arg MUJOCO_KEY_URL=$mujoco_key_url
 docker tag ibd:latest 109526153624.dkr.ecr.us-west-2.amazonaws.com/repository-0:latest
 docker push 109526153624.dkr.ecr.us-west-2.amazonaws.com/repository-0:latest

@@ -10,8 +10,6 @@ RUN mkdir -p /root/.mujoco \
     && rm mujoco150.zip
 ENV LD_LIBRARY_PATH /root/.mujoco/mjpro150/bin
 
-ARG MUJOCO_KEY
-RUN wget -O /root/.mujoco/mjkey.txt ${MUJOCO_KEY}
 
 COPY docker_entrypoint /entrypoint
 ENTRYPOINT ["/entrypoint"]
@@ -21,6 +19,9 @@ ENV LC_ALL C.UTF-8
 ENV LANG C.UTF-8
 
 COPY . /interactive-behaviour-design
+
+ARG MUJOCO_KEY_URL
+RUN wget -O /root/.mujoco/mjkey.txt ${MUJOCO_KEY_URL}
 
 # This isn't a perfect solution: different branches could have their own versions of the submodules
 # which could have different requirements. But this is good enough for now.
@@ -35,3 +36,6 @@ RUN cd interactive-behaviour-design && pipenv run pip uninstall -y gym && cd gym
 # We download code from S3; remove current code to avoid any confusion
 # (Keep Pipfile so we can still activate the virtualenv)
 RUN find interactive-behaviour-design -maxdepth 1 -mindepth 1 -not -name 'Pipfile' -exec rm -rf {} \;
+
+# The container is public, so we need to be careful about this
+RUN rm /root/.mujoco/mjkey.txt

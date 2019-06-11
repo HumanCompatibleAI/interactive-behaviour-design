@@ -2,6 +2,16 @@
 
 set -e
 
+if [[ ! -e /interactive-behaviour-design/run.py ]]; then
+    echo "Error: please mount code at /interactive-behaviour-design" >&2
+    exit 1
+fi
+if [[ ! -e /interactive-behaviour-design/mjkey.txt ]]; then
+    echo "Error: please place mjkey.txt in code directory" >&2
+    exit 1
+fi
+cp /interactive-behaviour-design/mjkey.txt /root/.mujoco/
+
 # Set up display; otherwise rendering will fail
 Xvfb -screen 0 1024x768x24 &
 export DISPLAY=:0
