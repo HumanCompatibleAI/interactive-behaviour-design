@@ -15,7 +15,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from policies.td3 import TD3Policy
 from policies.base_policy import PolicyTrainMode
-from policies.td3_test import gen_demonstrations, Oracle
+from policies.td3_test_long import gen_demonstrations, Oracle
 from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import get_git_rev
 from wrappers.fetch_pick_and_place_register import register

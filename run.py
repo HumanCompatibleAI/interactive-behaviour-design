@@ -40,7 +40,7 @@ from params import parse_args
 from policies.fetch import FetchAction, FetchTD3Policy
 from policies.policy_collection import PolicyCollection
 from policies.ppo import PPOPolicy
-from policies.td3_test import Oracle
+from policies.td3_test_long import Oracle
 from policy_rollouter import PolicyRollouter
 from reward_switcher import RewardSelector
 from rollouts import RolloutsByHash, CompressedRollout

@@ -3,8 +3,6 @@ from multiprocessing import Process, Pipe
 import numpy as np
 
 from baselines.common.vec_env import VecEnv, CloudpickleWrapper, VecEnvWrapper
-from utils import unwrap_to
-from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 
 """
 SubprocVencEnv which doesn't automatically reset the environment, so that we actually get the 'done' observation

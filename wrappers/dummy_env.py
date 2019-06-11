@@ -2,6 +2,7 @@ import cv2
 from gym import Env
 from gym.envs.registration import EnvSpec
 import numpy as np
+from gym.spaces import Discrete
 
 
 class DummyEnv(Env):
@@ -10,6 +11,7 @@ class DummyEnv(Env):
         self.max_steps = max_steps
         self.step_offset = step_offset
         self.spec = EnvSpec('DummyEnv-v0')
+        self.action_space = Discrete(1)
 
     def step(self, action):
         obs = self._obs()

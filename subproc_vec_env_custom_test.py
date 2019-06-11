@@ -2,9 +2,10 @@ import unittest
 
 import numpy as np
 from gym import Env
+from gym.spaces import Discrete
 
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as BaselinesSubprocVecEnv
-from subproc_vec_env_custom import SubprocVecEnvNoAutoReset as CustomSubprocVecEnv
+from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 
 
 class DummyEnv(Env):
@@ -12,6 +13,7 @@ class DummyEnv(Env):
         super().__init__()
         self.step_n = None
         self.max_steps = max_steps
+        self.action_space = Discrete(1)
 
     def reset(self):
         self.step_n = 0

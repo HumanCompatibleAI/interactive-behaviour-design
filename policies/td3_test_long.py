@@ -116,7 +116,7 @@ def get_replay_buffer(env, env_id):
                        noise_sigma=0.2,
                        polyak=0.995,
                        n_initial_episodes=3)
-    policy.set_training_env(env)
+    policy.set_training_env(env, tempfile.mkdtemp())
     policy.init_logger(tempfile.mkdtemp())
     while policy.initial_exploration_phase:
         policy.train()
@@ -180,7 +180,7 @@ class TestTD3(unittest.TestCase):
                            **hyperparams)
 
         policy.init_logger(tmp_dir)
-        policy.set_training_env(train_env)
+        policy.set_training_env(train_env, tempfile.mktemp())
         policy.test_env = test_env
         last_epoch_n = 0
         test_return = None
@@ -233,7 +233,7 @@ class TestTD3(unittest.TestCase):
         test_env.seed(0)
         test_env = Monitor(test_env, directory=temp_dir, video_callable=lambda n: True)
         test_env = SaveEpisodeStats(test_env, log_dir=temp_dir, stdout=False)
-        policy.test_env = test_env
+        policy.set_test_env(test_env)
 
         policy.init_logger(temp_dir)
         gen_demonstrations(env_id, os.path.join(temp_dir, 'demos'), n_demos, policy.demonstrations_buffer, oracle)
@@ -244,7 +244,7 @@ class TestTD3(unittest.TestCase):
                 print(f"Epoch {last_epoch_n}")
             print(f"Cycle {policy.cycle_n}")
             policy.train_bc_only()
-        policy.test_agent(n=30)
+        policy.test_agent()
         self.assertGreater(test_env.stats['success_rate'], 0.6)
 
 

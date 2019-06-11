@@ -9,11 +9,10 @@ import unittest
 import numpy as np
 from gym import Env
 
-from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
-
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import global_variables
+from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from wrappers.dummy_env import DummyEnv
 from wrappers.util_wrappers import SaveMidStateWrapper, RepeatActions, VecSaveSegments
 from wrappers.state_boundary_wrapper import StateBoundaryWrapper
@@ -117,9 +116,11 @@ class TestVecSaveSegments(unittest.TestCase):
     def test(self):
         segments_queue = multiprocessing.Queue()
         n_envs = 3
-        venv = SubprocVecEnvNoAutoReset([lambda n=n: StateBoundaryWrapper(DummyEnv(global_variables.frames_per_segment - 1 + n,
-                                                                                   step_offset=(n * 100)))
-                                         for n in range(n_envs)])
+        global_variables.frames_per_segment = 30
+        venv = SubprocVecEnvNoAutoReset(
+            [lambda n=n: StateBoundaryWrapper(DummyEnv(global_variables.frames_per_segment - 2 + n,
+                                                       step_offset=(n * 100)))
+             for n in range(n_envs)])
         venv = VecSaveSegments(venv, segments_queue)
 
         for n in range(n_envs):
@@ -131,7 +132,7 @@ class TestVecSaveSegments(unittest.TestCase):
                     venv.reset_one_env(n)
 
         obses, rewards, frames = segments_queue.get()
-        # The first segment we get should be from the environment that reset after 29 steps
+        # The first segment we get should be from the environment that reset on the 28th step
         expected = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
                     23, 24, 25, 26, 27, 28, 28]
         np.testing.assert_array_equal(obses, expected)
