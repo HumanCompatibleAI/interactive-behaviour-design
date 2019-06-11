@@ -2,14 +2,14 @@ from enum import Enum
 
 
 class RolloutMode(Enum):
-    primitives = 0
-    cur_policy = 1
+    PRIMITIVES = 0
+    CUR_POLICY = 1
 
 
 class RolloutRandomness(Enum):
-    sample_action = 0
-    random_action = 1
-    correlated_random_action = 2
+    SAMPLE_ACTION = 0
+    RANDOM_ACTION = 1
+    CORRELATED_RANDOM_ACTION = 2
 
 
 segment_save_mode = None

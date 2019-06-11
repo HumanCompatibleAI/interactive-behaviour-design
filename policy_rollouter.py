@@ -140,7 +140,7 @@ class RolloutWorker:
             frames.append(env.render(mode='rgb_array'))
             action = self.policy.step(obs, deterministic=deterministic)
             if noise:
-                action = self.get_noisy_action(action, env)
+                action = self.add_noise_to_action(action, env)
             actions.append(action)
             obs, reward, done, info = env.step(action)
             # Fetch environments return numpy float reward which is not serializable
@@ -194,7 +194,7 @@ class RolloutWorker:
 
         self.rollout_queue.put((group_serial, rollout_hash))
 
-    def get_noisy_action(self, action, env):
+    def add_noise_to_action(self, action, env):
         assert env.action_space.dtype in [np.int64, np.float32]
         if env.action_space.dtype == np.float32:
             noise = self.ou_noise()
@@ -202,9 +202,9 @@ class RolloutWorker:
             action = np.clip(action, env.action_space.low[0], env.action_space.high[0])
         elif env.action_space.dtype == np.int64:
             if np.random.rand() < global_variables.rollout_random_action_prob:
-                if global_variables.rollout_randomness == RolloutRandomness.random_action:
+                if global_variables.rollout_randomness == RolloutRandomness.RANDOM_ACTION:
                     action = env.action_space.sample()
-                elif global_variables.rollout_randomness == RolloutRandomness.correlated_random_action:
+                elif global_variables.rollout_randomness == RolloutRandomness.CORRELATED_RANDOM_ACTION:
                     if self.last_action and np.random.rand() < global_variables.rollout_random_correlation:
                         action = self.last_action
                     else:
@@ -268,33 +268,34 @@ class PolicyRollouter:
         rollout_len_frames = int(self.rollout_len_seconds * ROLLOUT_FPS)
         show_frames = int(self.show_from_end_seconds * ROLLOUT_FPS)
 
-        if global_variables.rollout_mode == RolloutMode.primitives:
+        if global_variables.rollout_mode == RolloutMode.PRIMITIVES:
             for policy_name in policy_names:
-                noise = (last_policy_name == 'redo')
+                add_extra_noise = (last_policy_name == 'redo')
                 if 'LunarLander' in str(self.env):
                     deterministic = False  # Lunar Lander primitives don't work well if deterministic
                 else:
                     deterministic = (policy_name != 'random')
-                self.env_state_queue.put((policy_name, env_state, noise,
+                self.env_state_queue.put((policy_name, env_state, add_extra_noise,
                                           rollout_len_frames, show_frames, group_serial, deterministic))
                 n_rollouts += 1
-        elif global_variables.rollout_mode == RolloutMode.cur_policy:
-            if global_variables.rollout_randomness == RolloutRandomness.sample_action:
+        elif global_variables.rollout_mode == RolloutMode.CUR_POLICY:
+            if global_variables.rollout_randomness == RolloutRandomness.SAMPLE_ACTION:
                 deterministic = False
-                noise = False
-            elif global_variables.rollout_randomness == RolloutRandomness.random_action or global_variables.rollout_randomness == RolloutRandomness.correlated_random_action:
+                add_extra_noise = False
+            elif global_variables.rollout_randomness == RolloutRandomness.RANDOM_ACTION or \
+                    global_variables.rollout_randomness == RolloutRandomness.CORRELATED_RANDOM_ACTION:
                 deterministic = True
-                noise = True
+                add_extra_noise = True
             else:
                 raise Exception('Invalid rollout randomness', global_variables.rollout_randomness)
             for _ in range(global_variables.n_cur_policy):
-                self.env_state_queue.put((policy_names[0], env_state, noise,
+                self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
                                           rollout_len_frames, show_frames, group_serial, deterministic))
                 n_rollouts += 1
             # Also add a trajectory sampled directly from the policy
-            noise = False
+            add_extra_noise = False
             deterministic = True
-            self.env_state_queue.put((policy_names[0], env_state, noise,
+            self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
                                       rollout_len_frames, show_frames, group_serial, deterministic))
             n_rollouts += 1
         else:

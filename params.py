@@ -68,8 +68,8 @@ def parse_args():
     global_variables.render_segments = args.render_segments
     global_variables.rollout_random_action_prob = args.rollout_random_action_prob
     global_variables.rollout_random_correlation = args.rollout_random_correlation
-    global_variables.rollout_mode = RolloutMode[args.rollout_mode]
-    global_variables.rollout_randomness = RolloutRandomness[args.cur_policy_randomness]
+    global_variables.rollout_mode = RolloutMode[args.rollout_mode.upper()]
+    global_variables.rollout_randomness = RolloutRandomness[args.cur_policy_randomness.upper()]
     global_variables.n_cur_policy = args.n_cur_policy
     global_variables.frames_per_segment = int(args.rollout_length_seconds * global_constants.ROLLOUT_FPS)
     global_variables.rollout_noise_sigma = args.rollout_noise_sigma
