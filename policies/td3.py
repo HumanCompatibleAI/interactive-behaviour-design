@@ -332,12 +332,17 @@ class TD3Policy(Policy):
         return np.mean(loss_bc_pi_l)
 
     def train_bc_only(self):
+        # Takes about 200 ms
         bc_loss = self.train_bc_batch()
 
-        if self.cycle_n % 10 == 0:
+        # Takes about 7 seconds
+        # 300: run about every 60 seconds
+        if self.cycle_n % 300 == 0:
             self.run_train_env_episode()
 
-        if self.cycle_n % self.cycles_per_epoch == 0:
+        # Takes about 3 minutes (because saves videos and rendering is slooooow)
+        # 5,000: run about every 15 minutes
+        if self.cycle_n % 5000 == 0:
             self.epoch_n += 1
             self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
             self.test_agent()
