@@ -14,6 +14,7 @@ from spinup.algos.td3.core import get_vars
 
 import global_variables
 from baselines.common.running_stat import RunningStat
+from baselines.common.vec_env import VecEnv
 from baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise
 from utils import TimerContext, LimitedRunningStat
 
@@ -284,13 +285,18 @@ class TD3Policy(Policy):
         # Why do the env reset in this funny way? Because we need to end with a reset to trigger
         # SaveEpisodeStats to save the stats from the final episode.
         # (FYI: test_env is a SubprocVecEnv - see env.py for the reason)
+        rewards = []
         with timer:
             for _ in range(self.test_rollouts_per_epoch):
                 obs, done = self.last_test_obs, False
+                episode_reward = 0
                 while not done:
-                    [obs], _, [done], _ = self.test_env.step([self.step(obs, deterministic=True)])
+                    [obs], [reward], [done], _ = self.test_env.step([self.step(obs, deterministic=True)])
+                    episode_reward += reward
+                rewards.append(episode_reward)
                 self.last_test_obs = self.test_env.reset()[0]
         self.logger.logkv(f'policy_{self.name}/test_env_time_ms', timer.duration_s * 1000)
+        return rewards
 
     def run_train_env_episode(self):
         timer = TimerContext(name=None, stdout=False)
@@ -614,7 +620,7 @@ class TD3Policy(Policy):
         self.reward_logger = EpisodeRewardLogger(log_dir, n_steps=1, n_envs=self.n_envs)
         self.actions_log_file = open(os.path.join(log_dir, 'actions'), 'w')  # TODO debugging; deleteme
 
-    def set_test_env(self, env, log_dir):
+    def set_test_env(self, env: VecEnv, log_dir):
         assert env.unwrapped.num_envs == 1, env.unwrapped.num_envs
         self.test_env = env
         self.last_test_obs = self.test_env.reset()[0]

@@ -11,6 +11,9 @@ import numpy as np
 import tensorflow as tf
 from gym.wrappers import FlattenDictWrapper, Monitor
 
+import global_variables
+from reward_switcher import RewardSelector, RewardSource
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from policies.base_policy import PolicyTrainMode
 from policies.td3 import TD3Policy, LockedReplayBuffer
@@ -118,6 +121,9 @@ def get_replay_buffer(env, env_id):
                        n_initial_episodes=3)
     policy.set_training_env(env, tempfile.mkdtemp())
     policy.init_logger(tempfile.mkdtemp())
+    # noinspection PyTypeChecker
+    global_variables.reward_selector = RewardSelector(None, None)
+    global_variables.reward_selector.set_reward_source(RewardSource.ENV)
     while policy.initial_exploration_phase:
         policy.train()
     return copy.deepcopy(policy.replay_buffer)  # Should end at about -1.7 AverageTestEpRet
@@ -164,8 +170,7 @@ class TestTD3(unittest.TestCase):
         print("Logging to", tmp_dir)
         train_env = SubprocVecEnvNoAutoReset(env_fns=[lambda env_n=env_n: self.env_fn(env_id=env_id, seed=env_n)
                                                       for env_n in range(n_envs)])
-        test_env = self.env_fn(env_id=env_id, seed=n_envs)
-        # test_env = Monitor(test_env, tmp_dir, video_callable=lambda n: True)
+        test_env = SubprocVecEnvNoAutoReset([lambda: self.env_fn(env_id=env_id, seed=n_envs)])
 
         # Increase chance of TensorFlow being deterministic
         # https://stackoverflow.com/a/39938524/7832197
@@ -179,9 +184,12 @@ class TestTD3(unittest.TestCase):
                            sess_config=config,
                            **hyperparams)
 
+        # noinspection PyTypeChecker
+        global_variables.reward_selector = RewardSelector(None, None)
+        global_variables.reward_selector.set_reward_source(RewardSource.ENV)
         policy.init_logger(tmp_dir)
-        policy.set_training_env(train_env, tempfile.mktemp())
-        policy.test_env = test_env
+        policy.set_training_env(train_env, tmp_dir)
+        policy.set_test_env(test_env, tmp_dir)
         last_epoch_n = 0
         test_return = None
         while policy.epoch_n <= n_epochs:
@@ -189,13 +197,15 @@ class TestTD3(unittest.TestCase):
             if policy.epoch_n != last_epoch_n:
                 print("Epoch", policy.epoch_n - 1)
                 print("  Total steps:", policy.n_serial_steps)
-                test_return = np.mean(policy.test_agent(n=5))
+                test_return = np.mean(policy.test_agent())
                 print("  Average test return:", test_return)
                 last_epoch_n = policy.epoch_n
                 with policy.graph.as_default():
                     var_sum = policy.sess.run(tf.reduce_sum([tf.reduce_sum(v) for v in tf.trainable_variables()]))
                     print("  Policy hash:", var_sum)
             sys.stdout.flush()
+        test_return = np.mean(policy.test_agent())
+        print("Average test return:", np.mean(test_return))
         train_env.close()
         test_env.close()
 
@@ -229,11 +239,15 @@ class TestTD3(unittest.TestCase):
 
         policy = make_policy()
 
-        test_env = gym.make(env_id)
-        test_env.seed(0)
-        test_env = Monitor(test_env, directory=temp_dir, video_callable=lambda n: True)
-        test_env = SaveEpisodeStats(test_env, log_dir=temp_dir, stdout=False)
-        policy.set_test_env(test_env)
+        def f():
+            test_env = gym.make(env_id)
+            test_env.seed(0)
+            test_env = Monitor(test_env, directory=temp_dir, video_callable=lambda n: True)
+            test_env = SaveEpisodeStats(test_env, log_dir=temp_dir, stdout=False)
+            return test_env
+
+        test_env = SubprocVecEnvNoAutoReset([f])
+        policy.set_test_env(test_env, temp_dir)
 
         policy.init_logger(temp_dir)
         gen_demonstrations(env_id, os.path.join(temp_dir, 'demos'), n_demos, policy.demonstrations_buffer, oracle)
