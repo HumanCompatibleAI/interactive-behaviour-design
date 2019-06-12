@@ -113,7 +113,7 @@ def main():
         classifier_network = mlp
         reward_predictor_network = net_mlp
         reward_predictor_network_args = {}
-        reward_predictor_std = 1.0
+        reward_predictor_std = 0.1
         policy_type = FetchTD3Policy
     elif isinstance(dummy_env.unwrapped, AtariEnv):
         classifier_network = nature_cnn
