@@ -72,7 +72,7 @@ class RolloutWorker:
         env = None
 
         while True:
-            policy_name, env_state, noise, rollout_len_frames, show_frames, group_serial, deterministic = env_state_queue.get()
+            policy_name, env_state, noise, rollout_len_frames, show_frames, group_serial, deterministic, just_explore = env_state_queue.get()
 
             if env is not None:
                 if hasattr(env.unwrapped, 'close'):
@@ -90,7 +90,7 @@ class RolloutWorker:
             else:
                 self.load_policy_checkpoint(policy_name)
                 self.rollout(policy_name, env, env_state.obs, group_serial,
-                             noise, rollout_len_frames, show_frames, deterministic)
+                             noise, rollout_len_frames, show_frames, deterministic, just_explore)
             # is sometimes slow to flush in processes; be more proactive so output is less confusing
             sys.stdout.flush()
 
@@ -128,7 +128,7 @@ class RolloutWorker:
 
         self.rollout_queue.put((group_serial, rollout_hash))
 
-    def rollout(self, policy_name, env, obs, group_serial, noise, rollout_len_frames, show_frames, deterministic):
+    def rollout(self, policy_name, env, obs, group_serial, noise, rollout_len_frames, show_frames, deterministic, just_explore):
         obses = []
         frames = []
         actions = []
@@ -138,7 +138,10 @@ class RolloutWorker:
         for _ in range(rollout_len_frames):
             obses.append(np.copy(obs))
             frames.append(env.render(mode='rgb_array'))
-            action = self.policy.step(obs, deterministic=deterministic)
+            if just_explore:
+                action = np.zeros(env.action_space.shape)
+            else:
+                action = self.policy.step(obs, deterministic=deterministic)
             if noise:
                 action = self.add_noise_to_action(action, env)
             actions.append(action)
@@ -235,6 +238,7 @@ class PolicyRollouter:
         if show_from_end_seconds is None:
             show_from_end_seconds = rollout_len_seconds
         self.show_from_end_seconds = show_from_end_seconds
+        self.just_explore = True
 
         # 'spawn' -> start a fresh process
         # (TensorFlow is not fork-safe)
@@ -269,6 +273,7 @@ class PolicyRollouter:
         show_frames = int(self.show_from_end_seconds * ROLLOUT_FPS)
 
         if global_variables.rollout_mode == RolloutMode.PRIMITIVES:
+            self.just_explore = False
             for policy_name in policy_names:
                 add_extra_noise = (last_policy_name == 'redo')
                 if 'LunarLander' in str(self.env):
@@ -276,7 +281,7 @@ class PolicyRollouter:
                 else:
                     deterministic = (policy_name != 'random')
                 self.env_state_queue.put((policy_name, env_state, add_extra_noise,
-                                          rollout_len_frames, show_frames, group_serial, deterministic))
+                                          rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore))
                 n_rollouts += 1
         elif global_variables.rollout_mode == RolloutMode.CUR_POLICY:
             if global_variables.rollout_randomness == RolloutRandomness.SAMPLE_ACTION:
@@ -290,13 +295,13 @@ class PolicyRollouter:
                 raise Exception('Invalid rollout randomness', global_variables.rollout_randomness)
             for _ in range(global_variables.n_cur_policy):
                 self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
-                                          rollout_len_frames, show_frames, group_serial, deterministic))
+                                          rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore))
                 n_rollouts += 1
             # Also add a trajectory sampled directly from the policy
             add_extra_noise = False
             deterministic = True
             self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
-                                      rollout_len_frames, show_frames, group_serial, deterministic))
+                                      rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore))
             n_rollouts += 1
         else:
             raise Exception("Invalid rollout mode", global_variables.rollout_mode)

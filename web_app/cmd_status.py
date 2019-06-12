@@ -16,7 +16,7 @@ from web_app.web_globals import _classifiers, _cur_label, _demonstration_rollout
     _reward_selector, \
     global_experience_buffer, _save_state_from_proportion_through_episode_value, \
     _demonstrations_reset_mode_value, \
-    _run_drlhp_training, _checkpointer
+    _run_drlhp_training, _checkpointer, _policy_rollouter
 from wrappers.util_wrappers import ResetMode, QueueEndpoint
 
 cmd_status_app = Blueprint('cmd_status', __name__)
@@ -222,6 +222,15 @@ def run_cmd():
             return (str(e))
         finally:
             sys.stdout = orig_stdout
+    elif cmd == 'config_demos':
+        explore = request.args['explore']
+        if explore == 'True':
+            explore = True
+        elif explore == 'False':
+            explore = False
+        else:
+            raise Exception(f"Invalid explore value '{explore}")
+        _policy_rollouter.just_explore = explore
     else:
         return "Unknown command '{}'".format(cmd)
 
