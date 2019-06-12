@@ -31,16 +31,136 @@ from tensorflow.python.util import deprecation
 
 matplotlib.use('Agg')
 
-from pylab import plot, xlabel, ylabel, figure, legend, savefig, grid, ylim, xlim, ticklabel_format
+from pylab import plot, xlabel, ylabel, figure, legend, savefig, grid, ylim, xlim, ticklabel_format, show
 
 deprecation._PRINT_DEPRECATION_WARNINGS = False
 
 # Get thousands separated by commas
 locale.format_string = partial(locale.format_string, grouping=True)
-locale.setlocale(locale.LC_ALL, 'en_GB.utf8')
 
 
-# Event-reading utils
+# locale.setlocale(locale.LC_ALL, 'en_GB.utf8')
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('runs_dir', nargs='?')
+    parser.add_argument('--max_steps', type=float)
+    parser.add_argument('--max_hours', type=float)
+    parser.add_argument('--train_env_key', default='env_train')
+    parser.add_argument('--test', action='store_true')
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument('--with_individual_seeds', action='store_true')
+    group.add_argument('--individual_seeds_only', action='store_true')
+    parser.add_argument('--smooth_individual_seeds', action='store_true')
+    args = parser.parse_args()
+
+    if args.test:
+        sys.argv.pop(1)
+        unittest.main()
+
+    for f in glob.glob('*.png'):
+        os.remove(f)
+
+    events_by_env_name_by_run_type_by_seed = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
+    for run_dir in [path for path in os.scandir(args.runs_dir) if os.path.isdir(path.path)]:
+        print(f"Reading events for {run_dir.name}...")
+        events = read_all_events(run_dir.path)
+        try:
+            env_name, run_type, seed = parse_run_name(run_dir.name)
+        except Exception as e:
+            print(e)
+            continue
+        if 'DRLHP' in run_type:
+            filter_pretraining_events(run_dir.path, events)
+        drop_first_event(events)
+        make_timestamps_relative_hours(events)
+        events_by_env_name_by_run_type_by_seed[env_name][run_type][seed] = (events, run_dir.name)
+
+    if args.max_steps:
+        add_steps_to_bc_run(events_by_env_name_by_run_type_by_seed, args.max_steps)
+
+    for env_name, events_by_run_type_by_seed in events_by_env_name_by_run_type_by_seed.items():
+        plot_env(args, env_name, events_by_run_type_by_seed)
+
+def downsample_to_changes(timestamps, values):
+    downsampled = []
+    last_v = None
+    for t, v in zip(timestamps, values):
+        if last_v is None or v != last_v:
+            downsampled.append((t, v))
+        last_v = v
+    timestamps, values = list(zip(*downsampled))
+    return timestamps, values
+
+def plot_env(args, env_name, events_by_run_type_by_seed):
+    print(f"Plotting {env_name}...")
+    metrics = detect_metrics(env_name, args.train_env_key)
+    time_values_fn = partial(get_values_by_time, max_hours=args.max_hours)
+    steps_value_fn = partial(get_values_by_step, max_steps=args.max_steps)
+    plot_modes = [
+        (time_values_fn, 'time', 'Hours', args.max_hours),
+        (steps_value_fn, 'steps', 'Total environment steps', args.max_steps),
+        (get_values_by_n_human_interactions, 'interactions', 'No. human interactions', None)
+    ]
+    for value_fn, x_type, x_label, x_lim in plot_modes:
+        for metric_n, metric in enumerate(metrics):
+            print(f"Metric '{metric.tag}'")
+            figure(metric_n)
+            all_min_y = float('inf')
+            all_max_y = -float('inf')
+            for run_type_n, (run_type, events_by_seed) in enumerate(events_by_run_type_by_seed.items()):
+                if run_type in ['BC', 'BCNP'] and value_fn == steps_value_fn:
+                    continue
+                if run_type == 'RL' and value_fn == get_values_by_n_human_interactions:
+                    continue
+                print(f"Run type '{run_type}'")
+
+                xs_list, ys_list = get_values(events_by_seed, metric, run_type, value_fn)
+                color = colors.to_rgba(f"C{run_type_n}")
+                n_seeds = len(xs_list)
+                if args.with_individual_seeds or args.individual_seeds_only:
+                    if args.individual_seeds_only:
+                        linewidth = 1
+                        labels = [f'{run_type}-{seed}' for seed in range(n_seeds)]
+                    else:
+                        linewidth = 0.5
+                        labels = [None] * n_seeds  # Labels will get set by plot_averaged
+                    individual_run_opacities = np.linspace(0.3, 1.0, n_seeds)
+                    for seed in range(n_seeds):
+                        timestamps, values = xs_list[seed], ys_list[seed]
+                        if args.smooth_individual_seeds:
+                            values = smooth_values_exponential(values, 0.97)
+                        plot(timestamps, values, color=color, linewidth=linewidth,
+                             alpha=individual_run_opacities[seed], label=labels[seed])
+                if not args.individual_seeds_only:
+                    plot_averaged(xs_list, ys_list,
+                                  metric.window_size, metric.fill_window_size,
+                                  color, run_type)
+
+                all_min_y = min(all_min_y, np.min([np.min(ys) for ys in ys_list]))
+                all_max_y = max(all_max_y, np.max([np.max(ys) for ys in ys_list]))
+
+            grid(True)
+            ticklabel_format(axis='x', style='scientific', scilimits=(0, 5), useLocale=True)
+            xlabel(x_label)
+            ylabel(metric.name)
+            xlim(left=0)
+            if x_lim is not None:
+                xlim(right=x_lim)
+            y_range = all_max_y - all_min_y
+            all_min_y -= y_range / 10
+            all_max_y += y_range / 10
+            ylim([all_min_y, all_max_y])
+            title(env_name)
+            legend(bbox_to_anchor=(1.0, 0.5), loc='center left')
+
+            escaped_env_name = escape_name(env_name)
+            escaped_metric_name = escape_name(metric.name)
+            fig_filename = '{}_{}_by_{}.png'.format(escaped_env_name, escaped_metric_name, x_type)
+            savefig(fig_filename, dpi=300, bbox_inches='tight')
+
+        close('all')
+
 
 def find_files_matching_pattern(pattern, path):
     result = []
@@ -74,8 +194,6 @@ def read_all_events(directory):
     return all_events
 
 
-# Value interpolation helper functions
-
 def interpolate_values(x_y_tuples, new_xs):
     xs, ys = zip(*x_y_tuples)
     if new_xs[-1] < xs[0]:
@@ -97,12 +215,17 @@ class TestInterpolateValues(unittest.TestCase):
         np.testing.assert_almost_equal(interpolated_values, [np.nan, 0.0, 5.0, 10.0, 11.0, 30.0, np.nan])
 
 
-# Plotting helper functions
-
 def smooth_values(values, window_size):
     window = np.ones(window_size)
     actual_window_sizes = np.convolve(np.ones(len(values)), window, 'same')
     smoothed_values = np.convolve(values, window, 'same') / actual_window_sizes
+    return smoothed_values
+
+
+def smooth_values_exponential(values, smoothing):
+    smoothed_values = [values[0]]
+    for v in values[1:]:
+        smoothed_values.append(smoothing * smoothed_values[-1] + (1 - smoothing) * v)
     return smoothed_values
 
 
@@ -158,9 +281,13 @@ def detect_metrics(env_name, train_env_key):
         metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
     if env_name == 'Enduro':
         metrics.append(M(f'{train_env_key}/reward_sum', 'Episode reward', 100, 100))
-    if env_name == 'Fetch':
+    if env_name == 'Fetch pick-and-place':
         metrics.append(M(f'env_test/ep_frac_aligned_with_block', 'Fraction of episode aligned with block', 100, 100))
         metrics.append(M(f'env_test/ep_frac_gripping_block', 'Fraction of episode gripping block', 100, 100))
+        metrics.append(M(f'env_test/success_rate', 'Success rate (end of episode)', 10, 10))
+        metrics.append(M(f'env_test/success_near_end_rate', 'Success rate (near end of episode)', 10, 10))
+        metrics.append(M(f'env_test/success_partial_rate', 'Success rate (anywhere in episode)', 10, 10))
+    if env_name == 'Fetch reach':
         metrics.append(M(f'env_test/success_rate', 'Success rate (end of episode)', 10, 10))
         metrics.append(M(f'env_test/success_near_end_rate', 'Success rate (near end of episode)', 10, 10))
         metrics.append(M(f'env_test/success_partial_rate', 'Success rate (anywhere in episode)', 10, 10))
@@ -273,8 +400,6 @@ def plot_averaged(xs_list, ys_list, window_size, fill_window_size, color, label)
     else:
         min_val, max_val = np.min(smoothed_mean_ys), np.max(smoothed_mean_ys)
 
-    grid(True)
-
     return min_val, max_val
 
 
@@ -287,14 +412,17 @@ def parse_run_name(run_dir):
     run_type = match.group(3)
 
     env_shortname_to_env_name = {
-        'fetchpp': 'Fetch',
-        'fetch': 'Fetch',
+        'fetchpp': 'Fetch pick-and-place',
+        'fetchr': 'Fetch reach',
         'lunarlander': 'Lunar Lander',
         'enduro': 'Enduro',
         'breakout': 'Breakout',
         'seaquest': 'Seaquest'
     }
+    if env_shortname not in env_shortname_to_env_name:
+        raise Exception(f"Error: unsure of full env name for '{env_shortname}'")
     env_name = env_shortname_to_env_name[env_shortname]
+    run_type = run_type.replace('-fetchreach', '')
     run_type = run_type.upper()
 
     return env_name, run_type, seed
@@ -325,14 +453,66 @@ def get_values_by_step(events, metric, run_type, max_steps):
     return steps, values
 
 
+def combine_counters(timestamp_count_tuples_1, timestamp_count_tuples_2):
+    check_increasing(timestamp_count_tuples_1)
+    check_increasing(timestamp_count_tuples_2)
+
+    timestamps_1 = [tup[0] for tup in timestamp_count_tuples_1]
+    counts_1 = [tup[1] for tup in timestamp_count_tuples_1]
+    deltas_1 = np.array(counts_1) - np.array([0] + counts_1[:-1])
+    timestamp_delta_tuples_1 = list(zip(timestamps_1, deltas_1))
+
+    timestamps_2 = [tup[0] for tup in timestamp_count_tuples_2]
+    counts_2 = [tup[1] for tup in timestamp_count_tuples_2]
+    deltas_2 = np.array(counts_2) - np.array([0] + counts_2[:-1])
+    timestamp_delta_tuples_2 = list(zip(timestamps_2, deltas_2))
+
+    all_tuples = timestamp_delta_tuples_1 + timestamp_delta_tuples_2
+    all_tuples.sort(key=lambda tup: tup[0])
+    combined_tuples = []
+    combined_count = 0
+    for tup in all_tuples:
+        timestamp, count = tup
+        combined_count += tup[1]
+        combined_tuples.append((timestamp, combined_count))
+
+    return combined_tuples
+
+
+def check_increasing(timestamp_value_tuples):
+    for i in range(1, len(timestamp_value_tuples)):
+        tup_after = timestamp_value_tuples[i]
+        tup_before = timestamp_value_tuples[i - 1]
+        assert tup_after[1] >= tup_before[1], (tup_before, tup_after)
+
+
+class TestCombineCounterEvents(unittest.TestCase):
+    def test(self):
+        counts1 = [(0, 10),
+                   (1, 20),
+                   (2, 30)]
+        counts2 = [(0.5, 5),
+                   (1.5, 6),
+                   (2.5, 7)]
+        combined = combine_counters(counts1, counts2)
+        self.assertEqual(combined, [(0, 10),
+                                    (0.5, 15),
+                                    (1, 25),
+                                    (1.5, 26),
+                                    (2, 36),
+                                    (2.5, 37)])
+
+
 def get_values_by_n_human_interactions(events, metric, run_type):
     if run_type == 'DRLHP':
-        n_interactions_tag = 'pref_db/added_prefs'
-    elif run_type in ['SDRLHP', 'SDRLHPNP', 'BC']:
-        n_interactions_tag = 'demonstrations/added_demonstrations'
+        n_interactions = events['pref_db/added_prefs']
+    elif run_type in ['SDRLHP', 'SDRLHPNP', 'BC', 'BCNP']:
+        n_interactions = events['demonstrations/added_demonstrations']
+    elif run_type in ['SDRLHP-DRLHP', 'SDRLHPNP-DRLHP']:
+        n_interactions = combine_counters(events['pref_db/added_prefs'], events['demonstrations/added_demonstrations'])
     else:
         raise Exception(f"Unsure which tag represents no. human interactions for run type '{run_type}'")
-    xs, ys = interpolate_to_common_xs(events[metric.tag], events[n_interactions_tag])
+    xs, ys = interpolate_to_common_xs(events[metric.tag], n_interactions)
     return xs, ys
 
 
@@ -393,110 +573,21 @@ def drop_first_event(events):
         events[key] = events[key][1:]
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument('--runs_dir')
-    group.add_argument('--test', action='store_true')
-    parser.add_argument('--max_steps', type=float)
-    parser.add_argument('--max_hours', type=float)
-    parser.add_argument('--train_env_key', default='env_train')
-    parser.add_argument('--individual_seeds', action='store_true')
-    args = parser.parse_args()
+def get_values(events_by_seed, metric, run_type, value_fn):
+    xs_list = []
+    ys_list = []
+    for seed, (events, run_dir) in events_by_seed.items():
+        if metric.tag not in events:
+            print(f"Error: couldn't find metric '{metric.tag}' in run '{run_dir}'", file=sys.stderr)
+            exit(1)
+        xs, ys = value_fn(events, metric, run_type)
+        xs_list.append(xs)
+        ys_list.append(ys)
+    return xs_list, ys_list
 
-    if args.test:
-        sys.argv.pop(1)
-        unittest.main()
 
-    for f in glob.glob('*.png'):
-        os.remove(f)
-
-    events_by_env_name_by_run_type_by_seed = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
-    for run_dir in [path for path in os.scandir(args.runs_dir) if os.path.isdir(path.path)]:
-        print(f"Reading events for {run_dir.name}...")
-        events = read_all_events(run_dir.path)
-        try:
-            env_name, run_type, seed = parse_run_name(run_dir.name)
-        except Exception as e:
-            print(e)
-            continue
-        if run_type in ['DRLHP', 'DRLHPD', 'SDRLHP', 'SDRLHP-BC', 'SDRLHPNP']:
-            filter_pretraining_events(run_dir.path, events)
-        drop_first_event(events)
-        make_timestamps_relative_hours(events)
-        events_by_env_name_by_run_type_by_seed[env_name][run_type][seed] = (events, run_dir.name)
-
-    if args.max_steps:
-        add_steps_to_bc_run(events_by_env_name_by_run_type_by_seed, args.max_steps)
-
-    time_values_fn = partial(get_values_by_time, max_hours=args.max_hours)
-    steps_value_fn = partial(get_values_by_step, max_steps=args.max_steps)
-
-    for env_name, events_by_run_type_by_seed in events_by_env_name_by_run_type_by_seed.items():
-        print(f"Plotting {env_name}...")
-        metrics = detect_metrics(env_name, args.train_env_key)
-        for value_fn, x_type, x_label, x_lim in [
-            (time_values_fn, 'time', 'Hours', args.max_hours),
-            (steps_value_fn, 'steps', 'Total environment steps', args.max_steps),
-            (get_values_by_n_human_interactions, 'interactions', 'No. human interactions', None)
-        ]:
-            for metric_n, metric in enumerate(metrics):
-                print(f"Metric '{metric.tag}'")
-                figure(metric_n)
-                ticklabel_format(axis='x', style='scientific', scilimits=(0, 5), useLocale=True)
-                all_min_y = float('inf')
-                all_max_y = -float('inf')
-                for run_type_n, (run_type, events_by_seed) in enumerate(events_by_run_type_by_seed.items()):
-                    if run_type == 'BC' and value_fn in [steps_value_fn]:
-                        continue
-                    if run_type == 'RL' and value_fn in [get_values_by_n_human_interactions]:
-                        continue
-                    print(f"Run type '{run_type}'")
-                    color = colors.to_rgba(f"C{run_type_n}")
-                    xs_list = []
-                    ys_list = []
-                    for seed, (events, run_dir) in events_by_seed.items():
-                        if metric.tag not in events:
-                            print(f"Error: couldn't find metric '{metric.tag}' in run '{run_dir}'", file=sys.stderr)
-                            exit(1)
-                        xs, ys = value_fn(events, metric, run_type)
-                        print(f"Seed {seed}:", np.array(xs).shape, np.array(ys).shape)
-                        xs_list.append(xs)
-                        ys_list.append(ys)
-
-                    if args.individual_seeds:
-                        individual_run_opacities = np.linspace(0.3, 1.0, len(xs_list))
-                        for n in range(len(xs_list)):
-                            plot(xs_list[n], ys_list[n], color=color, linewidth=0.5, alpha=individual_run_opacities[n])
-                    all_min_y = min(all_min_y, np.min([np.min(ys) for ys in ys_list]))
-                    all_max_y = max(all_max_y, np.max([np.max(ys) for ys in ys_list]))
-
-                    plot_averaged(xs_list, ys_list,
-                                  metric.window_size, metric.fill_window_size,
-                                  color, run_type)
-
-                if all_min_y == float('inf'):
-                    # If we didn't plot anything because we were plotting by steps and none of the runs logged steps
-                    continue
-
-                legend()
-                xlabel(x_label)
-                ylabel(metric.name)
-                xlim(left=0)
-                if x_lim is not None:
-                    xlim(right=x_lim)
-                y_range = all_max_y - all_min_y
-                all_min_y -= y_range / 10
-                all_max_y += y_range / 10
-                ylim([all_min_y, all_max_y])
-                title(env_name)
-
-                escaped_env_name = env_name.replace(' ', '_').lower()
-                escaped_metric_name = metric.name.replace(' ', '_').replace('.', '').replace('(', '').replace(')',
-                                                                                                              '').lower()
-                fig_filename = '{}_{}_by_{}.png'.format(escaped_env_name, escaped_metric_name, x_type)
-                savefig(fig_filename, dpi=300, bbox_inches='tight')
-            close('all')
+def escape_name(name):
+    return name.replace(' ', '_').replace('.', '').replace('(', '').replace(')', '').lower()
 
 
 if __name__ == '__main__':
