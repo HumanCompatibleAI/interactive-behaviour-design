@@ -99,8 +99,12 @@ def run_cmd():
             mode = PolicyTrainMode.R_ONLY
         elif mode_str == 'reward_plus_bc':
             mode = PolicyTrainMode.R_PLUS_BC
+        elif mode_str == 'reward_plus_sqil':
+            mode = PolicyTrainMode.R_PLUS_SQIL
         elif mode_str == 'bc_only':
             mode = PolicyTrainMode.BC_ONLY
+        elif mode_str == 'sqil_only':
+            mode = PolicyTrainMode.SQIL_ONLY
         elif mode_str == 'no_training':
             mode = PolicyTrainMode.NO_TRAINING
         else:

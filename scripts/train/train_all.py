@@ -127,3 +127,13 @@ for seed in seeds:
         print("python3 scripts/train/auto_train_prefs.py "
               f"{env_id} bc_only sdrlhpnp {run_name}-bcnp_{args.name} --seed {seed} --disable_redo "
               f"--extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args} --tags {env_shortname},bcnp --group {wandb_group}")
+
+        # SQIL on rollouts from SDRLHP-NP
+        print("python3 scripts/train/auto_train_prefs.py "
+              f"{env_id} sqil sdrlhpnp {run_name}-sqil_{args.name} --seed {seed} --disable_redo "
+              f"--extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args} --tags {env_shortname},sqil --group {wandb_group}")
+
+        # SDRLHPNP + SQIL
+        print("python3 scripts/train/auto_train_prefs.py "
+              f"{env_id} rewrad_plus_sqil sdrlhpnp {run_name}-sqil_{args.name} --seed {seed} --disable_redo "
+              f"--extra_args ' {extra_args} {np_args}' {test_args} --gpus '{args.gpus}' {args.harness_extra_args} --tags {env_shortname},sdrlhpnp-sqil --group {wandb_group}")

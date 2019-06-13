@@ -24,7 +24,7 @@ args = None
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('env_id')
-    parser.add_argument('training_mode', choices=['reward_only', 'bc_only', 'reward_plus_bc'])
+    parser.add_argument('training_mode')
     parser.add_argument('segment_generation', choices=['demonstrations', 'drlhp', 'demonstrations-drlhp', 'sdrlhpnp', 'sdrlhpnp-drlhp'])
     parser.add_argument('run_name')
     parser.add_argument('--n_envs', type=int, default=16)
