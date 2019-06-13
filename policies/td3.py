@@ -468,9 +468,7 @@ class TD3Policy(Policy):
             explore_batch = self.replay_buffer.sample_batch(self.batch_size)
 
             if self.train_mode == PolicyTrainMode.R_PLUS_SQIL:
-                max_r = np.max(explore_batch.rews)
-                if max_r >= SQIL_REWARD:
-                    print("Error: max. reward while exploring {:.3f} greater than SQIL reward".format(max_r))
+                self.check_sqil_reward(explore_batch)
 
             if self.train_mode in [PolicyTrainMode.SQIL_ONLY, PolicyTrainMode.R_PLUS_SQIL]:
                 demo_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
@@ -496,6 +494,11 @@ class TD3Policy(Policy):
 
         for k, l in results.items():
             self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
+
+    def check_sqil_reward(self, explore_batch):
+        max_r = np.max(explore_batch.rews)
+        if max_r >= SQIL_REWARD:
+            print("Error: max. reward while exploring {:.3f} greater than SQIL reward".format(max_r))
 
     def check_specific_states_qs(self):
         if self.monitor_q_s:
