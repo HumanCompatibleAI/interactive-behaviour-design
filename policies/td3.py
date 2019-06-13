@@ -131,7 +131,6 @@ class TD3Policy(Policy):
             with tf.variable_scope('main'):
                 pi, q1, q2, q1_pi = actor_critic(x_ph, a_ph, **ac_kwargs)
 
-
             # Target policy network
             with tf.variable_scope('target'):
                 pi_targ, _, _, _ = actor_critic(x2_ph, a_ph, **ac_kwargs)
@@ -147,9 +146,6 @@ class TD3Policy(Policy):
                 # Target Q-values, using action from target policy
                 _, q1_targ, q2_targ, _ = actor_critic(x2_ph, a2, **ac_kwargs)
 
-            # Experience buffer
-            replay_buffer = ReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
-            demonstrations_buffer = LockedReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
 
             # Bellman backup for Q functions, using Clipped Double-Q targets
             min_q_targ = tf.minimum(q1_targ, q2_targ)
@@ -213,6 +209,10 @@ class TD3Policy(Policy):
 
             sess.run(tf.global_variables_initializer())
             sess.run(target_init)
+
+        # Experience buffer
+        replay_buffer = ReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
+        demonstrations_buffer = LockedReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
 
         self.noise_sigma = np.ones((n_envs, act_dim))
         if isinstance(noise_sigma, float):
