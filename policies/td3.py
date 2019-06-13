@@ -462,7 +462,7 @@ class TD3Policy(Policy):
             self.cycle_n += 1
 
     def _train_rl(self):
-        fetch_vals_l = defaultdict(list)
+        results = defaultdict(list)
         for batch_n in range(self.batches_per_cycle):
             # Experience from normal replay buffer for regular Q-learning
             explore_batch = self.replay_buffer.sample_batch(self.batch_size)
@@ -494,11 +494,7 @@ class TD3Policy(Policy):
                 'q2_vals': self.q2
             }
             fetch_vals = self.sess.run(list(fetches.values()) + [self.train_q_op], feed_dict)[:-1]
-            for k, v in zip(fetches.keys(), fetch_vals):
-                if isinstance(v, np.float32):
-                    fetch_vals_l[k].append(v)
-                else:
-                    fetch_vals_l[k].extend(v)
+            self.update_results(fetch_vals, results, fetches)
 
             # Delayed policy update
             if batch_n % self.policy_delay == 0:
@@ -520,11 +516,7 @@ class TD3Policy(Policy):
                 fetch_vals = self.sess.run(list(fetches.values()) + [self.train_pi_op, self.target_update],
                                            feed_dict)[:-2]
 
-                for k, v in zip(fetches.keys(), fetch_vals):
-                    if isinstance(v, np.float32):
-                        fetch_vals_l[k].append(v)
-                    else:
-                        fetch_vals_l[k].extend(v)
+                self.update_results(fetch_vals, results, fetches)
 
         if self.monitor_q_s:
             q1, q2, pi = self.sess.run([self.q1, self.q2, self.pi],
@@ -535,8 +527,15 @@ class TD3Policy(Policy):
                 self.logger.logkv(f'q_checks/q2_{i}', q2[i])
                 self.logger.logkv(f'q_checks/pi_{i}', np.linalg.norm(pi - self.monitor_q_a[i]))
 
-        for k, l in fetch_vals_l.items():
+        for k, l in results.items():
             self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
+
+    def update_results(self, fetch_vals, fetch_vals_l, fetches):
+        for k, v in zip(fetches.keys(), fetch_vals):
+            if isinstance(v, np.float32):
+                fetch_vals_l[k].append(v)
+            else:
+                fetch_vals_l[k].extend(v)
 
     # Why use two functions rather than just having a 'deterministic' argument?
     # Because we need to be careful that the batch size matches the number of
