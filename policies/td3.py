@@ -492,6 +492,12 @@ class TD3Policy(Policy):
             if batch_n % self.policy_delay == 0:
                 self.train_pi(feed_dict, results)
 
+        self.check_specific_states_qs()
+
+        for k, l in results.items():
+            self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
+
+    def check_specific_states_qs(self):
         if self.monitor_q_s:
             q1, q2, pi = self.sess.run([self.q1, self.q2, self.pi],
                                        feed_dict={self.x_ph: self.monitor_q_s,
@@ -500,9 +506,6 @@ class TD3Policy(Policy):
                 self.logger.logkv(f'q_checks/q1_{i}', q1[i])
                 self.logger.logkv(f'q_checks/q2_{i}', q2[i])
                 self.logger.logkv(f'q_checks/pi_{i}', np.linalg.norm(pi - self.monitor_q_a[i]))
-
-        for k, l in results.items():
-            self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
 
     def train_pi(self, feed_dict, results):
         fetches = {
