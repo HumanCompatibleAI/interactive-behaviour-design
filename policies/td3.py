@@ -486,15 +486,7 @@ class TD3Policy(Policy):
                 self.d_ph: batch.done,
             }
 
-            fetches = {
-                'loss_q': self.q_loss,
-                'loss_q1': self.q1_loss,
-                'loss_q2': self.q2_loss,
-                'q1_vals': self.q1,
-                'q2_vals': self.q2
-            }
-            fetch_vals = self.sess.run(list(fetches.values()) + [self.train_q_op], feed_dict)[:-1]
-            self.update_results(fetch_vals, results, fetches)
+            self.train_q(feed_dict, results)
 
             # Delayed policy update
             if batch_n % self.policy_delay == 0:
@@ -529,6 +521,15 @@ class TD3Policy(Policy):
 
         for k, l in results.items():
             self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
+
+    def train_q(self, feed_dict, results):
+        fetches = {
+            'loss_q': self.q_loss, 'loss_q1': self.q1_loss, 'loss_q2': self.q2_loss,
+            'q1_vals': self.q1,
+            'q2_vals': self.q2
+        }
+        fetch_vals = self.sess.run(list(fetches.values()) + [self.train_q_op], feed_dict)[:-1]
+        self.update_results(fetch_vals, results, fetches)
 
     def update_results(self, fetch_vals, fetch_vals_l, fetches):
         for k, v in zip(fetches.keys(), fetch_vals):
