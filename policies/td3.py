@@ -127,35 +127,9 @@ class TD3Policy(Policy):
             x_ph, a_ph, x2_ph, r_ph, d_ph = core.placeholders(obs_dim, act_dim, obs_dim, None, None)
             bc_x_ph, bc_a_ph, _, _, _ = core.placeholders(obs_dim, act_dim, obs_dim, None, None)
 
-            # Main outputs from computation graph
-            with tf.variable_scope('main'):
-                pi, q1, q2, q1_pi = actor_critic(x_ph, a_ph, **ac_kwargs)
-
-            # Target policy network
-            with tf.variable_scope('target'):
-                pi_targ, _, _, _ = actor_critic(x2_ph, a_ph, **ac_kwargs)
-
-            # Target Q networks
-            with tf.variable_scope('target', reuse=True):
-                # Target policy smoothing, by adding clipped noise to target actions
-                epsilon = tf.random_normal(tf.shape(pi_targ), stddev=target_noise)
-                epsilon = tf.clip_by_value(epsilon, -noise_clip, noise_clip)
-                a2 = pi_targ + epsilon
-                a2 = tf.clip_by_value(a2, -act_limit, act_limit)
-
-                # Target Q-values, using action from target policy
-                _, q1_targ, q2_targ, _ = actor_critic(x2_ph, a2, **ac_kwargs)
-
-
-            # Bellman backup for Q functions, using Clipped Double-Q targets
-            min_q_targ = tf.minimum(q1_targ, q2_targ)
-            backup = tf.stop_gradient(r_ph + gamma * (1 - d_ph) * min_q_targ)
-
-            # TD3 losses
-            td3_pi_loss = -tf.reduce_mean(q1_pi)
-            q1_loss = tf.reduce_mean((q1 - backup) ** 2)
-            q2_loss = tf.reduce_mean((q2 - backup) ** 2)
-            q_loss = q1_loss + q2_loss
+            pi, q1, q1_loss, q2, q2_loss, q_loss, td3_pi_loss = self.td3_graph(a_ph, ac_kwargs, act_limit, actor_critic,
+                                                                               d_ph, gamma, noise_clip, r_ph,
+                                                                               target_noise, x2_ph, x_ph)
 
             # Behavioral cloning copy of main graph
             with tf.variable_scope('main', reuse=True):
@@ -288,6 +262,34 @@ class TD3Policy(Policy):
         self.reward_logger = None
 
         self.reset_noise()
+
+    def td3_graph(self, a_ph, ac_kwargs, act_limit, actor_critic, d_ph, gamma, noise_clip, r_ph, target_noise, x2_ph,
+                  x_ph):
+        # Main outputs from computation graph
+        with tf.variable_scope('main'):
+            pi, q1, q2, q1_pi = actor_critic(x_ph, a_ph, **ac_kwargs)
+        # Target policy network
+        with tf.variable_scope('target'):
+            pi_targ, _, _, _ = actor_critic(x2_ph, a_ph, **ac_kwargs)
+        # Target Q networks
+        with tf.variable_scope('target', reuse=True):
+            # Target policy smoothing, by adding clipped noise to target actions
+            epsilon = tf.random_normal(tf.shape(pi_targ), stddev=target_noise)
+            epsilon = tf.clip_by_value(epsilon, -noise_clip, noise_clip)
+            a2 = pi_targ + epsilon
+            a2 = tf.clip_by_value(a2, -act_limit, act_limit)
+
+            # Target Q-values, using action from target policy
+            _, q1_targ, q2_targ, _ = actor_critic(x2_ph, a2, **ac_kwargs)
+        # Bellman backup for Q functions, using Clipped Double-Q targets
+        min_q_targ = tf.minimum(q1_targ, q2_targ)
+        backup = tf.stop_gradient(r_ph + gamma * (1 - d_ph) * min_q_targ)
+        # TD3 losses
+        td3_pi_loss = -tf.reduce_mean(q1_pi)
+        q1_loss = tf.reduce_mean((q1 - backup) ** 2)
+        q2_loss = tf.reduce_mean((q2 - backup) ** 2)
+        q_loss = q1_loss + q2_loss
+        return pi, q1, q1_loss, q2, q2_loss, q_loss, td3_pi_loss
 
     def reset_noise(self):
         mu = np.zeros((self.n_envs, self.act_dim))
