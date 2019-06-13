@@ -25,6 +25,20 @@ from rollouts import RolloutsByHash
 SQIL_REWARD = 5
 
 
+class Batch:
+    def __init__(self, obs1, obs2, acts, rews, done):
+        assert len(obs1) == len(obs2) == len(acts) == len(rews) == len(done)
+        self.len = len(obs1)
+        self.obs1 = obs1
+        self.obs2 = obs2
+        self.acts = acts
+        self.rews = rews
+        self.done = done
+
+    def __len__(self):
+        return self.len
+
+
 class ReplayBuffer:
     """
     A simple FIFO experience replay buffer for TD3 agents.
@@ -49,11 +63,11 @@ class ReplayBuffer:
 
     def sample_batch(self, batch_size=32):
         idxs = np.random.randint(0, self.size, size=batch_size)
-        return dict(obs1=self.obs1_buf[idxs],
-                    obs2=self.obs2_buf[idxs],
-                    acts=self.acts_buf[idxs],
-                    rews=self.rews_buf[idxs],
-                    done=self.done_buf[idxs])
+        return Batch(obs1=self.obs1_buf[idxs],
+                     obs2=self.obs2_buf[idxs],
+                     acts=self.acts_buf[idxs],
+                     rews=self.rews_buf[idxs],
+                     done=self.done_buf[idxs])
 
 
 class NotEnoughDataInReplayBuffer(Exception):
@@ -113,74 +127,27 @@ class TD3Policy(Policy):
             x_ph, a_ph, x2_ph, r_ph, d_ph = core.placeholders(obs_dim, act_dim, obs_dim, None, None)
             bc_x_ph, bc_a_ph, _, _, _ = core.placeholders(obs_dim, act_dim, obs_dim, None, None)
 
-            # Main outputs from computation graph
-            with tf.variable_scope('main'):
-                pi, q1, q2, q1_pi = actor_critic(x_ph, a_ph, **ac_kwargs)
+            pi, q1, q1_loss, q2, q2_loss, q_loss, td3_pi_loss = self.td3_graph(a_ph, ac_kwargs, act_limit, actor_critic,
+                                                                               d_ph, gamma, noise_clip, r_ph,
+                                                                               target_noise, x2_ph, x_ph)
 
-            # Behavioral cloning copy of main graph
-            with tf.variable_scope('main', reuse=True):
-                bc_pi, _, _, _ = actor_critic(bc_x_ph, bc_a_ph, **ac_kwargs)
-                weights = [v for v in tf.trainable_variables() if '/kernel:0' in v.name]
-                l2_loss = tf.add_n([tf.nn.l2_loss(w) for w in weights])
-
-            # Target policy network
-            with tf.variable_scope('target'):
-                pi_targ, _, _, _ = actor_critic(x2_ph, a_ph, **ac_kwargs)
-
-            # Target Q networks
-            with tf.variable_scope('target', reuse=True):
-                # Target policy smoothing, by adding clipped noise to target actions
-                epsilon = tf.random_normal(tf.shape(pi_targ), stddev=target_noise)
-                epsilon = tf.clip_by_value(epsilon, -noise_clip, noise_clip)
-                a2 = pi_targ + epsilon
-                a2 = tf.clip_by_value(a2, -act_limit, act_limit)
-
-                # Target Q-values, using action from target policy
-                _, q1_targ, q2_targ, _ = actor_critic(x2_ph, a2, **ac_kwargs)
-
-            # Experience buffer
-            replay_buffer = ReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
-            demonstrations_buffer = LockedReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
-
-            # Bellman backup for Q functions, using Clipped Double-Q targets
-            min_q_targ = tf.minimum(q1_targ, q2_targ)
-            backup = tf.stop_gradient(r_ph + gamma * (1 - d_ph) * min_q_targ)
-
-            # TD3 losses
-            td3_pi_loss = -tf.reduce_mean(q1_pi)
-            q1_loss = tf.reduce_mean((q1 - backup) ** 2)
-            q2_loss = tf.reduce_mean((q2 - backup) ** 2)
-            q_loss = q1_loss + q2_loss
-
-            assert pi.shape.as_list() == bc_a_ph.shape.as_list()
-            squared_differences = (bc_pi - bc_a_ph) ** 2
-            assert squared_differences.shape.as_list() == [None, act_dim]
-            if 'Fetch' in env_id:
-                # Place more weight on gripper action
-                squared_differences = tf.concat([squared_differences[:, :3], 10 * squared_differences[:, 3, None]],
-                                                axis=1)
-            assert squared_differences.shape.as_list() == [None, act_dim]
-            squared_norms = tf.reduce_sum(squared_differences, axis=1)
-            assert squared_norms.shape.as_list() == [None]
-            bc_pi_loss = tf.reduce_mean(squared_norms, axis=0)
-            assert bc_pi_loss.shape.as_list() == []
-            bc_pi_loss += l2_coef * l2_loss
+            bc_pi_loss, l2_loss = self.bc_graph(ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, l2_coef, pi)
 
             td3_plus_bc_pi_loss = td3_pi_loss + bc_pi_loss
 
             # Separate train ops for pi, q
             pi_optimizer = tf.train.AdamOptimizer(learning_rate=pi_lr)
-            q_optimizer = tf.train.AdamOptimizer(learning_rate=q_lr)
-            train_pi_td3_only_op = pi_optimizer.minimize(td3_pi_loss, var_list=get_vars('main/pi'))
+            train_pi_r_only_op = pi_optimizer.minimize(td3_pi_loss, var_list=get_vars('main/pi'))
             train_pi_bc_only_op = pi_optimizer.minimize(bc_pi_loss, var_list=get_vars('main/pi'))
             train_pi_td3_plus_bc_op = pi_optimizer.minimize(td3_plus_bc_pi_loss, var_list=get_vars('main/pi'))
             train_pi_ops = {
-                PolicyTrainMode.R_ONLY: train_pi_td3_only_op,
-                PolicyTrainMode.SQIL_ONLY: train_pi_td3_only_op,
-                PolicyTrainMode.R_PLUS_SQIL: train_pi_td3_only_op,
+                PolicyTrainMode.R_ONLY: train_pi_r_only_op,
+                PolicyTrainMode.SQIL_ONLY: train_pi_r_only_op,
+                PolicyTrainMode.R_PLUS_SQIL: train_pi_r_only_op,
                 PolicyTrainMode.BC_ONLY: train_pi_bc_only_op,
                 PolicyTrainMode.R_PLUS_BC: train_pi_td3_plus_bc_op
             }
+            q_optimizer = tf.train.AdamOptimizer(learning_rate=q_lr)
             train_q_op = q_optimizer.minimize(q_loss, var_list=get_vars('main/q'))
 
             # Polyak averaging for target variables
@@ -198,6 +165,10 @@ class TD3Policy(Policy):
 
             sess.run(tf.global_variables_initializer())
             sess.run(target_init)
+
+        # Experience buffer
+        replay_buffer = ReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
+        demonstrations_buffer = LockedReplayBuffer(obs_dim=obs_dim, act_dim=act_dim, size=replay_size)
 
         self.noise_sigma = np.ones((n_envs, act_dim))
         if isinstance(noise_sigma, float):
@@ -274,6 +245,56 @@ class TD3Policy(Policy):
 
         self.reset_noise()
 
+    @staticmethod
+    def bc_graph(ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, l2_coef, pi):
+        # Behavioral cloning copy of main graph
+        with tf.variable_scope('main', reuse=True):
+            bc_pi, _, _, _ = actor_critic(bc_x_ph, bc_a_ph, **ac_kwargs)
+            weights = [v for v in tf.trainable_variables() if '/kernel:0' in v.name]
+            l2_loss = tf.add_n([tf.nn.l2_loss(w) for w in weights])
+        assert pi.shape.as_list() == bc_a_ph.shape.as_list()
+        squared_differences = (bc_pi - bc_a_ph) ** 2
+        assert squared_differences.shape.as_list() == [None, act_dim]
+        if 'Fetch' in env_id:
+            # Place more weight on gripper action
+            squared_differences = tf.concat([squared_differences[:, :3], 10 * squared_differences[:, 3, None]],
+                                            axis=1)
+        assert squared_differences.shape.as_list() == [None, act_dim]
+        squared_norms = tf.reduce_sum(squared_differences, axis=1)
+        assert squared_norms.shape.as_list() == [None]
+        bc_pi_loss = tf.reduce_mean(squared_norms, axis=0)
+        assert bc_pi_loss.shape.as_list() == []
+        bc_pi_loss += l2_coef * l2_loss
+        return bc_pi_loss, l2_loss
+
+    @staticmethod
+    def td3_graph(a_ph, ac_kwargs, act_limit, actor_critic, d_ph, gamma, noise_clip, r_ph, target_noise, x2_ph, x_ph):
+        # Main outputs from computation graph
+        with tf.variable_scope('main'):
+            pi, q1, q2, q1_pi = actor_critic(x_ph, a_ph, **ac_kwargs)
+        # Target policy network
+        with tf.variable_scope('target'):
+            pi_targ, _, _, _ = actor_critic(x2_ph, a_ph, **ac_kwargs)
+        # Target Q networks
+        with tf.variable_scope('target', reuse=True):
+            # Target policy smoothing, by adding clipped noise to target actions
+            epsilon = tf.random_normal(tf.shape(pi_targ), stddev=target_noise)
+            epsilon = tf.clip_by_value(epsilon, -noise_clip, noise_clip)
+            a2 = pi_targ + epsilon
+            a2 = tf.clip_by_value(a2, -act_limit, act_limit)
+
+            # Target Q-values, using action from target policy
+            _, q1_targ, q2_targ, _ = actor_critic(x2_ph, a2, **ac_kwargs)
+        # Bellman backup for Q functions, using Clipped Double-Q targets
+        min_q_targ = tf.minimum(q1_targ, q2_targ)
+        backup = tf.stop_gradient(r_ph + gamma * (1 - d_ph) * min_q_targ)
+        # TD3 losses
+        td3_pi_loss = -tf.reduce_mean(q1_pi)
+        q1_loss = tf.reduce_mean((q1 - backup) ** 2)
+        q2_loss = tf.reduce_mean((q2 - backup) ** 2)
+        q_loss = q1_loss + q2_loss
+        return pi, q1, q1_loss, q2, q2_loss, q_loss, td3_pi_loss
+
     def reset_noise(self):
         mu = np.zeros((self.n_envs, self.act_dim))
         self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=self.noise_sigma)
@@ -323,7 +344,7 @@ class TD3Policy(Policy):
             loss_bc_pi_l, loss_l2_l = [], []
             for _ in range(self.batches_per_cycle):
                 bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-                feed_dict = {self.bc_x_ph: bc_batch['obs1'], self.bc_a_ph: bc_batch['acts']}
+                feed_dict = {self.bc_x_ph: bc_batch.obs1, self.bc_a_ph: bc_batch.acts}
                 bc_pi_loss, l2_loss, _ = self.sess.run([self.bc_pi_loss,
                                                         self.l2_loss,
                                                         self.train_pi_bc_only_op],
@@ -362,6 +383,9 @@ class TD3Policy(Policy):
         return reward_selector_rewards
 
     def train(self):
+        if self.train_env is None:
+            raise Exception("env not set")
+
         if self.train_mode == PolicyTrainMode.NO_TRAINING:
             # Just run the environment to e.g. generate segments for DRLHP
             action = self.get_noise()
@@ -374,9 +398,6 @@ class TD3Policy(Policy):
         if self.train_mode == PolicyTrainMode.BC_ONLY:
             self.train_bc_only()
             return
-
-        if self.train_env is None:
-            raise Exception("env not set")
 
         if self.initial_exploration_phase and self.serial_episode_n * self.n_envs >= self.n_initial_episodes:
             self.initial_exploration_phase = False
@@ -441,92 +462,45 @@ class TD3Policy(Policy):
 
             self.cycle_n += 1
 
-    @staticmethod
-    def combine_batches(b1, b2):
-        assert len(list(b1.keys())) == len(list(b2.keys()))
-        for k in b1.keys():
-            assert b1[k].shape == b2[k].shape
-            assert isinstance(b1[k], np.ndarray)
-            assert isinstance(b2[k], np.ndarray)
-
-        b = {}
-        b['obs1'] = np.concatenate([b1['obs1'], b2['obs1']], axis=0)
-        b['obs2'] = np.concatenate([b1['obs2'], b2['obs2']], axis=0)
-        b['acts'] = np.concatenate([b1['acts'], b2['acts']], axis=0)
-        b['rews'] = np.concatenate([b1['rews'], b2['rews']], axis=0)
-        b['done'] = np.concatenate([b1['done'], b2['done']], axis=0)
-
-        for k in b1.keys():
-            expected_shape = (b1[k].shape[0] + b2[k].shape[0],) + b1[k].shape[1:]
-            assert b[k].shape == expected_shape
-
-        return b
-
     def _train_rl(self):
-        fetch_vals_l = defaultdict(list)
+        results = defaultdict(list)
         for batch_n in range(self.batches_per_cycle):
             # Experience from normal replay buffer for regular Q-learning
             explore_batch = self.replay_buffer.sample_batch(self.batch_size)
             if self.train_mode == PolicyTrainMode.R_PLUS_SQIL:
-                max_r = np.max(explore_batch['rews'])
-                if max_r >= SQIL_REWARD:
-                    print("(Potential) error: max. reward while exploring {:.3f}is greater than SQIL reward".format(max_r))
+                self.check_sqil_reward(explore_batch)
+            if self.train_mode == PolicyTrainMode.SQIL_ONLY:
+                explore_batch.rews = np.array([0] * self.batch_size)
+
+            demo_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
+            demo_batch.rews = np.array([SQIL_REWARD] * self.batch_size)
+
             if self.train_mode in [PolicyTrainMode.SQIL_ONLY, PolicyTrainMode.R_PLUS_SQIL]:
-                demo_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-                if self.train_mode == PolicyTrainMode.SQIL_ONLY:
-                    explore_batch['rews'] = np.array([0] * self.batch_size)
-                demo_batch['rews'] = np.array([SQIL_REWARD] * self.batch_size)
-                batch = self.combine_batches(explore_batch, demo_batch)
+                batch = combine_batches(explore_batch, demo_batch)
             else:
                 batch = explore_batch
+
             feed_dict = {
-                self.x_ph: batch['obs1'],
-                self.x2_ph: batch['obs2'],
-                self.a_ph: batch['acts'],
-                self.r_ph: batch['rews'],
-                self.d_ph: batch['done'],
+                self.x_ph: batch.obs1, self.x2_ph: batch.obs2,
+                self.a_ph: batch.acts, self.r_ph: batch.rews, self.d_ph: batch.done,
             }
-
-            fetches = {
-                'loss_q': self.q_loss,
-                'loss_q1': self.q1_loss,
-                'loss_q2': self.q2_loss,
-                'q1_vals': self.q1,
-                'q2_vals': self.q2
-            }
-            fetch_vals = self.sess.run(list(fetches.values()) + [self.train_q_op], feed_dict)[:-1]
-            for k, v in zip(fetches.keys(), fetch_vals):
-                if isinstance(v, np.float32):
-                    fetch_vals_l[k].append(v)
-                else:
-                    fetch_vals_l[k].extend(v)
-
+            self.train_q(feed_dict, results)
             # Delayed policy update
             if batch_n % self.policy_delay == 0:
-                fetches = {
-                    'loss_td3_pi': self.td3_pi_loss,
-                    'loss_l2': self.l2_loss,
-                }
+                self.train_pi(feed_dict, results)
 
-                # Behavioral cloning
-                if self.train_mode == PolicyTrainMode.R_PLUS_BC:
-                    bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-                    feed_dict.update({self.bc_x_ph: bc_batch['obs1'],
-                                      self.bc_a_ph: bc_batch['acts']})
-                    fetches.update({'loss_bc_pi': self.bc_pi_loss,
-                                    'loss_td3_plus_bc_pi': self.td3_plus_bc_pi_loss})
+        self.check_specific_states_qs()
 
-                # train_pi_op is automatically set to be appropriate for the mode
-                # (i.e. it /does/ do BC training if the policy was initialised with a BC mode)
-                fetch_vals = self.sess.run(list(fetches.values()) + [self.train_pi_op, self.target_update],
-                                           feed_dict)[:-2]
+        for k, l in results.items():
+            self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
 
-                for k, v in zip(fetches.keys(), fetch_vals):
-                    if isinstance(v, np.float32):
-                        fetch_vals_l[k].append(v)
-                    else:
-                        fetch_vals_l[k].extend(v)
+    @staticmethod
+    def check_sqil_reward(explore_batch):
+        max_r = np.max(explore_batch.rews)
+        if max_r >= SQIL_REWARD:
+            print("Error: max. reward while exploring {:.3f} greater than SQIL reward".format(max_r))
 
+    def check_specific_states_qs(self):
         if self.monitor_q_s:
             q1, q2, pi = self.sess.run([self.q1, self.q2, self.pi],
                                        feed_dict={self.x_ph: self.monitor_q_s,
@@ -536,8 +510,40 @@ class TD3Policy(Policy):
                 self.logger.logkv(f'q_checks/q2_{i}', q2[i])
                 self.logger.logkv(f'q_checks/pi_{i}', np.linalg.norm(pi - self.monitor_q_a[i]))
 
-        for k, l in fetch_vals_l.items():
-            self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
+    def train_pi(self, feed_dict, results):
+        fetches = {
+            'loss_td3_pi': self.td3_pi_loss,
+            'loss_l2': self.l2_loss,
+        }
+        # Behavioral cloning
+        if self.train_mode == PolicyTrainMode.R_PLUS_BC:
+            bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
+            feed_dict.update({self.bc_x_ph: bc_batch.obs1,
+                              self.bc_a_ph: bc_batch.acts})
+            fetches.update({'loss_bc_pi': self.bc_pi_loss,
+                            'loss_td3_plus_bc_pi': self.td3_plus_bc_pi_loss})
+        # train_pi_op is automatically set to be appropriate for the mode
+        # (i.e. it /does/ do BC training if the policy was initialised with a BC mode)
+        fetch_vals = self.sess.run(list(fetches.values()) + [self.train_pi_op, self.target_update],
+                                   feed_dict)[:-2]
+        self.update_results(fetch_vals, results, fetches)
+
+    def train_q(self, feed_dict, results):
+        fetches = {
+            'loss_q': self.q_loss, 'loss_q1': self.q1_loss, 'loss_q2': self.q2_loss,
+            'q1_vals': self.q1,
+            'q2_vals': self.q2
+        }
+        fetch_vals = self.sess.run(list(fetches.values()) + [self.train_q_op], feed_dict)[:-1]
+        self.update_results(fetch_vals, results, fetches)
+
+    @staticmethod
+    def update_results(fetch_vals, fetch_vals_l, fetches):
+        for k, v in zip(fetches.keys(), fetch_vals):
+            if isinstance(v, np.float32):
+                fetch_vals_l[k].append(v)
+            else:
+                fetch_vals_l[k].extend(v)
 
     # Why use two functions rather than just having a 'deterministic' argument?
     # Because we need to be careful that the batch size matches the number of
@@ -637,7 +643,7 @@ class TD3Policy(Policy):
                     acts = d.actions[:-1]
                     o2s = d.obses[1:]
                     dones = [0] * len(o1s)
-                    assert len(o1s) == len(acts) == len(o2s) == len(dones),\
+                    assert len(o1s) == len(acts) == len(o2s) == len(dones), \
                         (len(o1s), len(acts), len(o2s), len(dones))
                     for o1, a, o2, done in zip(o1s, acts, o2s, dones):
                         self.demonstrations_buffer.store(obs=o1, act=a, next_obs=o2, done=done, rew=None)
@@ -646,3 +652,14 @@ class TD3Policy(Policy):
                 time.sleep(1)
 
         Thread(target=f).start()
+
+
+def combine_batches(b1, b2):
+    assert b1.len == b2.len
+    return Batch(
+        obs1=np.concatenate([b1.obs1, b2.obs1], axis=0),
+        obs2=np.concatenate([b1.obs2, b2.obs2], axis=0),
+        acts=np.concatenate([b1.acts, b2.acts], axis=0),
+        rews=np.concatenate([b1.rews, b2.rews], axis=0),
+        done=np.concatenate([b1.done, b2.done], axis=0),
+    )
