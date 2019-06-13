@@ -490,25 +490,7 @@ class TD3Policy(Policy):
 
             # Delayed policy update
             if batch_n % self.policy_delay == 0:
-                fetches = {
-                    'loss_td3_pi': self.td3_pi_loss,
-                    'loss_l2': self.l2_loss,
-                }
-
-                # Behavioral cloning
-                if self.train_mode == PolicyTrainMode.R_PLUS_BC:
-                    bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-                    feed_dict.update({self.bc_x_ph: bc_batch.obs1,
-                                      self.bc_a_ph: bc_batch.acts})
-                    fetches.update({'loss_bc_pi': self.bc_pi_loss,
-                                    'loss_td3_plus_bc_pi': self.td3_plus_bc_pi_loss})
-
-                # train_pi_op is automatically set to be appropriate for the mode
-                # (i.e. it /does/ do BC training if the policy was initialised with a BC mode)
-                fetch_vals = self.sess.run(list(fetches.values()) + [self.train_pi_op, self.target_update],
-                                           feed_dict)[:-2]
-
-                self.update_results(fetch_vals, results, fetches)
+                self.train_pi(feed_dict, results)
 
         if self.monitor_q_s:
             q1, q2, pi = self.sess.run([self.q1, self.q2, self.pi],
@@ -521,6 +503,24 @@ class TD3Policy(Policy):
 
         for k, l in results.items():
             self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
+
+    def train_pi(self, feed_dict, results):
+        fetches = {
+            'loss_td3_pi': self.td3_pi_loss,
+            'loss_l2': self.l2_loss,
+        }
+        # Behavioral cloning
+        if self.train_mode == PolicyTrainMode.R_PLUS_BC:
+            bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
+            feed_dict.update({self.bc_x_ph: bc_batch.obs1,
+                              self.bc_a_ph: bc_batch.acts})
+            fetches.update({'loss_bc_pi': self.bc_pi_loss,
+                            'loss_td3_plus_bc_pi': self.td3_plus_bc_pi_loss})
+        # train_pi_op is automatically set to be appropriate for the mode
+        # (i.e. it /does/ do BC training if the policy was initialised with a BC mode)
+        fetch_vals = self.sess.run(list(fetches.values()) + [self.train_pi_op, self.target_update],
+                                   feed_dict)[:-2]
+        self.update_results(fetch_vals, results, fetches)
 
     def train_q(self, feed_dict, results):
         fetches = {
