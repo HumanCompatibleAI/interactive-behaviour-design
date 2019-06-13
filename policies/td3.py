@@ -455,23 +455,6 @@ class TD3Policy(Policy):
 
             self.cycle_n += 1
 
-    @staticmethod
-    def combine_batches(b1, b2):
-        b = Batch(
-            obs1=np.concatenate([b1.obs1, b2.obs1], axis=0),
-            obs2=np.concatenate([b1.obs2, b2.obs2], axis=0),
-            acts=np.concatenate([b1.acts, b2.acts], axis=0),
-            rews=np.concatenate([b1.rews, b2.rews], axis=0),
-            done=np.concatenate([b1.done, b2.done], axis=0),
-        )
-
-        for v in [v for v in dir(b) if '__' not in v and v != 'len']:
-            expected_len = getattr(b1, v).shape[0] + getattr(b2, v).shape[0]
-            expected_shape = (expected_len,) + getattr(b1, v).shape[1:]
-            assert getattr(b, v).shape == expected_shape
-
-        return b
-
     def _train_rl(self):
         fetch_vals_l = defaultdict(list)
         for batch_n in range(self.batches_per_cycle):
@@ -486,7 +469,7 @@ class TD3Policy(Policy):
                 if self.train_mode == PolicyTrainMode.SQIL_ONLY:
                     explore_batch.rews = np.array([0] * self.batch_size)
                 demo_batch.rews = np.array([SQIL_REWARD] * self.batch_size)
-                batch = self.combine_batches(explore_batch, demo_batch)
+                batch = combine_batches(explore_batch, demo_batch)
             else:
                 batch = explore_batch
             feed_dict = {
@@ -656,3 +639,14 @@ class TD3Policy(Policy):
                 time.sleep(1)
 
         Thread(target=f).start()
+
+
+def combine_batches(b1, b2):
+    assert b1.len == b2.len
+    return Batch(
+        obs1=np.concatenate([b1.obs1, b2.obs1], axis=0),
+        obs2=np.concatenate([b1.obs2, b2.obs2], axis=0),
+        acts=np.concatenate([b1.acts, b2.acts], axis=0),
+        rews=np.concatenate([b1.rews, b2.rews], axis=0),
+        done=np.concatenate([b1.done, b2.done], axis=0),
+    )
