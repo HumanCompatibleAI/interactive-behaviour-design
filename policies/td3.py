@@ -245,7 +245,8 @@ class TD3Policy(Policy):
 
         self.reset_noise()
 
-    def bc_graph(self, ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, l2_coef, pi):
+    @staticmethod
+    def bc_graph(ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, l2_coef, pi):
         # Behavioral cloning copy of main graph
         with tf.variable_scope('main', reuse=True):
             bc_pi, _, _, _ = actor_critic(bc_x_ph, bc_a_ph, **ac_kwargs)
@@ -266,8 +267,8 @@ class TD3Policy(Policy):
         bc_pi_loss += l2_coef * l2_loss
         return bc_pi_loss, l2_loss
 
-    def td3_graph(self, a_ph, ac_kwargs, act_limit, actor_critic, d_ph, gamma, noise_clip, r_ph, target_noise, x2_ph,
-                  x_ph):
+    @staticmethod
+    def td3_graph(a_ph, ac_kwargs, act_limit, actor_critic, d_ph, gamma, noise_clip, r_ph, target_noise, x2_ph, x_ph):
         # Main outputs from computation graph
         with tf.variable_scope('main'):
             pi, q1, q2, q1_pi = actor_critic(x_ph, a_ph, **ac_kwargs)
@@ -493,7 +494,8 @@ class TD3Policy(Policy):
         for k, l in results.items():
             self.logger.log_list_stats(f'policy_{self.name}/' + k, l)
 
-    def check_sqil_reward(self, explore_batch):
+    @staticmethod
+    def check_sqil_reward(explore_batch):
         max_r = np.max(explore_batch.rews)
         if max_r >= SQIL_REWARD:
             print("Error: max. reward while exploring {:.3f} greater than SQIL reward".format(max_r))
@@ -535,7 +537,8 @@ class TD3Policy(Policy):
         fetch_vals = self.sess.run(list(fetches.values()) + [self.train_q_op], feed_dict)[:-1]
         self.update_results(fetch_vals, results, fetches)
 
-    def update_results(self, fetch_vals, fetch_vals_l, fetches):
+    @staticmethod
+    def update_results(fetch_vals, fetch_vals_l, fetches):
         for k, v in zip(fetches.keys(), fetch_vals):
             if isinstance(v, np.float32):
                 fetch_vals_l[k].append(v)
