@@ -466,15 +466,15 @@ class TD3Policy(Policy):
         for batch_n in range(self.batches_per_cycle):
             # Experience from normal replay buffer for regular Q-learning
             explore_batch = self.replay_buffer.sample_batch(self.batch_size)
-
             if self.train_mode == PolicyTrainMode.R_PLUS_SQIL:
                 self.check_sqil_reward(explore_batch)
+            if self.train_mode == PolicyTrainMode.SQIL_ONLY:
+                explore_batch.rews = np.array([0] * self.batch_size)
+
+            demo_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
+            demo_batch.rews = np.array([SQIL_REWARD] * self.batch_size)
 
             if self.train_mode in [PolicyTrainMode.SQIL_ONLY, PolicyTrainMode.R_PLUS_SQIL]:
-                demo_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-                if self.train_mode == PolicyTrainMode.SQIL_ONLY:
-                    explore_batch.rews = np.array([0] * self.batch_size)
-                demo_batch.rews = np.array([SQIL_REWARD] * self.batch_size)
                 batch = combine_batches(explore_batch, demo_batch)
             else:
                 batch = explore_batch
@@ -483,9 +483,7 @@ class TD3Policy(Policy):
                 self.x_ph: batch.obs1, self.x2_ph: batch.obs2,
                 self.a_ph: batch.acts, self.r_ph: batch.rews, self.d_ph: batch.done,
             }
-
             self.train_q(feed_dict, results)
-
             # Delayed policy update
             if batch_n % self.policy_delay == 0:
                 self.train_pi(feed_dict, results)
