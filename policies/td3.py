@@ -362,6 +362,9 @@ class TD3Policy(Policy):
         return reward_selector_rewards
 
     def train(self):
+        if self.train_env is None:
+            raise Exception("env not set")
+
         if self.train_mode == PolicyTrainMode.NO_TRAINING:
             # Just run the environment to e.g. generate segments for DRLHP
             action = self.get_noise()
@@ -374,9 +377,6 @@ class TD3Policy(Policy):
         if self.train_mode == PolicyTrainMode.BC_ONLY:
             self.train_bc_only()
             return
-
-        if self.train_env is None:
-            raise Exception("env not set")
 
         if self.initial_exploration_phase and self.serial_episode_n * self.n_envs >= self.n_initial_episodes:
             self.initial_exploration_phase = False
