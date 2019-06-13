@@ -466,10 +466,12 @@ class TD3Policy(Policy):
         for batch_n in range(self.batches_per_cycle):
             # Experience from normal replay buffer for regular Q-learning
             explore_batch = self.replay_buffer.sample_batch(self.batch_size)
+
             if self.train_mode == PolicyTrainMode.R_PLUS_SQIL:
                 max_r = np.max(explore_batch.rews)
                 if max_r >= SQIL_REWARD:
                     print("Error: max. reward while exploring {:.3f} greater than SQIL reward".format(max_r))
+
             if self.train_mode in [PolicyTrainMode.SQIL_ONLY, PolicyTrainMode.R_PLUS_SQIL]:
                 demo_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
                 if self.train_mode == PolicyTrainMode.SQIL_ONLY:
@@ -478,12 +480,10 @@ class TD3Policy(Policy):
                 batch = combine_batches(explore_batch, demo_batch)
             else:
                 batch = explore_batch
+
             feed_dict = {
-                self.x_ph: batch.obs1,
-                self.x2_ph: batch.obs2,
-                self.a_ph: batch.acts,
-                self.r_ph: batch.rews,
-                self.d_ph: batch.done,
+                self.x_ph: batch.obs1, self.x2_ph: batch.obs2,
+                self.a_ph: batch.acts, self.r_ph: batch.rews, self.d_ph: batch.done,
             }
 
             self.train_q(feed_dict, results)
