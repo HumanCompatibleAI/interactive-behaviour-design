@@ -131,11 +131,6 @@ class TD3Policy(Policy):
             with tf.variable_scope('main'):
                 pi, q1, q2, q1_pi = actor_critic(x_ph, a_ph, **ac_kwargs)
 
-            # Behavioral cloning copy of main graph
-            with tf.variable_scope('main', reuse=True):
-                bc_pi, _, _, _ = actor_critic(bc_x_ph, bc_a_ph, **ac_kwargs)
-                weights = [v for v in tf.trainable_variables() if '/kernel:0' in v.name]
-                l2_loss = tf.add_n([tf.nn.l2_loss(w) for w in weights])
 
             # Target policy network
             with tf.variable_scope('target'):
@@ -165,6 +160,12 @@ class TD3Policy(Policy):
             q1_loss = tf.reduce_mean((q1 - backup) ** 2)
             q2_loss = tf.reduce_mean((q2 - backup) ** 2)
             q_loss = q1_loss + q2_loss
+
+            # Behavioral cloning copy of main graph
+            with tf.variable_scope('main', reuse=True):
+                bc_pi, _, _, _ = actor_critic(bc_x_ph, bc_a_ph, **ac_kwargs)
+                weights = [v for v in tf.trainable_variables() if '/kernel:0' in v.name]
+                l2_loss = tf.add_n([tf.nn.l2_loss(w) for w in weights])
 
             assert pi.shape.as_list() == bc_a_ph.shape.as_list()
             squared_differences = (bc_pi - bc_a_ph) ** 2
