@@ -131,25 +131,7 @@ class TD3Policy(Policy):
                                                                                d_ph, gamma, noise_clip, r_ph,
                                                                                target_noise, x2_ph, x_ph)
 
-            # Behavioral cloning copy of main graph
-            with tf.variable_scope('main', reuse=True):
-                bc_pi, _, _, _ = actor_critic(bc_x_ph, bc_a_ph, **ac_kwargs)
-                weights = [v for v in tf.trainable_variables() if '/kernel:0' in v.name]
-                l2_loss = tf.add_n([tf.nn.l2_loss(w) for w in weights])
-
-            assert pi.shape.as_list() == bc_a_ph.shape.as_list()
-            squared_differences = (bc_pi - bc_a_ph) ** 2
-            assert squared_differences.shape.as_list() == [None, act_dim]
-            if 'Fetch' in env_id:
-                # Place more weight on gripper action
-                squared_differences = tf.concat([squared_differences[:, :3], 10 * squared_differences[:, 3, None]],
-                                                axis=1)
-            assert squared_differences.shape.as_list() == [None, act_dim]
-            squared_norms = tf.reduce_sum(squared_differences, axis=1)
-            assert squared_norms.shape.as_list() == [None]
-            bc_pi_loss = tf.reduce_mean(squared_norms, axis=0)
-            assert bc_pi_loss.shape.as_list() == []
-            bc_pi_loss += l2_coef * l2_loss
+            bc_pi_loss, l2_loss = self.bc_graph(ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, l2_coef, pi)
 
             td3_plus_bc_pi_loss = td3_pi_loss + bc_pi_loss
 
@@ -262,6 +244,27 @@ class TD3Policy(Policy):
         self.reward_logger = None
 
         self.reset_noise()
+
+    def bc_graph(self, ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, l2_coef, pi):
+        # Behavioral cloning copy of main graph
+        with tf.variable_scope('main', reuse=True):
+            bc_pi, _, _, _ = actor_critic(bc_x_ph, bc_a_ph, **ac_kwargs)
+            weights = [v for v in tf.trainable_variables() if '/kernel:0' in v.name]
+            l2_loss = tf.add_n([tf.nn.l2_loss(w) for w in weights])
+        assert pi.shape.as_list() == bc_a_ph.shape.as_list()
+        squared_differences = (bc_pi - bc_a_ph) ** 2
+        assert squared_differences.shape.as_list() == [None, act_dim]
+        if 'Fetch' in env_id:
+            # Place more weight on gripper action
+            squared_differences = tf.concat([squared_differences[:, :3], 10 * squared_differences[:, 3, None]],
+                                            axis=1)
+        assert squared_differences.shape.as_list() == [None, act_dim]
+        squared_norms = tf.reduce_sum(squared_differences, axis=1)
+        assert squared_norms.shape.as_list() == [None]
+        bc_pi_loss = tf.reduce_mean(squared_norms, axis=0)
+        assert bc_pi_loss.shape.as_list() == []
+        bc_pi_loss += l2_coef * l2_loss
+        return bc_pi_loss, l2_loss
 
     def td3_graph(self, a_ph, ac_kwargs, act_limit, actor_critic, d_ph, gamma, noise_clip, r_ph, target_noise, x2_ph,
                   x_ph):
