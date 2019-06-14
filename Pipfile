@@ -24,12 +24,13 @@ atari-py = "*"
 pillow = "*"
 pyopengl = "*"
 tmuxprocess = "*"
-mujoco-py = "*"
+mujoco-py = "==1.50.1.68"
 "box2d" = "*"
 "box2d-py" = "*"
 pims = "*"
 memory-profiler = "*"
 moviepy = "*"
+wandb = "*"
 
 [dev-packages]
 
