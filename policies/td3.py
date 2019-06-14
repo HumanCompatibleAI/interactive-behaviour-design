@@ -472,10 +472,9 @@ class TD3Policy(Policy):
             if self.train_mode == PolicyTrainMode.SQIL_ONLY:
                 explore_batch.rews = np.array([0] * self.batch_size)
 
-            demo_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-            demo_batch.rews = np.array([SQIL_REWARD] * self.batch_size)
-
             if self.train_mode in [PolicyTrainMode.SQIL_ONLY, PolicyTrainMode.R_PLUS_SQIL]:
+                demo_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
+                demo_batch.rews = np.array([SQIL_REWARD] * self.batch_size)
                 batch = combine_batches(explore_batch, demo_batch)
             else:
                 batch = explore_batch
