@@ -66,6 +66,10 @@ def main():
             print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} "
                   f"--gpus '{args.gpus}' --tags rl,{env_shortname}")
 
+    if args.extra_args is not None:
+        run_suffix = '_' + args.extra_args.lstrip().replace(' ', '_').replace('-', '').replace('.', 'p')
+    else:
+        run_suffix = ''
     for env_shortname, env_id in prefs_envs:
         if 'Fetch' in env_id:
             rollout_length_seconds = 0.5
@@ -76,14 +80,17 @@ def main():
             rollout_length_seconds = 1.0
         experiments = get_experiments(env_id)
         for ex in experiments:
-            wandb_group = f"{env_shortname}-{ex.name}_{git_rev}"
+            wandb_group = f"{env_shortname}-{ex.name}{run_suffix}_{git_rev}"
             extra_args = f" --rollout_length_seconds {rollout_length_seconds} {ex.no_primitives_config} {args.extra_args}"
             for seed in seeds:
-                run_name = f"{env_shortname}-{seed}-{ex.name}"
+                run_name = f"{env_shortname}-{seed}-{ex.name}{run_suffix}"
                 if args.test:
                     run_name += '_test'
                 cmd = ("python3 scripts/train/auto_train_prefs.py "
-                       f"{env_id} {ex.train_mode} {ex.segment_generation} {run_name} {test_args} --seed {seed} {'--disable_redo' if ex.disable_redo else ''} "
+                       f"{env_id} {ex.train_mode} {ex.segment_generation} {run_name} {test_args} "
+                       f"--seed {seed} "
+                       f"{'--disable_redo' if ex.disable_redo else ''} "
+                       f"{'--decay_label_rate' if ex.decay_label_rate else ''} "
                        f"--extra_args ' {extra_args}' --gpus '{args.gpus}' {args.harness_extra_args} --tags {env_shortname},{ex.name} --group {wandb_group}")
                 print(cmd)
 
