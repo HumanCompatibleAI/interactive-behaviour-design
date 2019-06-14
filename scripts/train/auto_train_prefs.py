@@ -112,8 +112,7 @@ def main():
         add_master_policy(base_url)
         wait_for_demonstration_rollouts(base_url)
         wait_for_drlhp_segments(base_url)
-        start_oracle(base_url, 'drlhp', args.tmux_sess, args.log_dir, args.min_label_interval_seconds, args.decay_label_rate)
-        start_oracle(base_url, 'demonstrations', args.tmux_sess, args.log_dir, args.min_label_interval_seconds, args.decay_label_rate)
+        start_oracle(base_url, 'both', args.tmux_sess, args.log_dir, args.min_label_interval_seconds, args.decay_label_rate)
         if not args.no_pretrain:
             wait_for_initial_demonstrations(base_url, args.n_initial_demos)
         start_reward_predictor_training(base_url)

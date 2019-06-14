@@ -197,7 +197,7 @@ def main():
     else:
         logger = None
 
-    n = 0
+    n_interactions = 0
     last_interaction_time = None
     while True:
         while not work_timer.done():
@@ -206,6 +206,11 @@ def main():
                     demonstrate(args.url)
                 elif args.segment_generation == 'drlhp':
                     compare(args.url)
+                elif args.segment_generation == 'both':
+                    if n_interactions % 2 == 0:
+                        demonstrate(args.url)
+                    else:
+                        compare(args.url)
             except (NoRolloutsError, NoSegmentsError):
                 time.sleep(1.0)
                 continue
@@ -214,8 +219,8 @@ def main():
                 time.sleep(1.0)
                 continue
             else:
-                n += 1
-                print(f"Simulated {n} interactions")
+                n_interactions += 1
+                print(f"Simulated {n_interactions} interactions")
                 if last_interaction_time is not None:
                     t_since_last = time.time() - last_interaction_time
                     print("{:.1f} seconds since last interaction".format(t_since_last))
