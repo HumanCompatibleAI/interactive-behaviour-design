@@ -5,7 +5,7 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from utils import find_least_busy_gpu, get_git_rev
+from utils import find_least_busy_gpu, get_git_rev, NoGPUsError
 
 rl_envs = [
     ('seaquest', 'SeaquestDeepMind-v0'),
@@ -13,6 +13,7 @@ rl_envs = [
     ('breakout', 'BreakoutDeepMind-v0'),
     ('fetchpp',
      'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-Delta-GripperBonuses-v0'),
+    ('fetchr', 'FetchReach-Custom-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
@@ -51,7 +52,10 @@ def main():
     git_rev = get_git_rev()
 
     if args.gpus is None:
-        args.gpus = str(find_least_busy_gpu())
+        try:
+            args.gpus = str(find_least_busy_gpu())
+        except NoGPUsError:
+            args.gpus = None
 
     seeds = list(map(int, args.seeds.split(',')))
     if args.test:
@@ -59,12 +63,14 @@ def main():
     else:
         test_args = ''
 
+    gpu_arg = f"--gpus '{args.gpus}' " if args.gpus is not None else " "
     # RL using environment reward
     for env_shortname, env_id in rl_envs:
         for seed in seeds:
             run_name = f"{env_shortname}-{seed}-rl"
             print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} "
-                  f"--gpus '{args.gpus}' --tags rl,{env_shortname}")
+                  f"{gpu_arg} "
+                  f"--tags rl,{env_shortname}")
 
     if args.extra_args is not None:
         run_suffix = '_' + args.extra_args.lstrip().replace(' ', '_').replace('-', '').replace('.', 'p')
