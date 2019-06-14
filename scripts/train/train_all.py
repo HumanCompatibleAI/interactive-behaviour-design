@@ -72,7 +72,7 @@ def main():
                   f"{gpu_arg} "
                   f"--tags rl,{env_shortname}")
 
-    if args.extra_args is not None:
+    if args.extra_args:
         run_suffix = '_' + args.extra_args.lstrip().replace(' ', '_').replace('-', '').replace('.', 'p')
     else:
         run_suffix = ''
