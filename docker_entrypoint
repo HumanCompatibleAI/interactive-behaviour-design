@@ -2,15 +2,13 @@
 
 set -e
 
-if [[ ! -e /interactive-behaviour-design/run.py ]]; then
-    echo "Error: please mount code at /interactive-behaviour-design" >&2
-    exit 1
+# If we're running on a developer's local machine or on Travis, we assume the code and the key
+# are mounted at /interactive-behaviour-design
+if [[ -e /interactive-behaviour-design/mjkey.txt ]]; then
+    cp /interactive-behaviour-design/mjkey.txt /root/.mujoco/
 fi
-if [[ ! -e /interactive-behaviour-design/mjkey.txt ]]; then
-    echo "Error: please place mjkey.txt in code directory" >&2
-    exit 1
-fi
-cp /interactive-behaviour-design/mjkey.txt /root/.mujoco/
+# If we're running on AWS, we assume the key has been put in place by the run script
+# (because otherwise we'd have to store the key in the AMI, and it would be a pain to update)
 
 # Set up display; otherwise rendering will fail
 Xvfb -screen 0 1024x768x24 &
