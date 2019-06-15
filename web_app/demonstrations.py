@@ -13,11 +13,11 @@ from typing import Dict
 import easy_tf_log
 from flask import request, render_template, send_from_directory, Blueprint
 
-import global_variables
 from rollouts import CompressedRollout
 from utils import concatenate_and_write_videos_to
 from web_app import web_globals
-from web_app.utils import nocache, add_pref, get_n_rl_steps
+from web_app.interaction_throttler import mark_interaction, throttle
+from web_app.utils import nocache, add_pref
 from web_app.web_globals import _demonstration_rollouts, experience_dir, _policies, \
     _policy_rollouter, _demonstration_rollouts_dir, _reset_state_cache
 from wrappers.util_wrappers import SaveEpisodeStats
@@ -37,7 +37,6 @@ trajectory_for_group_dict = {}
 logger = easy_tf_log.Logger()
 logger.set_log_dir(_demonstration_rollouts_dir)
 episode_stats_logger = None
-n_rl_steps_at_last_pref = None
 
 
 @demonstrations_app.route('/demonstrate', methods=['GET'])
@@ -67,15 +66,7 @@ def generate_rollouts():
 
 @demonstrations_app.route('/get_rollouts', methods=['GET'])
 def get_rollouts():
-    global n_rl_steps_at_last_pref
-    n_rl_steps = get_n_rl_steps()
-    if global_variables.n_rl_steps_per_interaction != 0:
-        if n_rl_steps is not None and n_rl_steps_at_last_pref is not None:  # Maybe we haven't started training yet
-            n_rl_steps_since_last_pref = n_rl_steps - n_rl_steps_at_last_pref
-            logger.logkv('interaction_limit/n_rl_steps', n_rl_steps)
-            logger.logkv('interaction_limit/n_rl_steps_since_last_pref', n_rl_steps_since_last_pref)
-            if n_rl_steps_since_last_pref < global_variables.n_rl_steps_per_interaction:
-                return 'No rollouts available'
+    throttle('rollouts')
 
     rollout_groups = get_metadatas()
     if not rollout_groups:
@@ -185,8 +176,6 @@ def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollo
 
 @demonstrations_app.route('/choose_rollout', methods=['GET'])
 def choose_rollout():
-    global n_rl_steps_at_last_pref
-
     group_name = request.args['group']
     chosen_rollout_hash_str = request.args['hash']
     policies_str = request.args['policies']
@@ -239,9 +228,7 @@ def choose_rollout():
                                                                    group_name, trajectory_dir, trajectory_serial,
                                                                    policy_names, softmax_temp)).start()
 
-    n_rl_steps_at_last_pref = get_n_rl_steps()
-    if n_rl_steps_at_last_pref is not None:
-        logger.logkv('interaction_limit/n_rl_steps_at_last_pref', n_rl_steps_at_last_pref)
+    mark_interaction()
 
     return ""
 

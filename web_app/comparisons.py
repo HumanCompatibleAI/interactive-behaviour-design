@@ -16,7 +16,8 @@ import global_variables
 from rollouts import CompressedRollout
 from utils import make_small_change, save_video
 from web_app import web_globals
-from web_app.utils import add_pref, nocache, get_n_rl_steps
+from web_app.interaction_throttler import throttle, mark_interaction
+from web_app.utils import add_pref, nocache
 
 comparisons_app = Blueprint('comparisons', __name__)
 logger = None
@@ -96,15 +97,9 @@ def get_segment_video():
 
 @comparisons_app.route('/get_comparison', methods=['GET'])
 def get_comparison():
-    global n_rl_steps_at_last_pref, segments_lock, segments_being_compared
-    n_rl_steps = get_n_rl_steps()
-    if global_variables.n_rl_steps_per_interaction != 0:
-        if n_rl_steps is not None and n_rl_steps_at_last_pref is not None:  # Maybe we haven't started training yet
-            n_rl_steps_since_last_pref = n_rl_steps - n_rl_steps_at_last_pref
-            logger.logkv('interaction_limit/n_rl_steps', n_rl_steps)
-            logger.logkv('interaction_limit/n_rl_steps_since_last_pref', n_rl_steps_since_last_pref)
-            if n_rl_steps_since_last_pref < global_variables.n_rl_steps_per_interaction:
-                return 'No segments available'
+    global segments_lock, segments_being_compared
+
+    throttle('segments')
 
     try:
         with segments_lock:
@@ -127,8 +122,6 @@ def get_comparison():
 
 @comparisons_app.route('/prefer_segment', methods=['POST'])
 def choose_segment():
-    global n_rl_steps_at_last_pref
-
     hash1 = request.form['hash1']
     hash2 = request.form['hash2']
     pref = json.loads(request.form['pref'])
@@ -156,10 +149,7 @@ def choose_segment():
         return f"Error: invalid preference '{pref}'"
 
     mark_compared(hash1, hash2, chosen_segment_n)
-
-    n_rl_steps_at_last_pref = get_n_rl_steps()
-    if n_rl_steps_at_last_pref is not None:
-        logger.logkv('interaction_limit/n_rl_steps_at_last_pref', n_rl_steps_at_last_pref)
+    mark_interaction()
 
     return ""
 
