@@ -439,6 +439,9 @@ def filter_pretraining_events(run_dir, events):
         events[tag] = [(t, v) for t, v in events[tag] if t >= training_start_timestamp]
         if not events[tag]:
             del events[tag]
+        if not events:
+            print("Error: no events after training start? Do the files have the original timestamps?", file=sys.stderr)
+            exit(1)
     # Reset the steps to start from 0 after the pretraining period
     first_step = events['policy_master/n_total_steps'][0][1]
     events['policy_master/n_total_steps'] = [(t, step - first_step)
