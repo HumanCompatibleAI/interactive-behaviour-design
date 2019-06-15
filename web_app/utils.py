@@ -60,9 +60,3 @@ def add_pref(rollout1: CompressedRollout, rollout2: CompressedRollout, pref):
 
 
 add_pref.added_prefs = 0
-
-
-def get_n_rl_steps():
-    if web_globals._policies.cur_policy is None:
-        return None
-    return web_globals._policies.policies[web_globals._policies.cur_policy].n_total_steps

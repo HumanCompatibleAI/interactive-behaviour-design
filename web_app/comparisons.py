@@ -13,10 +13,11 @@ from flask import Blueprint, render_template, request, send_from_directory
 from gym.utils import atomic_write
 
 import global_variables
+import throttler
 from rollouts import CompressedRollout
+from throttler import check_throttle
 from utils import make_small_change, save_video
 from web_app import web_globals
-from web_app.interaction_throttler import throttle, mark_interaction
 from web_app.utils import add_pref, nocache
 
 comparisons_app = Blueprint('comparisons', __name__)
@@ -99,7 +100,8 @@ def get_segment_video():
 def get_comparison():
     global segments_lock, segments_being_compared
 
-    throttle('segments')
+    if check_throttle(throttler.EventType.INTERACTION):
+        return 'No segments available'
 
     try:
         with segments_lock:
@@ -149,7 +151,7 @@ def choose_segment():
         return f"Error: invalid preference '{pref}'"
 
     mark_compared(hash1, hash2, chosen_segment_n)
-    mark_interaction()
+    throttler.mark_event(throttler.EventType.INTERACTION)
 
     return ""
 

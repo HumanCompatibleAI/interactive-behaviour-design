@@ -25,6 +25,7 @@ from gym.envs.robotics import FetchEnv
 from gym.envs.robotics.robot_env import RobotEnv
 
 import global_variables
+import throttler
 from a2c.policies import mlp, nature_cnn
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as SubprocVecEnvBaselines
 from basicfetch import basicfetch
@@ -101,6 +102,8 @@ def main():
     if platform.system() == 'Darwin':
         raise Exception(
             "Due to fork restrictions on macOS core libraries, macOS is not supported")
+
+    throttler.init(log_dir, 0)
 
     dummy_env = gym.make(args.env)
     if isinstance(dummy_env.unwrapped, (MujocoEnv, LunarLander)):

@@ -104,7 +104,7 @@ def compare(url):
     response = requests.get(url + '/get_comparison')
     response.raise_for_status()
     if response.text == 'No segments available':
-        raise NoRolloutsError
+        raise NoSegmentsError
     segment_dict = response.json()
     if not segment_dict:
         raise Exception("Empty segment dictionary")

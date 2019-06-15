@@ -5,6 +5,7 @@ from threading import Thread
 
 import easy_tf_log
 import numpy as np
+from gym.utils.atomic_write import atomic_write
 
 from global_constants import DEFAULT_BC_COEF
 from rollouts import RolloutsByHash
@@ -35,12 +36,15 @@ class Policy:
         self.training_enabled = False
         self.train_thread = None
         self.demonstration_rollouts = None
-        self.n_total_steps = None
+        self.n_serial_steps = 0
+        self.n_envs = n_envs
+        self.log_dir = None
 
     def init_logger(self, log_dir):
         if self.logger is None:
             self.logger = easy_tf_log.Logger()
             self.logger.set_log_dir(os.path.join(log_dir, 'policy_{}'.format(self.name)))
+            self.log_dir = log_dir
 
     def start_training(self):
         self.training_enabled = True
@@ -55,6 +59,19 @@ class Policy:
     def train_loop(self):
         while self.training_enabled:
             self.train()
+            if self.n_serial_steps > 100:
+                # Only write this once we've really started training;
+                # throttler uses this to decide when to start throttling
+                self.write_n_total_steps()
+
+    def n_total_steps(self):
+        return self.n_serial_steps * self.n_envs
+
+    def write_n_total_steps(self):
+        fname = os.path.join(self.log_dir, f'policy_{self.name}', 'n_total_steps.txt')
+        # Needs to be atomic because is read by throttler, possibly in a different thread
+        with atomic_write(fname) as f:
+            f.write(str(self.n_total_steps()) + '\n')
 
     @abstractmethod
     def train(self):
