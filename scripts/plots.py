@@ -507,15 +507,10 @@ class TestCombineCounterEvents(unittest.TestCase):
 
 
 def get_values_by_n_human_interactions(events, metric, run_type):
-    if run_type == 'DRLHP':
-        n_interactions = events['pref_db/added_prefs']
-    elif run_type in ['SDRLHP', 'SDRLHPNP', 'BC', 'BCNP']:
-        n_interactions = events['demonstrations/added_demonstrations']
-    elif run_type in ['SDRLHP-DRLHP', 'SDRLHPNP-DRLHP']:
-        n_interactions = combine_counters(events['pref_db/added_prefs'], events['demonstrations/added_demonstrations'])
-    else:
-        raise Exception(f"Unsure which tag represents no. human interactions for run type '{run_type}'")
-    xs, ys = interpolate_to_common_xs(events[metric.tag], n_interactions)
+    timestamps, _ = zip(*events['oracle/label_rate'])
+    n_interactions = range(len(timestamps))
+    timestamp_n_tuples = list(zip(timestamps, n_interactions))
+    xs, ys = interpolate_to_common_xs(events[metric.tag], timestamp_n_tuples)
     return xs, ys
 
 
