@@ -227,6 +227,7 @@ def main():
                     if logger:
                         logger.logkv('oracle/label_interval', t_since_last)
                         logger.logkv('oracle/label_rate', 1 / t_since_last)
+                        logger.logkv('oracle/n_interactions', n_interactions)
                 last_interaction_time = time.time()
                 rate_limiter.sleep()
 
