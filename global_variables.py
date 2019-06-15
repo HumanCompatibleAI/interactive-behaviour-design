@@ -27,7 +27,7 @@ n_cur_policy = None  # type: int
 # should acquire this lock before attempting the creation.
 env_creation_lock = None
 reward_selector = None
-min_n_rl_steps_per_pref = None
+n_rl_steps_per_interaction = None
 frames_per_segment = None
 rollout_noise_sigma = None
 

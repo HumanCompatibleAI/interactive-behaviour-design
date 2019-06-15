@@ -75,12 +75,12 @@ def parse_args():
     global_variables.rollout_noise_sigma = args.rollout_noise_sigma
 
     if args.target_n_prefs_per_24h == 0:
-        global_variables.min_n_rl_steps_per_pref = 0
+        global_variables.n_rl_steps_per_interaction = 0
     else:
         expected_steps_per_second = 800
         steps_per_24h = 24 * 60 * 60 * expected_steps_per_second
         steps_per_pref = int(steps_per_24h / args.target_n_prefs_per_24h)
-        global_variables.min_n_rl_steps_per_pref = steps_per_pref
+        global_variables.n_rl_steps_per_interaction = steps_per_pref
 
     if args.render_every_nth_episode is None:
         if 'Fetch' in args.env:
