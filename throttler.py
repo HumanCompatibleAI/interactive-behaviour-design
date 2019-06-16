@@ -28,12 +28,13 @@ class EventType(Enum):
     REWARD_PREDICTOR_15_BATCHES = 1
 
 
-def init(_log_dir, throttler_id):
+# ID necessary because we might have to initialize different throttlers for difference processes
+def init(_log_dir, log_dir_id):
     global logger, log_dir
     if logger is not None:
         raise Exception("Throttled already initialized")
     log_dir = _log_dir
-    logger = easy_tf_log.Logger(os.path.join(_log_dir, f'throttler_{throttler_id}'))
+    logger = easy_tf_log.Logger(os.path.join(_log_dir, f'throttler_{log_dir_id}'))
 
 
 def get_n_rl_steps_per_event(event_type):
