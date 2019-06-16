@@ -17,7 +17,7 @@ class Stats:
 
 class EventType(Enum):
     INTERACTION = 0
-    REWARD_PREDICTOR_STEP = 1
+    REWARD_PREDICTOR_10_STEPS = 1
 
 
 logger = None
@@ -38,13 +38,12 @@ def init(_log_dir, log_dir_id):
 def get_n_rl_steps_per_event(event_type):
     if event_type == EventType.INTERACTION:
         return global_variables.n_rl_steps_per_interaction
-    elif event_type == EventType.REWARD_PREDICTOR_STEP:
-        # lowest_seen_n_batches_per_second = 4
-        # expected_n_rl_steps_per_second = 800
-        # steps_per_batch = expected_n_rl_steps_per_second / lowest_seen_n_batches_per_second
-        # n_rl_steps_per_reward_predictor_step = steps_per_batch * 15
-        n_rl_steps_per_reward_predictor_step = 200
-        return n_rl_steps_per_reward_predictor_step
+    elif event_type == EventType.REWARD_PREDICTOR_10_STEPS:
+        desired_n_reward_predictor_steps_per_second = 50
+        expected_n_rl_steps_per_second = 800
+        n_rl_steps_per_reward_predictor_step = expected_n_rl_steps_per_second / desired_n_reward_predictor_steps_per_second
+        n_rl_steps_per_10_reward_predictor_steps = n_rl_steps_per_reward_predictor_step * 10
+        return n_rl_steps_per_10_reward_predictor_steps
 
 
 def mark_event(event_type):

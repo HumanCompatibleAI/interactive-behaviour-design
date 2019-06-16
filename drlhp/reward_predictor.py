@@ -9,9 +9,9 @@ import tensorflow as tf
 from numpy.testing import assert_equal
 
 import throttler
+from drlhp.drlhp_utils import LimitedRunningStat, RunningStat
 from drlhp.pref_db import PrefDB
 from drlhp.reward_predictor_core_network import net_cnn
-from drlhp.drlhp_utils import LimitedRunningStat, RunningStat
 from utils import batch_iter
 
 MIN_L2_REG_COEF = 0.1
@@ -209,12 +209,13 @@ class RewardPredictor:
         train_losses = []
         val_losses = []
         for batch_n, batch in enumerate(batch_iter(prefs_train.prefs, batch_size=32, shuffle=True)):
-            throttler.throttle_sleep(throttler.EventType.REWARD_PREDICTOR_STEP)
+            throttler.throttle_sleep(throttler.EventType.REWARD_PREDICTOR_10_STEPS)
             train_losses.append(self.train_step(batch, prefs_train))
             self.n_steps += 1
             if self.n_steps % val_interval == 0 and len(prefs_val) != 0:
                 val_losses.append(self.val_step(prefs_val))
-            throttler.mark_event(throttler.EventType.REWARD_PREDICTOR_STEP)
+            if self.n_steps % 10 == 0:
+                throttler.mark_event(throttler.EventType.REWARD_PREDICTOR_10_STEPS)
 
         if val_losses:
             train_loss = np.mean(train_losses)
