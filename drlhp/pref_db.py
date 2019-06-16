@@ -1,6 +1,4 @@
-import collections
 import copy
-import lzma
 import os
 import pickle
 import queue
@@ -46,30 +44,6 @@ class Segment:
         return len(self.frames)
 
 
-class CompressedDict(collections.MutableMapping):
-
-    def __init__(self):
-        self.store = dict()
-
-    def __getitem__(self, key):
-        return pickle.loads(lzma.decompress(self.store[key]))
-
-    def __setitem__(self, key, value):
-        self.store[key] = lzma.compress(pickle.dumps(value))
-
-    def __delitem__(self, key):
-        del self.store[key]
-
-    def __iter__(self):
-        return iter(self.store)
-
-    def __len__(self):
-        return len(self.store)
-
-    def __keytransform__(self, key):
-        return key
-
-
 class PrefDB:
     """
     A circular database of preferences about pairs of segments.
@@ -104,7 +78,7 @@ class PrefDB:
 
     def reset(self):
         with self.lock:
-            self.segments = CompressedDict()
+            self.segments = dict()
             self.seg_refs = {}
             self.prefs = []
 
