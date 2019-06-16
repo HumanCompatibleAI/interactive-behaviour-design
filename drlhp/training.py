@@ -75,7 +75,7 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
 
         t3 = time.time()
         try:
-            reward_predictor.train(pref_db.train, pref_db.test, val_interval=1)
+            reward_predictor.train(pref_db.train, pref_db.test, val_interval=20)
         except:
             print("Exception while training reward predictor:")
             traceback.print_exc()
