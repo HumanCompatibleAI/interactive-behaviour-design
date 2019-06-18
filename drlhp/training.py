@@ -64,7 +64,7 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
         # but just in case, let's be careful
         try:
             with LogMilliseconds('reward_predictor_train_loop/prefs_load_time_ms', logger):
-                pref_db.load(pref_db_path)
+                pref_db.load(pref_db_path, verbose=False)
         except:
             print("Exception while loading preference database:")
             traceback.print_exc()
@@ -77,7 +77,7 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
 
         with LogMilliseconds('reward_predictor_train_loop/train_time_ms', logger):
             try:
-                reward_predictor.train(pref_db.train, pref_db.test, val_interval=20)
+                reward_predictor.train(pref_db.train, pref_db.test, val_interval=20, verbose=False)
             except:
                 print("Exception while training reward predictor:")
                 traceback.print_exc()

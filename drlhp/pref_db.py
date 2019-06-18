@@ -191,10 +191,11 @@ class PrefDBTestTrain:
     def __init__(self):
         self.reset()
 
-    def load(self, path):
+    def load(self, path, verbose=True):
         with open(path, 'rb') as f:
             self.test, self.train = pickle.load(f)
-            print(f"\tLoaded {len(self.test)}/{len(self.train)} test/train prefs")
+            if verbose:
+                print(f"Loaded {len(self.test)}/{len(self.train)} test/train prefs")
 
     def save(self, path):
         # Important to write atomically because this is loaded by the reward predictor training process
