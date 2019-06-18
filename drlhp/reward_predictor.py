@@ -12,7 +12,7 @@ import throttler
 from drlhp.drlhp_utils import LimitedRunningStat, RunningStat
 from drlhp.pref_db import PrefDB
 from drlhp.reward_predictor_core_network import net_cnn
-from utils import batch_iter
+from utils import batch_iter, RateMeasure
 
 MIN_L2_REG_COEF = 0.1
 
@@ -65,6 +65,9 @@ class RewardPredictor:
         self.log_interval = 20
 
         self.ckpt_n = 0
+
+        self.step_rate = RateMeasure()
+        self.step_rate.reset(self.n_steps)
 
         self.init_network()
 
@@ -203,18 +206,18 @@ class RewardPredictor:
         if verbose:
             print("Training/testing with %d/%d preferences" % (len(prefs_train), len(prefs_val)))
 
-        start_steps = self.n_steps
-        start_time = time.time()
-
         train_losses = []
         val_losses = []
         for batch_n, batch in enumerate(batch_iter(prefs_train.prefs, batch_size=32, shuffle=True)):
-            throttler.throttle_sleep(throttler.EventType.REWARD_PREDICTOR_10_STEPS)
             train_losses.append(self.train_step(batch, prefs_train))
             self.n_steps += 1
             if self.n_steps % val_interval == 0 and len(prefs_val) != 0:
                 val_losses.append(self.val_step(prefs_val))
+            if self.n_steps % 100 == 0:
+                rate = self.step_rate.measure(self.n_steps)
+                self.logger.logkv('reward_predictor/training_steps_per_second', rate)
             if self.n_steps % 10 == 0:
+                throttler.throttle_sleep(throttler.EventType.REWARD_PREDICTOR_10_STEPS)
                 throttler.mark_event(throttler.EventType.REWARD_PREDICTOR_10_STEPS)
 
         if val_losses:
@@ -228,10 +231,6 @@ class RewardPredictor:
                 self.l2_reg_coef = max(self.l2_reg_coef / 1.5, MIN_L2_REG_COEF)
             self.logger.logkv('reward_predictor/reg_coef', self.l2_reg_coef)
 
-        end_time = time.time()
-        end_steps = self.n_steps
-        rate = (end_steps - start_steps) / (end_time - start_time)
-        self.logger.logkv('reward_predictor/training_steps_per_second', rate)
         if verbose:
             print("Done training DRLHP!")
 

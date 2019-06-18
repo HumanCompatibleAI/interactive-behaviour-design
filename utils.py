@@ -527,7 +527,7 @@ def save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus):
 def configure_cpus(log_dir, n_gpus):
     available_cpus = list(os.sched_getaffinity(0))
     rollouter_cpus = [available_cpus.pop() for _ in range(4)]
-    n_drlhp_training_cpus = 1 if n_gpus > 0 else 4
+    n_drlhp_training_cpus = 4
     drlhp_training_cpus = [available_cpus.pop() for _ in range(n_drlhp_training_cpus)]
     main_cpus = available_cpus
     save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus)
