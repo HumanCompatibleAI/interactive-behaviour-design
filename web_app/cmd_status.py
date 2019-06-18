@@ -235,6 +235,8 @@ def run_cmd():
         else:
             raise Exception(f"Invalid explore value '{explore}")
         _policy_rollouter.just_explore = explore
+    elif cmd == 'checkpoint':
+        _checkpointer.checkpoint()
     else:
         return "Unknown command '{}'".format(cmd)
 

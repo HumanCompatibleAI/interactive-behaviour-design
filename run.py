@@ -312,12 +312,11 @@ def main():
     checkpointer = Checkpointer(ckpt_dir, policies, classifier, pref_db, pref_db_ckpt_name)
     checkpointer.checkpoint()
 
-    reward_predictor_log_dir = os.path.join(log_dir, 'drlhp')
     obs_shape = train_env.observation_space.shape
 
     def make_reward_predictor_fn(name, gpu_n):
         return RewardPredictor(network=reward_predictor_network, network_args=reward_predictor_network_args,
-                               log_dir=reward_predictor_log_dir, obs_shape=obs_shape,
+                               log_dir=log_dir, obs_shape=obs_shape,
                                r_std=reward_predictor_std,
                                name=name, gpu_n=gpu_n)
 

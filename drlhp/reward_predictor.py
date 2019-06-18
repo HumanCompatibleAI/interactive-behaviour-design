@@ -54,12 +54,14 @@ class RewardPredictor:
             osp.join(log_dir, f'reward_predictor_{name}', 'test'), flush_secs=5)
 
         self.n_steps = 0
+        self.n_epochs = 0
         self.r_norm_limited = LimitedRunningStat()
         self.r_norm = RunningStat(shape=[])
         self.r_std = r_std
 
         self.logger = easy_tf_log.Logger()
         self.logger.set_log_dir(osp.join(log_dir, f'reward_predictor_{name}', 'misc'))
+        self.log_n_epochs()
         self.reward_call_n = 0
 
         self.log_interval = 20
@@ -231,8 +233,14 @@ class RewardPredictor:
                 self.l2_reg_coef = max(self.l2_reg_coef / 1.5, MIN_L2_REG_COEF)
             self.logger.logkv('reward_predictor/reg_coef', self.l2_reg_coef)
 
+        self.n_epochs += 1
+        self.log_n_epochs()
+
         if verbose:
             print("Done training DRLHP!")
+
+    def log_n_epochs(self):
+        self.logger.logkv('reward_predictor/n_epochs', self.n_epochs)
 
     def train_step(self, batch, prefs_train):
         s1s = [prefs_train.segments[k1] for k1, k2, pref, in batch]

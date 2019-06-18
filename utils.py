@@ -635,3 +635,16 @@ def get_available_gpu_ns():
     results_queue = ctx.Queue()
     ctx.Process(target=get_available_gpu_ns_proc, args=(results_queue,)).start()
     return results_queue.get()
+
+
+def read_events_file(events_filename):
+    events = {}
+    try:
+        for event in tf.train.summary_iterator(events_filename):
+            for value in event.summary.value:
+                if value.tag not in events:
+                    events[value.tag] = []
+                events[value.tag].append((event.wall_time, value.simple_value))
+    except Exception as e:
+        print(f"While reading '{events_filename}':", e)
+    return events
