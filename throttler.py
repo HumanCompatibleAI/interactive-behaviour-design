@@ -4,15 +4,8 @@ from collections import defaultdict
 from enum import Enum
 
 import easy_tf_log
-import numpy as np
 
 import global_variables
-
-
-class Stats:
-    def __init__(self, init_time, n_rl_steps_since_last_event_list):
-        self.init_time = init_time
-        self.n_rl_steps_since_last_list = n_rl_steps_since_last_event_list
 
 
 class EventType(Enum):
@@ -23,7 +16,6 @@ class EventType(Enum):
 logger = None
 log_dir = None
 n_rl_steps_at_last_event = defaultdict(lambda: 0)
-event_stats = defaultdict(lambda: Stats(init_time=0, n_rl_steps_since_last_event_list=[]))
 
 
 # log_dir_is necessary because we might have to initialize different throttlers for difference processes
@@ -56,18 +48,12 @@ def mark_event(event_type):
 
 def log_stats(event_type, n_rl_steps):
     n_rl_steps_since_last_event = n_rl_steps - n_rl_steps_at_last_event[event_type]
-    # This gets called for every reward predictor training step, so we need to be careful not to log too often
-    stats = event_stats[event_type]
-    stats.n_rl_steps_since_last_list.append(n_rl_steps_since_last_event)
-    seconds_since_last_log = time.time() - stats.init_time
-    if seconds_since_last_log > 60:
-        frac = np.array(stats.n_rl_steps_since_last_list) / get_n_rl_steps_per_event(event_type)
-        for aggregation_str, aggregration_fn in [('max', max), ('min', min)]:
-            logger.logkv(f'throttler/{event_type.name}/n_rl_steps_since_last_{aggregation_str}',
-                         aggregration_fn(stats.n_rl_steps_since_last_list))
-            logger.logkv(f'throttler/{event_type.name}/target_frac_{aggregation_str}',
-                         aggregration_fn(frac))
-        event_stats[event_type] = Stats(init_time=time.time(), n_rl_steps_since_last_event_list=[])
+    n_target = get_n_rl_steps_per_event(event_type)
+    # 0 => don't throttle
+    if n_target == 0:
+        return
+    frac = n_rl_steps_since_last_event / n_target
+    logger.logkv(f'throttler/{event_type.name}/target_frac', frac)
 
 
 def get_n_rl_steps():
