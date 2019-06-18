@@ -73,7 +73,7 @@ class TimerContext(object):
             print("'{}' took {:.1f} {} ({})".format(self.name, duration, units, time.time()))
 
 
-class LogTime:
+class LogMilliseconds:
     def __init__(self, name, easy_tf_log_logger):
         self.name = name
         self.logger = easy_tf_log_logger
@@ -84,7 +84,7 @@ class LogTime:
     def __exit__(self, type, value, traceback):
         t_end = time.time()
         duration_seconds = t_end - self.t_start
-        self.logger.logkv('time/{}'.format(self.name), duration_seconds)
+        self.logger.logkv(self.name, duration_seconds * 1000)
 
 
 class RateMeasure:

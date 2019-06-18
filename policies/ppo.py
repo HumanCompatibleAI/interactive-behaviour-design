@@ -11,7 +11,7 @@ import global_variables
 from baselines.common.policies import build_policy
 from baselines.ppo2.ppo2 import constfn, Model as PPOModel, Runner as PPORunner
 from policies.base_policy import Policy, PolicyTrainMode
-from utils import RateMeasure, batch_iter, LogTime, Timer, sample_demonstration_batch, NotEnoughDemonstrations
+from utils import RateMeasure, batch_iter, LogMilliseconds, Timer, sample_demonstration_batch, NotEnoughDemonstrations
 
 
 class PPOPolicy(Policy):
@@ -257,7 +257,7 @@ class PPOPolicy(Policy):
                 self.logger.logkv('policy_{}/{}'.format(self.name, stat_key), stats[n])
 
     def train_bc_only(self):
-        with LogTime('bc_training', self.logger):
+        with LogMilliseconds('bc_training', self.logger):
             train_timer = Timer(duration_seconds=self.train_bc_time)
             train_timer.reset()
             while not train_timer.done():
@@ -280,7 +280,7 @@ class PPOPolicy(Policy):
                 self.n_bc_epochs += 1
                 self.logger.logkv(f'policy_{self.name}/n_bc_epochs', self.n_bc_epochs)
 
-        with LogTime('run_episode', self.logger):
+        with LogMilliseconds('run_episode', self.logger):
             t1 = time.time()
             done = [False]
             obs = self.last_obs
