@@ -41,7 +41,7 @@ def get_args():
     parser.add_argument('--disable_redo', action='store_true')
     parser.add_argument('--extra_args')
     parser.add_argument('--time', default=str(int(time.time())))
-    parser.add_argument('--min_label_interval_seconds', type=float, default=3)
+    parser.add_argument('--min_label_interval_seconds', type=float, default=0.1)
     parser.add_argument('--max_interactions', type=int, default=None)
     parser.add_argument('--decay_label_rate', action='store_true')
     parser.add_argument('--gpus', default='')
