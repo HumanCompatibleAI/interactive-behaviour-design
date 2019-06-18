@@ -11,8 +11,9 @@ from cloudpickle import cloudpickle
 import throttler
 from drlhp.pref_db import PrefDBTestTrain
 from drlhp.reward_predictor import RewardPredictor
-from global_constants import SYNC_REWARD_PREDICTOR_EVERY_N_SECONDS
-from utils import load_cpu_config, find_latest_checkpoint, LogMilliseconds
+from global_constants import MAIN_PROCESS_LOAD_REWARD_PREDICTOR_EVERY_N_SECONDS, \
+    REWARD_PREDICTOR_TRAINING_PROCESS_SAVE_EVERY_N_SECONDS
+from utils import load_cpu_config, find_latest_checkpoint, LogMilliseconds, Timer
 
 
 def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
@@ -24,7 +25,7 @@ def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
 
     n_successful_loads = 0
     while True:
-        time.sleep(SYNC_REWARD_PREDICTOR_EVERY_N_SECONDS)
+        time.sleep(MAIN_PROCESS_LOAD_REWARD_PREDICTOR_EVERY_N_SECONDS)
         try:
             latest_ckpt_path = find_latest_checkpoint(ckpt_path)
             reward_predictor.load(latest_ckpt_path)
@@ -48,6 +49,9 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
     reward_predictor.save(save_ckpt_path)  # So that the checkpoint load thread is quieted
     pref_db = PrefDBTestTrain()
     logger = easy_tf_log.Logger(os.path.join(log_dir, 'drlhp_train_loop'))
+
+    ckpt_timer = Timer(duration_seconds=REWARD_PREDICTOR_TRAINING_PROCESS_SAVE_EVERY_N_SECONDS)
+    ckpt_timer.reset()
 
     while True:
         sys.stdout.flush()
@@ -80,5 +84,7 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
                 time.sleep(1.0)
                 continue
 
-        with LogMilliseconds('reward_predictor_train_loop/ckpt_save_time_ms', logger):
-            reward_predictor.save(save_ckpt_path)
+        if ckpt_timer.done():
+            with LogMilliseconds('reward_predictor_train_loop/ckpt_save_time_ms', logger):
+                reward_predictor.save(save_ckpt_path)
+            ckpt_timer.reset()
