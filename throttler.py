@@ -85,11 +85,11 @@ def check_throttle(event_type: EventType):
     n_rl_steps_per_event = get_n_rl_steps_per_event(event_type)
     # 0 => don't throttle
     if n_rl_steps_per_event == 0:
-        return
+        return False
 
     n_rl_steps = get_n_rl_steps()
     if n_rl_steps is None:
-        return
+        return False
 
     n_rl_steps_since_last_event = n_rl_steps - n_rl_steps_at_last_event[event_type]
     if n_rl_steps_since_last_event < n_rl_steps_per_event:
