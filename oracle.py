@@ -173,7 +173,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('url')
     parser.add_argument('segment_generation')
-    parser.add_argument('--seconds_per_label', type=int)
+    parser.add_argument('--seconds_per_label', type=float)
     parser.add_argument('--decay_label_rate', action='store_true')
     parser.add_argument('--schedule')  # '15/45' -> 'Alternating 15 minutes giving preferences/45 minutes of rest'
     parser.add_argument('--log_dir')
