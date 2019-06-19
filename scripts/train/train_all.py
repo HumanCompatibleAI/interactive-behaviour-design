@@ -101,7 +101,9 @@ def main():
                 print(cmd)
 
 
-def get_initial_prefs_config(env_id):
+def get_initial_prefs_config(env_id, extra_args):
+    if 'n_initial_prefs' in extra_args:
+        return ''
     if 'Fetch' in env_id:
         n = 100
     else:
@@ -109,7 +111,9 @@ def get_initial_prefs_config(env_id):
     return f'--n_initial_prefs {n}'
 
 
-def get_pretrain_config(env_id):
+def get_pretrain_config(env_id, extra_args):
+    if 'pretrain_reward_predictor_epochs' in extra_args:
+        return ''
     if 'Fetch' in env_id:
         n_epochs = 10
     else:
