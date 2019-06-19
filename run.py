@@ -89,7 +89,6 @@ def main():
     register_debug_handler()
 
     args, log_dir = parse_args()
-    assert args.n_envs == 16
     # check_env(args.env)
 
     gpu_ns = get_available_gpu_ns()
