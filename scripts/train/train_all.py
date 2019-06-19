@@ -55,7 +55,7 @@ def main():
         try:
             args.gpus = str(find_least_busy_gpu())
         except NoGPUsError:
-            args.gpus = None
+            args.gpus = ''
 
     seeds = list(map(int, args.seeds.split(',')))
     if args.test:
@@ -78,14 +78,14 @@ def main():
     else:
         run_suffix = ''
     for env_shortname, env_id in prefs_envs:
-        rollout_len_config = get_rollout_len_config(env_id)
+        rollout_len_config = get_rollout_len_config(env_id, args.extra_args)
         pretrain_config = get_pretrain_config(env_id)
         initial_prefs_config = get_initial_prefs_config(env_id)
         experiments = get_experiments(env_id)
         for ex in experiments:
             redo_config = f"{'--disable_redo' if ex.disable_redo else ''} "
             decay_config = f"{'--decay_label_rate' if ex.decay_label_rate else ''} "
-            extra_args = f" {rollout_len_config} {ex.no_primitives_config} {args.extra_args}"
+            extra_args = f"{rollout_len_config} {ex.no_primitives_config} {args.extra_args}"
             wandb_group = f"{env_shortname}-{ex.name}{run_suffix}_{git_rev}"
             for seed in seeds:
                 run_name = f"{env_shortname}-{seed}-{ex.name}{run_suffix}"
@@ -117,7 +117,9 @@ def get_pretrain_config(env_id):
     return f'--pretrain_reward_predictor_epochs {n_epochs}'
 
 
-def get_rollout_len_config(env_id):
+def get_rollout_len_config(env_id, extra_args):
+    if 'rollout_length_seconds' in extra_args:
+        return ''
     if 'Fetch' in env_id:
         rollout_length_seconds = 0.5
     elif 'Breakout' in env_id:
