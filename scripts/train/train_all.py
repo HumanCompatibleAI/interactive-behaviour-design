@@ -79,8 +79,8 @@ def main():
         run_suffix = ''
     for env_shortname, env_id in prefs_envs:
         rollout_len_config = get_rollout_len_config(env_id, args.extra_args)
-        pretrain_config = get_pretrain_config(env_id)
-        initial_prefs_config = get_initial_prefs_config(env_id)
+        pretrain_config = get_pretrain_config(env_id, args.harness_extra_args)
+        initial_prefs_config = get_initial_prefs_config(env_id, args.harness_extra_args)
         experiments = get_experiments(env_id)
         for ex in experiments:
             redo_config = f"{'--disable_redo' if ex.disable_redo else ''} "
@@ -94,7 +94,7 @@ def main():
                 cmd = ("python3 scripts/train/auto_train_prefs.py "
                        f"{env_id} {ex.train_mode} {ex.segment_generation} {run_name} "
                        f"{test_args} {redo_config} {decay_config} {pretrain_config} {initial_prefs_config} "
-                       f"{args.harness_extra_args}"
+                       f"{args.harness_extra_args} "
                        f"--seed {seed} "
                        f"--extra_args ' {extra_args}' --gpus '{args.gpus}' "
                        f"--tags {env_shortname},{ex.name} --group {wandb_group}")
