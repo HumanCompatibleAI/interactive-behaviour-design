@@ -159,12 +159,7 @@ def find_latest_checkpoint(ckpt_prefix):
             continue
     meta_path_timestample_tuples.sort(key=lambda tup: tup[1])
     ckpt_paths = [meta_path.replace('.meta', '') for meta_path, _ in meta_path_timestample_tuples]
-    if len(ckpt_paths) == 1:
-        return ckpt_paths[0]
-    else:
-        # Return the second-latest checkpoint to maximize the chance of successful restoration
-        # (in case e.g. the very latest one is still being written to)
-        return ckpt_paths[-2]
+    return ckpt_paths[-1]
 
 
 class CompressedAttributes:
