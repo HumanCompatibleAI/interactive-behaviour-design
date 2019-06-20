@@ -8,7 +8,6 @@ from gym.core import ObservationWrapper, Wrapper
 from gym.wrappers.monitoring.video_recorder import ImageEncoder
 
 from baselines.common.vec_env import VecEnvWrapper
-from drlhp.reward_predictor import RewardPredictor
 from utils import draw_dict_on_image
 
 """
@@ -141,25 +140,12 @@ class DrawRewards(Wrapper):
             return self.env.render(mode)
 
 
-class VecUsePredictedRewards(VecEnvWrapper):
-    def __init__(self, venv, reward_predictor: RewardPredictor):
-        self.reward_predictor = reward_predictor
-        super().__init__(venv)
-
-    def step_wait(self):
-        obses, _, dones, infos = self.venv.step_wait()
-        rewards = self.reward_predictor.raw_rewards(obses)[0]
-        return obses, rewards, dones, infos
-
-    def reset(self):
-        return self.venv.reset()
-
-    def reset_one_env(self, env_n):
-        return self.venv.reset_one_env(env_n)
-
-
 class RewardGrapher:
     def __init__(self):
+        self.values = None
+        self.reset()
+
+    def reset(self):
         self.values = deque(maxlen=100)
 
     def draw(self, frame):
@@ -189,31 +175,29 @@ class RewardGrapher:
         return frame
 
 
-class VecRecordVideosWithRewardGraphs(VecEnvWrapper):
-    def __init__(self, venv, video_dir):
+class VecRecordVideosWithPredictedRewardGraphs(VecEnvWrapper):
+    def __init__(self, venv, video_dir, reward_predictor):
         self.encoder = None
         self.dir = video_dir
         os.makedirs(self.dir)
         self.episode_n = 0
-        self.reward_graphers = [RewardGrapher() for _ in range(venv.num_envs)]
+        self.reward_grapher = RewardGrapher()
+        self.reward_predictor = reward_predictor
         super().__init__(venv)
 
     def step_wait(self):
         obses, rewards, dones, infos = self.venv.step_wait()
-        ims = self.venv.get_images()
-        frames = []
-        for grapher, reward, im in zip(self.reward_graphers, rewards, ims):
-            grapher.values.append(reward)
-            im = grapher.draw(im)
-            frames.append(im)
-        im = np.hstack(frames)
+        frames = self.venv.get_images()
+        predicted_rewards = self.reward_predictor.raw_rewards(obses)[0]
+        self.reward_grapher.values.append(predicted_rewards[0])
+        frame = self.reward_grapher.draw(frames[0])
 
         if not self.encoder:
             video_fname = os.path.join(self.dir, f'{self.episode_n}.mp4')
             self.encoder = ImageEncoder(video_fname,
-                                        im.shape,
+                                        frame.shape,
                                         frames_per_sec=30)
-        self.encoder.capture_frame(im)
+        self.encoder.capture_frame(frame)
         if dones[0]:
             self.encoder.close()
             self.encoder = None
@@ -221,6 +205,7 @@ class VecRecordVideosWithRewardGraphs(VecEnvWrapper):
 
     def reset(self):
         self.episode_n += 1
+        self.reward_grapher.reset()
         return self.venv.reset()
 
     def reset_one_env(self, env_n):
