@@ -47,6 +47,8 @@ def read_events_by_directory(dirs):
     with open('events_by_directory.pkl', 'wb') as f:
         pickle.dump(events_by_directory, f)
 
+    return events_by_directory
+
 
 def merge_events(events_list):
     assert isinstance(events_list, list)
