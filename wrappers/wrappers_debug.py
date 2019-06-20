@@ -1,8 +1,14 @@
+import os
+from collections import deque
+
 import cv2
 import gym.spaces as spaces
 import numpy as np
 from gym.core import ObservationWrapper, Wrapper
+from gym.wrappers.monitoring.video_recorder import ImageEncoder
 
+from baselines.common.vec_env import VecEnvWrapper
+from drlhp.reward_predictor import RewardPredictor
 from utils import draw_dict_on_image
 
 """
@@ -133,6 +139,94 @@ class DrawRewards(Wrapper):
             return im
         else:
             return self.env.render(mode)
+
+
+class VecUsePredictedRewards(VecEnvWrapper):
+    def __init__(self, venv, reward_predictor: RewardPredictor):
+        self.reward_predictor = reward_predictor
+        super().__init__(venv)
+
+    def step_wait(self):
+        obses, _, dones, infos = self.venv.step_wait()
+        rewards = self.reward_predictor.raw_rewards(obses)[0]
+        return obses, rewards, dones, infos
+
+    def reset(self):
+        return self.venv.reset()
+
+    def reset_one_env(self, env_n):
+        return self.venv.reset_one_env(env_n)
+
+
+class RewardGrapher:
+    def __init__(self):
+        self.values = deque(maxlen=100)
+
+    def draw(self, frame):
+        if not self.values:
+            return frame
+        y = 10
+        height = 100
+        frame[y, 5:-5, :] = 255
+        frame[y + height, 5:-5, :] = 255
+        frame[y + height // 2, 5:-5, :] = 255
+        frame[y:y + height, 5, :] = 255
+        frame[y:y + height, -5, :] = 255
+        scale = np.max(np.abs(self.values))
+        if scale == 0:
+            scale = 1
+        for x, val in enumerate(self.values):
+            val_y = int((val / scale) * (height / 2))
+            frame[y + height // 2 - val_y, 5 + x, :] = 255
+        frame = np.array(frame)
+        cv2.putText(frame,
+                    "{:.3f}".format(self.values[-1]),
+                    org=(20, 50),
+                    fontFace=cv2.FONT_HERSHEY_PLAIN,
+                    fontScale=0.5,
+                    color=[255] * frame.shape[-1],
+                    thickness=1)
+        return frame
+
+
+class VecRecordVideosWithRewardGraphs(VecEnvWrapper):
+    def __init__(self, venv, video_dir):
+        self.encoder = None
+        self.dir = video_dir
+        os.makedirs(self.dir)
+        self.episode_n = 0
+        self.reward_graphers = [RewardGrapher() for _ in range(venv.num_envs)]
+        super().__init__(venv)
+
+    def step_wait(self):
+        obses, rewards, dones, infos = self.venv.step_wait()
+        ims = self.venv.get_images()
+        frames = []
+        for grapher, reward, im in zip(self.reward_graphers, rewards, ims):
+            grapher.values.append(reward)
+            im = grapher.draw(im)
+            frames.append(im)
+        im = np.hstack(frames)
+
+        if not self.encoder:
+            video_fname = os.path.join(self.dir, f'{self.episode_n}.mp4')
+            self.encoder = ImageEncoder(video_fname,
+                                        im.shape,
+                                        frames_per_sec=30)
+        self.encoder.capture_frame(im)
+        if dones[0]:
+            self.encoder.close()
+            self.encoder = None
+        return obses, rewards, dones, infos
+
+    def reset(self):
+        self.episode_n += 1
+        return self.venv.reset()
+
+    def reset_one_env(self, env_n):
+        if env_n == 0:
+            self.episode_n += 1
+        self.venv.reset_one_env(env_n)
 
 
 class DrawObses(Wrapper):
