@@ -12,7 +12,7 @@ import numpy as np
 from gym import Wrapper, ObservationWrapper
 from gym.spaces import Box
 from gym.utils.play import play
-
+from gym.wrappers import TimeLimit
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from drlhp.reward_predictor import RewardPredictor
@@ -42,15 +42,17 @@ class DrawPredictedReward(Wrapper):
             return frame
         r = self.reward_predictor.raw_rewards(np.array([self.last_obs]))[0][0]
         self.graph_values.append(r)
-        frame[30, 5:-5, :] = 255
-        frame[20, 5:-5, :] = 255
-        frame[10, 5:-5, :] = 255
-        frame[10:30, 5, :] = 255
-        frame[10:30, -5, :] = 255
+        y = 10
+        height = 100
+        frame[y, 5:-5, :] = 255
+        frame[y + height, 5:-5, :] = 255
+        frame[y + height // 2, 5:-5, :] = 255
+        frame[y:y + height, 5, :] = 255
+        frame[y:y + height, -5, :] = 255
+        scale = np.max(np.abs(self.graph_values))
         for x, val in enumerate(self.graph_values):
-            scale = np.max(np.abs(self.graph_values))
-            y = int(val / scale * 10)
-            frame[20 - y, 5 + x, :] = 255
+            val_y = int((val / scale) * (height / 2))
+            frame[y + height // 2 - val_y, 5 + x, :] = 255
         cv2.putText(frame,
                     "{:.3f}".format(r),
                     org=(20, 50),
@@ -79,7 +81,9 @@ args = parser.parse_args()
 seaquest_register()
 breakout_register()
 fetch_reach_register()
-env = gym.make(args.env_id)
+env = gym.make(args.env_id)  # type: TimeLimit
+env._max_episode_seconds = None
+env._max_episode_steps = None
 
 if 'Fetch' in args.env_id:
     net = net_mlp
