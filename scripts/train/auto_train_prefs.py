@@ -19,7 +19,8 @@ import requests
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from utils import save_args, get_git_rev, read_events_file
-from drlhp.training import CheckForceCheckpoint
+import drlhp.training
+from drlhp.training import FileBasedEventPipe
 
 args = None
 
@@ -153,7 +154,8 @@ def wait_for_reward_predictor_n_epochs_trained(log_dir, n):
         if n_epochs != last_n_epochs:
             print(f"{n_epochs}/{n} epochs")
         last_n_epochs = n_epochs
-    force_drlhp_train_process_checkpoint(args.log_dir)
+    force_reward_predictor_training_process_save(args.log_dir)
+    force_reward_predictor_load(args.log_dir)
 
 
 def get_reward_predictor_n_epochs_trained(log_dir):
@@ -292,8 +294,14 @@ def force_main_process_checkpoint(base_url):
     requests.get(base_url + '/run_cmd?cmd=checkpoint').raise_for_status()
 
 
-def force_drlhp_train_process_checkpoint(log_dir):
-    CheckForceCheckpoint.force(log_dir)
+def force_reward_predictor_training_process_save(log_dir):
+    FileBasedEventPipe.send_event(os.path.join(log_dir, drlhp.training.FORCE_SAVE_FNAME))
+    FileBasedEventPipe.wait_for_ack(os.path.join(log_dir, drlhp.training.FORCE_SAVE_FNAME))
+
+
+def force_reward_predictor_load(log_dir):
+    FileBasedEventPipe.send_event(os.path.join(log_dir, drlhp.training.FORCE_LOAD_FNAME))
+    FileBasedEventPipe.wait_for_ack(os.path.join(log_dir, drlhp.training.FORCE_LOAD_FNAME))
 
 
 def start_reward_predictor_training(base_url):
