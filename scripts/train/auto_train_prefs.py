@@ -19,6 +19,7 @@ import requests
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from utils import save_args, get_git_rev, read_events_file
+from drlhp.training import CheckForceCheckpoint
 
 args = None
 
@@ -133,7 +134,6 @@ def main():
         if not args.no_pretrain:
             wait_for_initial_preferences(base_url, args.n_initial_prefs)
         if args.training_mode in ['reward_only', 'reward_plus_bc']:
-            # We assume we already have sufficient initial preferences from initial demonstrations
             start_reward_predictor_training(base_url)
             if not args.no_pretrain:
                 print("Pretraining reward predictor...")
@@ -153,6 +153,7 @@ def wait_for_reward_predictor_n_epochs_trained(log_dir, n):
         if n_epochs != last_n_epochs:
             print(f"{n_epochs}/{n} epochs")
         last_n_epochs = n_epochs
+    force_drlhp_train_process_checkpoint(args.log_dir)
 
 
 def get_reward_predictor_n_epochs_trained(log_dir):
@@ -284,11 +285,15 @@ def wait_for_initial_preferences(base_url, n_initial_prefs):
         time.sleep(1)
         n_prefs = get_n_prefs(base_url)
     # So that preferences are picked up by reward predictor training process
-    force_checkpoint(base_url)
+    force_main_process_checkpoint(base_url)
 
 
-def force_checkpoint(base_url):
+def force_main_process_checkpoint(base_url):
     requests.get(base_url + '/run_cmd?cmd=checkpoint').raise_for_status()
+
+
+def force_drlhp_train_process_checkpoint(log_dir):
+    CheckForceCheckpoint.force(log_dir)
 
 
 def start_reward_predictor_training(base_url):

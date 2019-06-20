@@ -36,6 +36,32 @@ def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
             traceback.print_exc()
 
 
+class CheckForceCheckpoint:
+    FORCE_FILE_NAME = 'force_drlhp_training_process_to_checkpoint'
+
+    @staticmethod
+    def force(log_dir):
+        open(os.path.join(log_dir, CheckForceCheckpoint.FORCE_FILE_NAME), 'w')
+
+    def __init__(self, log_dir):
+        self.log_dir = log_dir
+        self.last_mtime = None
+
+    def check(self):
+        force_file_path = os.path.join(self.log_dir, CheckForceCheckpoint.FORCE_FILE_NAME)
+        if not os.path.exists(force_file_path):
+            return
+
+        cur_mtime = os.path.getmtime(force_file_path)
+        if self.last_mtime is None or cur_mtime > self.last_mtime:
+            force = True
+        else:
+            force = False
+        self.last_mtime = cur_mtime
+
+        return force
+
+
 def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
                      run_training: multiprocessing.Value,
                      pref_db_path,
@@ -45,11 +71,13 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
     load_cpu_config(log_dir, 'drlhp_training')
     throttler.init(log_dir, 1)
 
-    reward_predictor = cloudpickle.loads(make_reward_predictor_fn_cloudpickle)('training', gpu_n)  # type: RewardPredictor
+    make_reward_predictor_fn = cloudpickle.loads(make_reward_predictor_fn_cloudpickle)
+    reward_predictor = make_reward_predictor_fn('training', gpu_n)  # type: RewardPredictor
     reward_predictor.save(save_ckpt_path)  # So that the checkpoint load thread is quieted
     pref_db = PrefDBTestTrain()
     logger = easy_tf_log.Logger(os.path.join(log_dir, 'drlhp_train_loop'))
 
+    force_checkpoint_checker = CheckForceCheckpoint(log_dir)
     ckpt_timer = Timer(duration_seconds=REWARD_PREDICTOR_TRAINING_PROCESS_SAVE_EVERY_N_SECONDS)
     ckpt_timer.reset()
 
@@ -84,7 +112,7 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
                 time.sleep(1.0)
                 continue
 
-        if ckpt_timer.done():
+        if ckpt_timer.done() or force_checkpoint_checker.check():
             with LogMilliseconds('reward_predictor_train_loop/ckpt_save_time_ms', logger):
                 reward_predictor.save(save_ckpt_path)
             ckpt_timer.reset()
