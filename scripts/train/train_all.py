@@ -59,7 +59,7 @@ def main():
 
     seeds = list(map(int, args.seeds.split(',')))
     if args.test:
-        test_args = '--n_initial_prefs 0 --n_initial_demos 0 --pretrain_reward_predictor_seconds 0 ' \
+        test_args = '--n_initial_prefs 0 --n_initial_demos 0 --pretrain_reward_predictor_epochs 0 ' \
                     '--min_label_interval_seconds 0.01'
     else:
         test_args = ''
