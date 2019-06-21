@@ -300,6 +300,10 @@ class TD3Policy(Policy):
         mu = np.zeros((self.n_envs, self.act_dim))
         self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=self.noise_sigma)
 
+    def reset_noise_n(self, n):
+        assert self.ou_noise.x_prev.shape == (self.n_envs, self.act_dim)
+        self.ou_noise.x_prev[n, :] = np.zeros([self.act_dim])
+
     def test_agent(self):
         timer = TimerContext(name=None, stdout=False)
         print("Running test episodes...")
@@ -420,6 +424,7 @@ class TD3Policy(Policy):
 
         for i in range(self.n_envs):
             if done[i]:
+                self.reset_noise_n(i)
                 # So that obs1 is immediately set to the first obs from the next episode
                 obs2[i] = self.train_env.reset_one_env(i)
                 if self.reward_predictor_warmup_phase:
