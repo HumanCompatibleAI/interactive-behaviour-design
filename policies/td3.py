@@ -428,9 +428,9 @@ class TD3Policy(Policy):
                 # So that obs1 is immediately set to the first obs from the next episode
                 obs2[i] = self.train_env.reset_one_env(i)
                 if self.reward_predictor_warmup_phase:
-                    self.n_reward_predictor_warmup_episodes = min(0, self.n_reward_predictor_warmup_episodes - 1)
+                    self.n_reward_predictor_warmup_episodes = max(0, self.n_reward_predictor_warmup_episodes - 1)
                 if self.initial_exploration_phase:
-                    self.n_initial_episodes = min(0, self.n_initial_episodes - 1)
+                    self.n_initial_episodes = max(0, self.n_initial_episodes - 1)
 
         self.obs1 = obs2
 
