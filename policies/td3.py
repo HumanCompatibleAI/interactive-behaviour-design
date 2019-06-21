@@ -95,7 +95,7 @@ class TD3Policy(Policy):
                  batch_size=256, batches_per_cycle=50, cycles_per_epoch=50, rollouts_per_worker=2,
                  gamma=0.99, polyak=0.999995, pi_lr=1e-3, q_lr=1e-3,
                  act_noise=0.1, target_noise=0.2, noise_clip=0.5, policy_delay=2,
-                 noise_type='ou', noise_sigma=0.2,
+                 noise_type='gaussian', noise_sigma=0.2,
                  n_initial_episodes=100, replay_size=int(1e6),
                  l2_coef=1e-4, train_mode=PolicyTrainMode.R_ONLY,
                  hidden_sizes=(256, 256, 256, 256),
