@@ -1,5 +1,6 @@
+import gym
 import numpy as np
-
+from gym.envs import register as gym_register
 from gym.envs.robotics import rotations, robot_env, utils
 
 
@@ -8,7 +9,7 @@ def goal_distance(goal_a, goal_b):
     return np.linalg.norm(goal_a - goal_b, axis=-1)
 
 
-class FetchEnv(robot_env.RobotEnv):
+class FetchEnvTwoBlock(robot_env.RobotEnv):
     """Superclass for all Fetch environments.
     """
 
@@ -43,7 +44,7 @@ class FetchEnv(robot_env.RobotEnv):
         self.distance_threshold = distance_threshold
         self.reward_type = reward_type
 
-        super(FetchEnv, self).__init__(
+        super(FetchEnvTwoBlock, self).__init__(
             model_path=model_path, n_substeps=n_substeps, n_actions=4,
             initial_qpos=initial_qpos)
 
@@ -91,27 +92,40 @@ class FetchEnv(robot_env.RobotEnv):
         grip_velp = self.sim.data.get_site_xvelp('robot0:grip') * dt
         robot_qpos, robot_qvel = utils.robot_get_obs(self.sim)
         if self.has_object:
-            object_pos = self.sim.data.get_site_xpos('object0')
+            object0_pos = self.sim.data.get_site_xpos('object0')
             # rotations
-            object_rot = rotations.mat2euler(self.sim.data.get_site_xmat('object0'))
+            object0_rot = rotations.mat2euler(self.sim.data.get_site_xmat('object0'))
             # velocities
-            object_velp = self.sim.data.get_site_xvelp('object0') * dt
-            object_velr = self.sim.data.get_site_xvelr('object0') * dt
+            object0_velp = self.sim.data.get_site_xvelp('object0') * dt
+            object0_velr = self.sim.data.get_site_xvelr('object0') * dt
             # gripper state
-            object_rel_pos = object_pos - grip_pos
-            object_velp -= grip_velp
+            object0_rel_pos = object0_pos - grip_pos
+            object0_velp -= grip_velp
+
+            object1_pos = self.sim.data.get_site_xpos('object1')
+            # rotations
+            object1_rot = rotations.mat2euler(self.sim.data.get_site_xmat('object1'))
+            # velocities
+            object1_velp = self.sim.data.get_site_xvelp('object1') * dt
+            object1_velr = self.sim.data.get_site_xvelr('object1') * dt
+            # gripper state
+            object1_rel_pos = object1_pos - grip_pos
+            object1_velp -= grip_velp
         else:
-            object_pos = object_rot = object_velp = object_velr = object_rel_pos = np.zeros(0)
+            object0_pos = object0_rot = object0_velp = object0_velr = object0_rel_pos = np.zeros(0)
+            object1_pos = object1_rot = object1_velp = object1_velr = object1_rel_pos = np.zeros(0)
         gripper_state = robot_qpos[-2:]
         gripper_vel = robot_qvel[-2:] * dt  # change to a scalar if the gripper is made symmetric
 
         if not self.has_object:
             achieved_goal = grip_pos.copy()
         else:
-            achieved_goal = np.squeeze(object_pos.copy())
+            achieved_goal = np.squeeze(object0_pos.copy())
         obs = np.concatenate([
-            grip_pos, object_pos.ravel(), object_rel_pos.ravel(), gripper_state, object_rot.ravel(),
-            object_velp.ravel(), object_velr.ravel(), grip_velp, gripper_vel,
+            grip_pos,
+            gripper_state,
+            object0_pos.ravel(), object0_rel_pos.ravel(),
+            object1_pos.ravel(), object1_rel_pos.ravel()
         ])
 
         return {
@@ -139,15 +153,15 @@ class FetchEnv(robot_env.RobotEnv):
     def _reset_sim(self):
         self.sim.set_state(self.initial_state)
 
-        # Randomize start position of object.
-        if self.has_object:
-            object_xpos = self.initial_gripper_xpos[:2]
-            while np.linalg.norm(object_xpos - self.initial_gripper_xpos[:2]) < 0.1:
-                object_xpos = self.initial_gripper_xpos[:2] + self.np_random.uniform(-self.obj_range, self.obj_range, size=2)
-            object_qpos = self.sim.data.get_joint_qpos('object0:joint')
-            assert object_qpos.shape == (7,)
-            object_qpos[:2] = object_xpos
-            self.sim.data.set_joint_qpos('object0:joint', object_qpos)
+        # # Randomize start position of object.
+        # if self.has_object:
+        #     object_xpos = self.initial_gripper_xpos[:2]
+        #     while np.linalg.norm(object_xpos - self.initial_gripper_xpos[:2]) < 0.1:
+        #         object_xpos = self.initial_gripper_xpos[:2] + self.np_random.uniform(-self.obj_range, self.obj_range, size=2)
+        #     object_qpos = self.sim.data.get_joint_qpos('object0:joint')
+        #     assert object_qpos.shape == (7,)
+        #     object_qpos[:2] = object_xpos
+        #     self.sim.data.set_joint_qpos('object0:joint', object_qpos)
 
         self.sim.forward()
         return True
@@ -187,4 +201,25 @@ class FetchEnv(robot_env.RobotEnv):
             self.height_offset = self.sim.data.get_site_xpos('object0')[2]
 
     def render(self, mode='human', width=500, height=500):
-        return super(FetchEnv, self).render(mode, width, height)
+        return super(FetchEnvTwoBlock, self).render(mode, width, height)
+
+
+class FetchBlockStackingEnv(FetchEnvTwoBlock, gym.utils.EzPickle):
+    def __init__(self, reward_type='sparse'):
+        initial_qpos = {
+            'robot0:slide0': 0.405,
+            'robot0:slide1': 0.48,
+            'robot0:slide2': 0.0,
+            'object0:joint': [1.25, 0.53, 0.4, 1., 0., 0., 0.],
+            'object1:joint': [1.25, 0.83, 0.4, 1., 0., 0., 0.],
+        }
+        FetchEnvTwoBlock.__init__(
+            self, 'fetch/block_stacking.xml', has_object=True, block_gripper=False, n_substeps=20,
+            gripper_extra_height=0.2, target_in_the_air=True, target_offset=0.0,
+            obj_range=0.15, target_range=0.15, distance_threshold=0.05,
+            initial_qpos=initial_qpos, reward_type=reward_type)
+        gym.utils.EzPickle.__init__(self)
+
+
+def register():
+    gym_register('FetchBlockStacking-v0', entry_point=FetchBlockStackingEnv, max_episode_steps=250)
