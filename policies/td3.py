@@ -224,13 +224,15 @@ class TD3Policy(Policy):
         self.cycle_n = 1
         self.epoch_n = 1
         self.n_envs = n_envs
-        self.initial_exploration_phase = True
+        self.reward_predictor_warmup_phase = True
+        self.initial_exploration_phase = False
         self.serial_episode_n = 0
         self.rollouts_per_worker = rollouts_per_worker
         self.policy_delay = policy_delay
         self.saver = None
         self.graph = graph
         self.n_initial_episodes = n_initial_episodes
+        self.n_reward_predictor_warmup_episodes = 100
         self.action_stats = LimitedRunningStat(shape=(act_dim,), len=1000)
         self.noise_stats = RunningStat(act_dim)
         self.ckpt_n = 0
@@ -398,12 +400,7 @@ class TD3Policy(Policy):
             self.train_bc_only()
             return
 
-        if self.initial_exploration_phase and self.serial_episode_n * self.n_envs >= self.n_initial_episodes:
-            self.initial_exploration_phase = False
-            print("Finished initial exploration at", str(datetime.datetime.now()))
-            print("Size of replay buffer:", self.replay_buffer.size)
-
-        if self.initial_exploration_phase:
+        if self.reward_predictor_warmup_phase or self.initial_exploration_phase:
             action = self.get_noise()
         else:
             action = self.train_step(self.obs1)
@@ -416,25 +413,46 @@ class TD3Policy(Policy):
         reward = self.process_rewards(obs2, reward)
         self.reward_logger.log([reward], [done])
 
-        # Store experience to replay buffer
-        for i in range(self.n_envs):
-            self.replay_buffer.store(self.obs1[i], action[i], reward[i], obs2[i], done[i])
-            # So that obs1 is immediately set to the first obs from the next episode
-            if done[i]:
-                obs2[i] = self.train_env.reset_one_env(i)
+        if not self.reward_predictor_warmup_phase:
+            # Store experience to replay buffer
+            for i in range(self.n_envs):
+                self.replay_buffer.store(self.obs1[i], action[i], reward[i], obs2[i], done[i])
 
-        # Super critical, easy to overlook step: make sure to update
-        # most recent observation!
+        for i in range(self.n_envs):
+            if done[i]:
+                # So that obs1 is immediately set to the first obs from the next episode
+                obs2[i] = self.train_env.reset_one_env(i)
+                if self.reward_predictor_warmup_phase:
+                    self.n_reward_predictor_warmup_episodes = min(0, self.n_reward_predictor_warmup_episodes - 1)
+                if self.initial_exploration_phase:
+                    self.n_initial_episodes = min(0, self.n_initial_episodes - 1)
+
         self.obs1 = obs2
+
+        if self.reward_predictor_warmup_phase:
+            self.logger.logkv(f'policy_{self.name}/n_reward_predictor_warmup_episodes',
+                              self.n_reward_predictor_warmup_episodes)
+            if self.n_reward_predictor_warmup_episodes > 0:
+                return
+            else:
+                print("Finished reward predictor warmup phase at", str(datetime.datetime.now()))
+                self.reward_predictor_warmup_phase = False
+                self.initial_exploration_phase = True
+
+        if self.initial_exploration_phase:
+            self.logger.logkv(f'policy_{self.name}/n_initial_episodes', self.n_initial_episodes)
+            if self.n_initial_episodes > 0:
+                return
+            else:
+                self.initial_exploration_phase = False
+                print("Finished initial exploration at", str(datetime.datetime.now()))
+                print("Size of replay buffer:", self.replay_buffer.size)
 
         if done[0]:
             self.serial_episode_n += 1
             cycle_done = (self.serial_episode_n % self.rollouts_per_worker == 0)
         else:
             cycle_done = False
-
-        if self.initial_exploration_phase:
-            return
 
         if cycle_done:
             print(f"Cycle {self.cycle_n} done")
