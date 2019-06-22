@@ -146,6 +146,22 @@ def unwrap_to(wrapped_env: Wrapper, class_name: type, n_before=0):
     return envs[0]
 
 
+def unwrap_to_instance(wrapped_env: Wrapper, class_name: type, n_before=0):
+    envs = deque(maxlen=(n_before + 1))
+    env = wrapped_env
+    envs.append(env)
+    ex = Exception("Wrapper '{}' not found".format(class_name))
+    while not isinstance(env, class_name):
+        if type(env) == AtariEnv:
+            raise ex
+        try:
+            env = env.env
+            envs.append(env)
+        except:
+            raise ex
+    return envs[0]
+
+
 def find_latest_checkpoint(ckpt_prefix):
     meta_paths = glob.glob(ckpt_prefix + '*.meta')
     if not meta_paths:

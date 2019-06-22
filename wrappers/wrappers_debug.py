@@ -8,7 +8,8 @@ from gym.core import ObservationWrapper, Wrapper
 from gym.wrappers.monitoring.video_recorder import ImageEncoder
 
 from baselines.common.vec_env import VecEnvWrapper
-from utils import draw_dict_on_image
+from utils import draw_dict_on_image, unwrap_to, unwrap_to_instance
+from wrappers.util_wrappers import CollectEpisodeStats
 
 """
 Wrappers for gym environments to help with debugging.
@@ -221,7 +222,8 @@ class DrawObses(Wrapper):
         Wrapper.__init__(self, env)
 
     def reset(self):
-        return self.env.reset()
+        self.last_obs = self.env.reset()
+        return self.last_obs
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
@@ -234,11 +236,25 @@ class DrawObses(Wrapper):
             if self.decode_fn:
                 d = self.decode_fn(self.last_obs)
             else:
-                d = {'obs': self.last_obs},
+                d = {'obs': self.last_obs}
             im = draw_dict_on_image(im, d, mode='concat')
             return im
         else:
             return self.env.render(mode, **kwargs)
+
+
+class DrawStats(Wrapper):
+    def reset(self):
+        return self.env.reset()
+
+    def render(self, mode='human', **kwargs):
+        if mode != 'rgb_array':
+            return self.env.render(mode, **kwargs)
+
+        im = self.env.render('rgb_array')
+        stats_wrapper = unwrap_to_instance(self.env, CollectEpisodeStats)
+        im = draw_dict_on_image(im, stats_wrapper.stats, mode='concat')
+        return im
 
 
 class DrawEnvN(Wrapper):
