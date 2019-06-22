@@ -50,6 +50,7 @@ def get_args():
     parser.add_argument('--no_pretrain', action='store_true')
     parser.add_argument('--tags')
     parser.add_argument('--group')
+    parser.add_argument('--just_pretrain', action='store_true')
     args = parser.parse_args()
 
     args.run_name += "_" + args.time
@@ -83,8 +84,9 @@ def main():
     port = get_open_port()
     base_url = f'http://localhost:{port}'
 
-    start_app(base_url, args.env_id, args.n_envs, port, args.seed, args.log_dir, args.tmux_sess, args.disable_redo,
-              args.extra_args, args.segment_generation, args.gpus)
+    train_window_name = start_app(base_url, args.env_id, args.n_envs, port, args.seed, args.log_dir, args.tmux_sess,
+                                  args.disable_redo,
+                                  args.extra_args, args.segment_generation, args.gpus)
     if args.segment_generation == 'drlhp':
         # In DRLHP mode, the master policy itself generates segments, so it needs to be added right at the beginning
         add_master_policy(base_url)
@@ -139,6 +141,12 @@ def main():
             if not args.no_pretrain:
                 print("Pretraining reward predictor...")
                 wait_for_reward_predictor_n_epochs_trained(args.log_dir, args.pretrain_reward_predictor_epochs)
+            if args.just_pretrain:
+                for name in [train_window_name, oracle_window_name]:
+                    cmd = ['tmux', 'kill-window', '-t', name]
+                    subprocess.run(cmd)
+                exit()
+
     else:
         raise Exception()
     configure_env_resets(base_url)
@@ -202,7 +210,7 @@ def start_app(base_url, env_id, n_envs, port, seed, log_dir, tmux_sess, disable_
     if extra_args is not None:
         cmd += ' ' + extra_args
     cmd += f' 2>&1 | tee {log_dir}/output.log'
-    run_in_tmux_sess(tmux_sess, cmd, "app", gpus=gpus)
+    window_name = run_in_tmux_sess(tmux_sess, cmd, "app", gpus=gpus)
     print("Waiting for app to start...")
     while True:
         try:
@@ -211,6 +219,7 @@ def start_app(base_url, env_id, n_envs, port, seed, log_dir, tmux_sess, disable_
             time.sleep(0.5)
         else:
             break
+    return window_name
 
 
 def add_master_policy(base_url):
