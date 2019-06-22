@@ -14,6 +14,7 @@ rl_envs = [
     ('fetchpp',
      'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-Delta-GripperBonuses-v0'),
     ('fetchr', 'FetchReach-Custom-v0'),
+    ('fetchs', 'FetchBlockStackingDense-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
@@ -26,6 +27,7 @@ prefs_envs = [
     ('fetchpp',
      'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-NonDelta-GripperBonuses-v0'),
     ('fetchr', 'FetchReach-Custom-v0'),
+    ('fetchs', 'FetchBlockStackingDense-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
