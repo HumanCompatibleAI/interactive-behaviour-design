@@ -14,6 +14,8 @@ from gym.spaces import Box
 from gym.utils.play import play
 from gym.wrappers import TimeLimit
 
+from wrappers.wrappers_debug import RewardGrapher
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from drlhp.reward_predictor import RewardPredictor
 from drlhp.reward_predictor_core_network import net_cnn, net_mlp
@@ -23,43 +25,24 @@ from wrappers.fetch_reach import register as fetch_reach_register
 from wrappers.util_wrappers import FetchDiscreteActions
 
 
-class DrawPredictedReward(Wrapper):
+class DrawRewards(Wrapper):
     def __init__(self, env, reward_predictor: RewardPredictor):
         super().__init__(env)
         self.reward_predictor = reward_predictor
-        self.graph_values = deque(maxlen=100)
-        self.last_obs = None
+        self.grapher_true_reward = RewardGrapher()
+        self.grapher_predicted_reward = RewardGrapher()
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
-        self.last_obs = np.array(obs)  # in case of LazyFrames
+        self.grapher_true_reward.values.append(reward)
+        self.grapher_predicted_reward.values.append(reward_predictor.raw_rewards(obs)[0])
         return obs, reward, done, info
 
     def render(self, mode='human', **kwargs):
         assert mode == 'rgb_array'
         frame = self.env.render(mode='rgb_array')
-        if self.last_obs is None:
-            return frame
-        r = self.reward_predictor.raw_rewards(np.array([self.last_obs]))[0][0]
-        self.graph_values.append(r)
-        y = 10
-        height = 100
-        frame[y, 5:-5, :] = 255
-        frame[y + height, 5:-5, :] = 255
-        frame[y + height // 2, 5:-5, :] = 255
-        frame[y:y + height, 5, :] = 255
-        frame[y:y + height, -5, :] = 255
-        scale = np.max(np.abs(self.graph_values))
-        for x, val in enumerate(self.graph_values):
-            val_y = int((val / scale) * (height / 2))
-            frame[y + height // 2 - val_y, 5 + x, :] = 255
-        cv2.putText(frame,
-                    "{:.3f}".format(r),
-                    org=(20, 50),
-                    fontFace=cv2.FONT_HERSHEY_PLAIN,
-                    fontScale=0.5,
-                    color=[255] * frame.shape[-1],
-                    thickness=1)
+        self.grapher_true_reward.draw(frame)
+        self.grapher_predicted_reward.draw(frame)
         return frame
 
 
