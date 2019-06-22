@@ -180,11 +180,26 @@ class FetchEnvTwoBlock(robot_env.RobotEnv):
         utils.reset_mocap_welds(self.sim)
         self.sim.forward()
 
+        # Open the gripper
+        self._set_action(np.array([0., 0., 0., 1.]))
+        for _ in range(10):
+            self.sim.step()
+
         # Move end effector into position.
-        gripper_target = np.array([-0.498, 0.005, -0.431 + self.gripper_extra_height]) + self.sim.data.get_site_xpos('robot0:grip')
+        # gripper_target = np.array([-0.498, 0.005, -0.431 + self.gripper_extra_height]) + self.sim.data.get_site_xpos('robot0:grip')
+        gripper_target = initial_qpos['object0:joint'][:3]
         gripper_rotation = np.array([1., 0., 1., 0.])
         self.sim.data.set_mocap_pos('robot0:mocap', gripper_target)
         self.sim.data.set_mocap_quat('robot0:mocap', gripper_rotation)
+        for _ in range(10):
+            self.sim.step()
+
+        # Moving the end effector over the block might have knocked the block,
+        # so put the block back where it's supposed to be
+        for name, value in initial_qpos.items():
+            self.sim.data.set_joint_qpos(name, value)
+        # The intial block position is slightly into the table...?
+        # Let's wait for it to rise out.
         for _ in range(10):
             self.sim.step()
 
