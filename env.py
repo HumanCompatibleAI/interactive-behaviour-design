@@ -10,6 +10,7 @@ from gym.wrappers import Monitor, TimeLimit
 import global_variables
 from a2c.common import gym
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv as SubprocVecEnvBaselines
+from fetch_block_stacking_env.env import FetchEnvTwoBlock
 from global_constants import ROLLOUT_FPS
 from policies.ppo import PPOPolicy
 from policies.td3 import TD3Policy
@@ -28,7 +29,7 @@ def set_timeouts(env):
     # Needed to prevent random resets in the demonstration environment
     env._max_episode_seconds = None
 
-    if isinstance(env.unwrapped, FetchEnv):
+    if isinstance(env.unwrapped, (FetchEnv, FetchEnvTwoBlock)):
         if 'Repeat3' in env.unwrapped.spec.id:
             max_seconds = 5
         else:
