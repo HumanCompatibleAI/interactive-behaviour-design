@@ -143,13 +143,6 @@ class FetchEnvTwoBlock(robot_env.RobotEnv):
         self.viewer.cam.azimuth = 132.
         self.viewer.cam.elevation = -14.
 
-    def _render_callback(self):
-        # Visualize target.
-        sites_offset = (self.sim.data.site_xpos - self.sim.model.site_pos).copy()
-        site_id = self.sim.model.site_name2id('target0')
-        self.sim.model.site_pos[site_id] = self.goal - sites_offset[0]
-        self.sim.forward()
-
     def _reset_sim(self):
         self.sim.set_state(self.initial_state)
 

@@ -13,7 +13,7 @@ from utils import RunningProportion
 from wrappers.util_wrappers import CollectEpisodeStats
 
 """
-Put object0 (black) on object1 (white).
+Put object0 (black) on object1 (red).
 """
 
 
