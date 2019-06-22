@@ -51,7 +51,7 @@ from utils import find_latest_checkpoint, MemoryProfiler, configure_cpus, \
 from web_app.app import run_web_app
 from web_app.comparisons import monitor_segments_dir_loop, write_segments_loop
 from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro, \
-    fetch_reach
+    fetch_reach, fetch_block_stacking
 from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
     VecSaveSegments
 
@@ -66,6 +66,7 @@ breakout_reward.register()
 enduro.register()
 fetch_pick_and_place_register.register()
 fetch_reach.register()
+fetch_block_stacking.register()
 basicfetch.register()
 faulthandler.enable()
 
