@@ -91,11 +91,11 @@ class FetchBlockStackingRewardWrapper(Wrapper):
         obs_by_name = decode_obs(obs)
         reward = self._reward(obs_by_name)
         grip_width = np.sum(obs_by_name['gripper_state'])
-        # maxes out at +1.0 reward
-        reward += 10 * grip_width
+        # maxes out at +0.5 reward
+        reward += 5 * grip_width
         if self.object_between_grippers(obs_by_name):
-            # about +1.0 reward for fully closed around block
-            reward += 30 * (0.1 - grip_width)
+            # about +0.5 reward for fully closed around block
+            reward += 15 * (0.1 - grip_width)
         return obs, reward, done, info
 
     def reset(self):
