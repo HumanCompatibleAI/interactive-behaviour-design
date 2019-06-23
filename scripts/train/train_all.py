@@ -76,7 +76,7 @@ def main():
                   f"--tags rl,{env_shortname}")
 
     if args.extra_args:
-        run_suffix = '_' + args.extra_args.lstrip().replace(' ', '_').replace('-', '').replace('.', 'p').replace('=', '_')
+        run_suffix = '_' + args.extra_args.lstrip().replace(' ', '_').replace('-', '').replace('.', 'p').replace('=', '_').replace(';', '_')
     else:
         run_suffix = ''
     for env_shortname, env_id in prefs_envs:
