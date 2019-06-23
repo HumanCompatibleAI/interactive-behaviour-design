@@ -159,8 +159,11 @@ def demonstrate(url):
     if response.text == 'No rollouts available':
         raise NoRolloutsError
 
-    print(response.json())  # TODO debugging, deleteme
-    group_name, demonstrations_dict = response.json()
+    response_list = response.json()
+    if not response_list:
+        print("Received empty response")
+        return
+    group_name, demonstrations_dict = response_list
     best_hash, best_policy_name = choose_segment_for_demonstration(demonstrations_dict)
     if best_hash is None:
         best_hash = 'equal'

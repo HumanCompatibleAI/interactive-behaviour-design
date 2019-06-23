@@ -73,7 +73,6 @@ def get_rollouts():
     rollout_groups = get_metadatas()
     if not rollout_groups:
         if n_rollouts_in_progress.value == 0:
-            print("Error: No rollouts in progress?")  # TODO debugging; deleteme
             return json.dumps([])
         else:
             print("Waiting for rollouts...")
