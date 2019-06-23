@@ -154,6 +154,8 @@ def main():
 
 
 def wait_for_reward_predictor_n_epochs_trained(log_dir, n):
+    if n == 0:
+        return
     n_epochs = get_reward_predictor_n_epochs_trained(log_dir)
     last_n_epochs = n_epochs
     while n_epochs < n:

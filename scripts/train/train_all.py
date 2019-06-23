@@ -60,11 +60,6 @@ def main():
             args.gpus = ''
 
     seeds = list(map(int, args.seeds.split(',')))
-    if args.test:
-        test_args = '--n_initial_prefs 0 --n_initial_demos 0 --pretrain_reward_predictor_epochs 0 ' \
-                    '--min_label_interval_seconds 0.01'
-    else:
-        test_args = ''
 
     gpu_arg = f"--gpus '{args.gpus}' " if args.gpus is not None else " "
     # RL using environment reward
@@ -76,13 +71,15 @@ def main():
                   f"--tags rl,{env_shortname}")
 
     if args.extra_args:
-        run_suffix = '_' + args.extra_args.lstrip().replace(' ', '_').replace('-', '').replace('.', 'p').replace('=', '_').replace(';', '_')
+        run_suffix = '_' + escape(args.extra_args.lstrip())
     else:
         run_suffix = ''
     for env_shortname, env_id in prefs_envs:
         rollout_len_config = get_rollout_len_config(env_id, args.extra_args)
-        pretrain_config = get_pretrain_config(env_id, args.harness_extra_args)
-        initial_prefs_config = get_initial_prefs_config(env_id, args.harness_extra_args)
+        pretrain_config = get_pretrain_config(args.harness_extra_args, args.test)
+        initial_prefs_config = get_initial_prefs_config(args.harness_extra_args, args.test)
+        initial_demos_config = get_initial_demos_config(args.harness_extra_args, args.test)
+        min_label_rate_config = get_min_label_rate_config(args.harness_extra_args, args.test)
         experiments = get_experiments(env_id)
         for ex in experiments:
             redo_config = f"{'--disable_redo' if ex.disable_redo else ''} "
@@ -95,7 +92,8 @@ def main():
                     run_name += '_test'
                 cmd = ("python3 scripts/train/auto_train_prefs.py "
                        f"{env_id} {ex.train_mode} {ex.segment_generation} {run_name} "
-                       f"{test_args} {redo_config} {decay_config} {pretrain_config} {initial_prefs_config} "
+                       f"{redo_config} {decay_config} "
+                       f"{pretrain_config} {initial_prefs_config} {initial_demos_config} {min_label_rate_config} "
                        f"{args.harness_extra_args} "
                        f"--seed {seed} "
                        f"--extra_args ' {extra_args}' --gpus '{args.gpus}' "
@@ -103,24 +101,48 @@ def main():
                 print(cmd)
 
 
-def get_initial_prefs_config(env_id, extra_args):
+def escape(name):
+    return name.replace(' ', '_').replace('-', '').replace('.', 'p').replace('=', '_').replace(';', '_')
+
+
+def get_initial_prefs_config(extra_args, test):
     if 'n_initial_prefs' in extra_args:
         return ''
-    if 'Fetch' in env_id:
-        n = 500
+    elif test:
+        n = 0
     else:
         n = 500
     return f'--n_initial_prefs {n}'
 
 
-def get_pretrain_config(env_id, extra_args):
+def get_initial_demos_config(extra_args, test):
+    if 'n_initial_demos' in extra_args:
+        return ''
+    elif test:
+        n = 0
+    else:
+        n = 500
+    return f'--n_initial_demos {n}'
+
+
+def get_pretrain_config(extra_args, test):
     if 'pretrain_reward_predictor_epochs' in extra_args:
         return ''
-    if 'Fetch' in env_id:
-        n_epochs = 200
+    elif test:
+        n_epochs = 0
     else:
         n_epochs = 200
     return f'--pretrain_reward_predictor_epochs {n_epochs}'
+
+
+def get_min_label_rate_config(extra_args, test):
+    if 'min_label_interval_seconds' in extra_args:
+        return ''
+    elif test:
+        interval = 0.01
+    else:
+        interval = 3
+    return f'--min_label_interval_seconds {interval}'
 
 
 def get_rollout_len_config(env_id, extra_args):
