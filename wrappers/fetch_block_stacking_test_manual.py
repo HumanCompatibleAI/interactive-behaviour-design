@@ -15,11 +15,11 @@ def test_play(env_id):
     env = gym.make(env_id)
     env._max_episode_steps = None
     env._max_episode_seconds = None
-    env = SaveObsToInfo(env)
-    env = DrawRewards(env)
-    env = DrawObses(env, decode_fn=FetchBlockStackingObsWrapper.decode)
-    env = DrawStats(env)
-    # env = GraphRewards(env)
+    # env = SaveObsToInfo(env)
+    # env = DrawRewards(env)
+    # env = DrawObses(env, decode_fn=FetchBlockStackingObsWrapper.decode)
+    # env = DrawStats(env)
+    env = GraphRewards(env, scale=1)
     env.reset()
     env = RenderObs(env)
     env = FetchDiscreteActions(env)

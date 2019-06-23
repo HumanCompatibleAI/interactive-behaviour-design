@@ -142,7 +142,8 @@ class DrawRewards(Wrapper):
 
 
 class RewardGrapher:
-    def __init__(self):
+    def __init__(self, scale=None):
+        self.scale = scale
         self.values = None
         self.reset()
 
@@ -151,40 +152,53 @@ class RewardGrapher:
 
     def draw(self, frame):
         if not self.values:
-            return frame
-        y = 10
+            return
+
+        y = 20
         height = 100
+
         frame[y, 5:-5, :] = 255
         frame[y + height, 5:-5, :] = 255
         frame[y + height // 2, 5:-5, :] = 255
         frame[y:y + height, 5, :] = 255
         frame[y:y + height, -5, :] = 255
-        scale = np.max(np.abs(self.values))
-        if scale == 0:
-            scale = 1
+
+        if self.scale is None:
+            scale = np.max(np.abs(self.values))
+            if scale == 0:
+                scale = 1
+        else:
+            scale = self.scale
+
         for x, val in enumerate(self.values):
             val_y = int((val / scale) * (height / 2))
             frame[y + height // 2 - val_y, 5 + x, :] = 255
-        frame = np.array(frame)
-        cv2.putText(frame,
+
+        # For some reason putText can't draw directly on the original frame...?
+        frame_copy = np.copy(frame)
+        cv2.putText(frame_copy,
                     "{:.3f}".format(self.values[-1]),
-                    org=(20, 50),
+                    org=(5, 15),
                     fontFace=cv2.FONT_HERSHEY_PLAIN,
-                    fontScale=0.5,
-                    color=[255] * frame.shape[-1],
+                    fontScale=1,
+                    color=[255, 255, 255],
                     thickness=1)
-        return frame
+        frame[:] = frame_copy[:]
 
 
 class GraphRewards(Wrapper):
-    def __init__(self, env):
+    def __init__(self, env, scale):
         super().__init__(env)
-        self.reward_grapher = RewardGrapher()
+        self.reward_grapher = RewardGrapher(scale)
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         self.reward_grapher.values.append(reward)
         return obs, reward, done, info
+
+    def reset(self):
+        self.reward_grapher.reset()
+        return self.env.reset()
 
     def render(self, mode='human', **kwargs):
         assert mode == 'rgb_array'
