@@ -8,7 +8,7 @@ from gym.core import ObservationWrapper, Wrapper
 from gym.wrappers.monitoring.video_recorder import ImageEncoder
 
 from baselines.common.vec_env import VecEnvWrapper
-from utils import draw_dict_on_image, unwrap_to, unwrap_to_instance
+from utils import draw_dict_on_image, unwrap_to_instance
 from wrappers.util_wrappers import CollectEpisodeStats
 
 """
@@ -174,6 +174,23 @@ class RewardGrapher:
                     color=[255] * frame.shape[-1],
                     thickness=1)
         return frame
+
+
+class GraphRewards(Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        self.reward_grapher = RewardGrapher()
+
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        self.reward_grapher.values.append(reward)
+        return obs, reward, done, info
+
+    def render(self, mode='human', **kwargs):
+        assert mode == 'rgb_array'
+        im = self.env.render(mode='rgb_array')
+        self.reward_grapher.draw(im)
+        return im
 
 
 class VecRecordVideosWithPredictedRewardGraphs(VecEnvWrapper):

@@ -7,7 +7,7 @@ from gym.utils.play import play
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from wrappers.fetch_block_stacking import register, FetchBlockStackingObsWrapper
 from wrappers.util_wrappers import RenderObs, SaveObsToInfo, FetchDiscreteActions
-from wrappers.wrappers_debug import DrawRewards, DrawObses, DrawStats
+from wrappers.wrappers_debug import DrawRewards, DrawObses, DrawStats, GraphRewards
 
 
 def test_play(env_id):
@@ -19,6 +19,7 @@ def test_play(env_id):
     env = DrawRewards(env)
     env = DrawObses(env, decode_fn=FetchBlockStackingObsWrapper.decode)
     env = DrawStats(env)
+    # env = GraphRewards(env)
     env.reset()
     env = RenderObs(env)
     env = FetchDiscreteActions(env)
