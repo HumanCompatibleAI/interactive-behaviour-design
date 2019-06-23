@@ -2,14 +2,13 @@ from collections import deque
 
 import gym
 import numpy as np
-from gym import ObservationWrapper
+from gym.core import ObservationWrapper
 from gym.envs import register as gym_register
 from gym.envs.robotics import FetchReachEnv
 from gym.spaces import Discrete
 from gym.wrappers import FlattenDictWrapper
 
 from wrappers.util_wrappers import CollectEpisodeStats
-from wrappers.wrappers_debug import DrawObses
 
 
 def decode_fetch_reach_obs(obs):
@@ -27,7 +26,7 @@ def decode_fetch_reach_obs(obs):
 class FetchReachObsWrapper(ObservationWrapper):
     def __init__(self, env):
         ObservationWrapper.__init__(self, env)
-        obs = self.observation(np.zeros((self.env.observation_space.shape)))
+        obs = self.observation(np.zeros(self.env.observation_space.shape))
         self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=obs.shape, dtype='float32')
 
     def observation(self, orig_obs):
@@ -63,6 +62,7 @@ class FetchReachStatsWrapper(CollectEpisodeStats):
         self.successes_near_end = []
         self.gripper_to_goal_dist_list = deque(maxlen=10)
         self.last_obs = None
+        self.n_steps = None
 
     def reset(self):
         if self.last_obs is not None:
@@ -91,6 +91,9 @@ class FetchReachStatsWrapper(CollectEpisodeStats):
                 self.stats['success_near_end_rate'] = self.successes_near_end.count(True) / len(self.successes_near_end)
                 self.successes_near_end = []
 
+            avg = self.stats['gripper_to_target_cumulative_distance'] / self.n_steps
+            self.stats['gripper_to_target_average_distance'] = avg
+
         self.last_stats = dict(self.stats)
         self.stats['gripper_to_target_cumulative_distance'] = 0
         self.partial_success = False
@@ -107,6 +110,7 @@ class FetchReachStatsWrapper(CollectEpisodeStats):
         if gripper_to_goal_distance < 0.05:
             self.partial_success = True
         self.last_obs = obs
+        self.n_steps += 1
         return obs, reward, done, info
 
 

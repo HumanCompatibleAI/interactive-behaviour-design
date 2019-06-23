@@ -3,7 +3,7 @@ from functools import partial
 
 import gym
 import numpy as np
-from gym import Wrapper, ObservationWrapper, ActionWrapper
+from gym.core import Wrapper, ObservationWrapper, ActionWrapper
 from gym.envs import register as gym_register
 from gym.spaces import Discrete
 from gym.wrappers import FlattenDictWrapper
@@ -159,6 +159,7 @@ class FetchBlockStackingStatsWrapper(CollectEpisodeStats):
         self.object0_to_target_distance_list = deque(maxlen=10)
         self.successes_near_end = []
         self.last_obs = None
+        self.n_steps = None
 
     @staticmethod
     def check_success(obs_by_name):
@@ -192,16 +193,20 @@ class FetchBlockStackingStatsWrapper(CollectEpisodeStats):
                 self.stats['success_near_end_rate'] = self.successes_near_end.count(True) / len(self.successes_near_end)
                 self.successes_near_end = []
 
+            avg_dist = self.stats['object0_to_target_cumulative_distance'] / self.n_steps
+            self.stats['object0_to_target_average_distance'] = avg_dist
+
         self.last_stats = dict(self.stats)
         self.stats['ep_frac_aligned_with_object0'] = 0
         self.stats['ep_frac_gripping_object0'] = 0
         self.stats['gripper_to_object0_cumulative_distance'] = 0
         self.stats['object0_to_target_cumulative_distance'] = 0
-        self.stats['min_object0_to_target_distance'] = float('inf')
+        self.stats['object0_to_target_min_distance'] = float('inf')
         self.aligned_proportion = RunningProportion()
         self.gripping_proportion = RunningProportion()
         self.partial_success = False
         self.last_obs = None
+        self.n_steps = 0
 
         return self.env.reset()
 
@@ -216,8 +221,8 @@ class FetchBlockStackingStatsWrapper(CollectEpisodeStats):
         object0_to_target_distance = np.linalg.norm(obs_by_name['object0_rel_target_pos'])
         self.stats['object0_to_target_cumulative_distance'] += object0_to_target_distance
 
-        if object0_to_target_distance < self.stats['min_object0_to_target_distance']:
-            self.stats['min_object0_to_target_distance'] = object0_to_target_distance
+        if object0_to_target_distance < self.stats['object0_to_target_min_distance']:
+            self.stats['object0_to_target_min_distance'] = object0_to_target_distance
 
         aligned_with_object0 = (np.linalg.norm(obs_by_name['object0_rel_pos']) < 0.04)
         self.aligned_proportion.update(float(aligned_with_object0))
@@ -232,5 +237,7 @@ class FetchBlockStackingStatsWrapper(CollectEpisodeStats):
 
         if self.check_success(obs_by_name):
             self.partial_success = True
+
+        self.n_steps += 1
 
         return obs, reward, done, info
