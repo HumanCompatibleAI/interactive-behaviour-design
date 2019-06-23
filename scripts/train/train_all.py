@@ -71,7 +71,7 @@ def main():
     for env_shortname, env_id in rl_envs:
         for seed in seeds:
             run_name = f"{env_shortname}-{seed}-rl"
-            print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} "
+            print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} --extra_args ' {args.extra_args}'"
                   f"{gpu_arg} "
                   f"--tags rl,{env_shortname}")
 

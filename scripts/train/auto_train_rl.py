@@ -18,7 +18,7 @@ def get_args():
     parser.add_argument('seed', type=int, default=0)
     parser.add_argument('env')
     parser.add_argument('run_name')
-    parser.add_argument('--policy_args')
+    parser.add_argument('--extra_args')
     parser.add_argument('--gpus', default='')
     default_log_dir = 'runs'
     parser.add_argument('--log_dir', default=default_log_dir)
@@ -27,10 +27,8 @@ def get_args():
     return parser.parse_args()
 
 
-def start_app(base_url, env, port, seed, run_name, log_dir, policy_args, gpus):
-    cmd = f'python -u run.py {env} --n_envs 16 --port {port} --log_dir {log_dir} --seed {seed}'
-    if policy_args:
-        cmd += f' --policy_args {policy_args}'
+def start_app(base_url, env, port, seed, run_name, log_dir, extra_args, gpus):
+    cmd = f'python -u run.py {env} --n_envs 16 --port {port} --log_dir {log_dir} --seed {seed} {extra_args}'
     cmd += f' 2>&1 | tee {log_dir}/output.log'
     start_tmux_sess_with_cmd(run_name, cmd, gpus)
     while True:
@@ -49,7 +47,7 @@ log_dir = os.path.abspath(os.path.join(args.log_dir, f'{args.run_name}_{int(time
 os.makedirs(log_dir)
 port = get_open_port()
 base_url = f'http://localhost:{port}'
-start_app(base_url, args.env, port, args.seed, args.run_name, log_dir, args.policy_args, args.gpus)
+start_app(base_url, args.env, port, args.seed, args.run_name, log_dir, args.extra_args, args.gpus)
 
 requests.get(base_url + '/run_cmd?cmd=add_policy&name=master').raise_for_status()
 while True:
