@@ -485,6 +485,7 @@ class TD3Policy(Policy):
 
     def _train_rl(self):
         results = defaultdict(list)
+        self.logger.logkv(f'policy_{self.name}/batches_per_cycle', self.batches_per_cycle)
         for batch_n in range(self.batches_per_cycle):
             # Experience from normal replay buffer for regular Q-learning
             explore_batch = self.replay_buffer.sample_batch(self.batch_size)
