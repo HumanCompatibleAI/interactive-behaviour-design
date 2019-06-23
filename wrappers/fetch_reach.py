@@ -98,6 +98,7 @@ class FetchReachStatsWrapper(CollectEpisodeStats):
         self.stats['gripper_to_target_cumulative_distance'] = 0
         self.partial_success = False
         self.last_obs = None
+        self.n_steps = 0
 
         return self.env.reset()
 
