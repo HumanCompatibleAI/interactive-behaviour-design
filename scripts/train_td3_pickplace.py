@@ -185,7 +185,7 @@ def main():
                              polyak=args.polyak,
                              pi_lr=args.lr,
                              q_lr=args.lr,
-                             l2_coef=args.l2_coef)
+                             bc_l2_coef=args.l2_coef)
     else:
         raise RuntimeError()
 

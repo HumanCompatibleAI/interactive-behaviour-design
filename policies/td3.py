@@ -97,7 +97,7 @@ class TD3Policy(Policy):
                  act_noise=0.1, target_noise=0.2, noise_clip=0.5, policy_delay=2,
                  noise_type='ou', noise_sigma=0.2,
                  n_initial_episodes=100, replay_size=int(1e6),
-                 l2_coef=1e-4, train_mode=PolicyTrainMode.R_ONLY,
+                 bc_l2_coef=1e-4, train_mode=PolicyTrainMode.R_ONLY,
                  hidden_sizes=(256, 256, 256, 256),
                  sess_config=None, test_rollouts_per_epoch=10):
         assert policy_delay < batches_per_cycle
@@ -130,7 +130,7 @@ class TD3Policy(Policy):
                                                                                d_ph, gamma, noise_clip, r_ph,
                                                                                target_noise, x2_ph, x_ph)
 
-            bc_pi_loss, l2_loss = self.bc_graph(ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, l2_coef, pi)
+            bc_pi_loss, l2_loss = self.bc_graph(ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, bc_l2_coef, pi)
 
             td3_plus_bc_pi_loss = td3_pi_loss + bc_pi_loss
 
