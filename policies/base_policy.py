@@ -98,7 +98,7 @@ class Policy:
         raise NotImplementedError()
 
     @abstractmethod
-    def use_demonstrations(self, demonstrations: RolloutsByHash, env_id):
+    def use_demonstrations(self, demonstrations: RolloutsByHash):
         raise NotImplementedError()
 
 

@@ -30,6 +30,5 @@ reward_selector = None
 n_rl_steps_per_interaction = None
 frames_per_segment = None
 rollout_noise_sigma = None
-goal_sqil = None
 
 pids_to_proc_names = {}
