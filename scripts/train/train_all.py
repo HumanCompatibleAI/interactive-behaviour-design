@@ -121,7 +121,7 @@ def get_initial_demos_config(extra_args, test):
     elif test:
         n = 0
     else:
-        n = 500
+        n = 10
     return f'--n_initial_demos {n}'
 
 
