@@ -419,18 +419,16 @@ def main():
 
 def parse_policy_args(policy_args_str):
     """
-    foo=bar;baz=qux -> {foo: bar, baz: qux}
+    foo=bar,baz=qux -> {foo: bar, baz: qux}
     """
     if not policy_args_str:
         return {}
 
     policy_args = {k: v
                    for k, v in [a.split('=')
-                                for a in policy_args_str.split(';')]}
+                                for a in policy_args_str.split(',')]}
     for k, v in policy_args.items():
-        if k == 'hidden_sizes':
-            policy_args['hidden_sizes'] = list(map(int, policy_args['hidden_sizes'].split(',')))
-        elif '.' in v:
+        if '.' in v:
             policy_args[k] = float(v)
         else:
             policy_args[k] = int(v)
