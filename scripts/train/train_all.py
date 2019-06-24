@@ -270,6 +270,15 @@ def get_experiments(env_id):
         no_primitives_config=no_primitives_config
     ))
 
+    experiments.append(Experiment(
+        name='sdrlhpnp-drlhp-sqil',
+        train_mode='reward_plus_sqil',
+        segment_generation='sdrlhpnp-drlhp',
+        disable_redo=imitation_learning_disable_redo,
+        decay_label_rate=False,
+        no_primitives_config=no_primitives_config
+    ))
+
     return experiments
 
 
