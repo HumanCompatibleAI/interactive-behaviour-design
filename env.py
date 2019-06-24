@@ -21,7 +21,6 @@ from wrappers.lunar_lander_stateful import LunarLanderStateful
 from wrappers.state_boundary_wrapper import StateBoundaryWrapper
 from wrappers.util_wrappers import StoredResetsWrapper, SaveMidStateWrapper, SaveEpisodeObs, SaveSegments, \
     CollectEpisodeStats, SaveEpisodeStats, DummyRender
-from wrappers.wrappers_debug import GraphRewards
 
 
 def set_timeouts(env):
@@ -85,7 +84,6 @@ def make_envs(env_id, num_env, seed, log_dir,
             if env_type == 'train' and env_n == 0:
                 train_log_dir = os.path.join(log_dir, 'train_env')
                 env = SaveEpisodeStats(env, suffix='_train', log_dir=train_log_dir)
-                env = GraphRewards(env, scale=1)  # TODO debugging
                 env = Monitor(env, train_log_dir, lambda n: n and n % render_every_nth_episode == 0)  # Save videos
                 env = SaveEpisodeObs(env, episode_obs_queue)  # For labelling of frames for classifiers
                 if global_variables.segment_save_mode == 'single_env':
@@ -102,7 +100,6 @@ def make_envs(env_id, num_env, seed, log_dir,
             if env_type == 'test':
                 test_log_dir = os.path.join(log_dir, 'test_env')
                 env = SaveEpisodeStats(env, suffix='_test', log_dir=test_log_dir)
-                env = GraphRewards(env, scale=1)  # TODO debugging
                 env = Monitor(env, test_log_dir, lambda n: True)
 
             return env
