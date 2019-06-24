@@ -519,7 +519,6 @@ class TD3Policy(Policy):
 
             if self.train_mode in [PolicyTrainMode.SQIL_ONLY, PolicyTrainMode.R_PLUS_SQIL]:
                 demo_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
-                demo_batch.rews = np.array([SQIL_REWARD] * self.batch_size)
                 batch = combine_batches(explore_batch, demo_batch)
             else:
                 batch = explore_batch
@@ -688,7 +687,7 @@ class TD3Policy(Policy):
                     assert len(o1s) == len(acts) == len(o2s) == len(dones), \
                         (len(o1s), len(acts), len(o2s), len(dones))
                     for o1, a, o2, done in zip(o1s, acts, o2s, dones):
-                        self.demonstrations_buffer.store(obs=o1, act=a, next_obs=o2, done=done, rew=None)
+                        self.demonstrations_buffer.store(obs=o1, act=a, next_obs=o2, done=done, rew=SQIL_REWARD)
                     self.seen_demonstrations.add(demonstration_hash)
                 self.logger.logkv(f'policy_{self.name}/replay_buffer_demo_ptr', self.demonstrations_buffer.ptr)
                 time.sleep(1)
