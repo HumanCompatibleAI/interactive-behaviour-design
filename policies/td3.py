@@ -130,8 +130,8 @@ class TD3Policy(Policy):
                                                                                d_ph, gamma, noise_clip, r_ph,
                                                                                target_noise, x2_ph, x_ph)
 
-            bc_pi_loss, l2_loss = self.bc_graph(ac_kwargs,
-                                                act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, bc_l2_coef, pi)
+            bc_pi_loss, l2_loss, accuracy_2norm, accuracy_1norm, accuracy_maxabsdiff = \
+                self.bc_graph(ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, bc_l2_coef, pi)
 
             td3_plus_bc_pi_loss = td3_pi_loss + bc_pi_loss
 
@@ -198,6 +198,9 @@ class TD3Policy(Policy):
         self.td3_pi_loss = td3_pi_loss
         self.bc_pi_loss = bc_pi_loss
         self.td3_plus_bc_pi_loss = td3_plus_bc_pi_loss
+        self.accuracy_2norm = accuracy_2norm
+        self.accuracy_1norm = accuracy_1norm
+        self.accuracy_maxabsdiff = accuracy_maxabsdiff
         self.q1 = q1
         self.q2 = q2
         self.q_loss = q_loss
@@ -267,7 +270,16 @@ class TD3Policy(Policy):
         bc_pi_loss = tf.reduce_mean(squared_norms, axis=0)
         assert bc_pi_loss.shape.as_list() == []
         bc_pi_loss += l2_coef * l2_loss
-        return bc_pi_loss, l2_loss
+
+        assert bc_pi.shape.as_list() == bc_a_ph.shape.as_list()
+        differences = bc_pi - bc_a_ph
+        assert len(differences.shape.as_list()) == 2
+        assert differences.shape.as_list()[1] == act_dim
+        accuracy_2norm = tf.norm(differences, ord=2, axis=1)
+        accuracy_1norm = tf.norm(differences, ord=1, axis=1)
+        accuracy_maxabsdiff = tf.reduce_max(tf.abs(differences), axis=1)
+
+        return bc_pi_loss, l2_loss, accuracy_2norm, accuracy_1norm, accuracy_maxabsdiff
 
     @staticmethod
     def td3_graph(a_ph, ac_kwargs, act_limit, actor_critic, d_ph, gamma, noise_clip, r_ph, target_noise, x2_ph, x_ph):
@@ -347,18 +359,28 @@ class TD3Policy(Policy):
             return None
         timer = TimerContext(name=None, stdout=False)
         with timer:
-            loss_bc_pi_l, loss_l2_l = [], []
+            loss_bc_pi_l, loss_l2_l, accuracy_1norm_l, accuracy_2norm_l, accuracy_maxabsdiff_l = [], [], [], [], []
             for _ in range(self.batches_per_cycle):
                 bc_batch = self.demonstrations_buffer.sample_batch(self.batch_size)
                 feed_dict = {self.bc_x_ph: bc_batch.obs1, self.bc_a_ph: bc_batch.acts}
-                bc_pi_loss, l2_loss, _ = self.sess.run([self.bc_pi_loss,
-                                                        self.l2_loss,
-                                                        self.train_pi_bc_only_op],
-                                                       feed_dict)
+                bc_pi_loss, l2_loss, accuracy_2norm, accuracy_1norm, accuracy_maxabsdiff, _ = \
+                    self.sess.run([self.bc_pi_loss,
+                                   self.l2_loss,
+                                   self.accuracy_2norm,
+                                   self.accuracy_1norm,
+                                   self.accuracy_maxabsdiff,
+                                   self.train_pi_bc_only_op],
+                                  feed_dict)
                 loss_bc_pi_l.append(bc_pi_loss)
                 loss_l2_l.append(l2_loss)
+                accuracy_2norm_l.append(accuracy_2norm)
+                accuracy_1norm_l.append(accuracy_1norm)
+                accuracy_maxabsdiff_l.append(accuracy_maxabsdiff)
             self.logger.log_list_stats(f'policy_{self.name}/loss_bc_pi', loss_bc_pi_l)
             self.logger.log_list_stats(f'policy_{self.name}/loss_l2', loss_l2_l)
+            self.logger.log_list_stats(f'policy_{self.name}/accuracy_2norm', accuracy_2norm_l)
+            self.logger.log_list_stats(f'policy_{self.name}/accuracy_1norm', accuracy_1norm_l)
+            self.logger.log_list_stats(f'policy_{self.name}/accuracy_maxabsdiff', accuracy_maxabsdiff_l)
             self.cycle_n += 1
             self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
         self.logger.logkv(f'policy_{self.name}/bc_train_time_ms', timer.duration_s * 1000)
