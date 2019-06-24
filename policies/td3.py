@@ -130,8 +130,7 @@ class TD3Policy(Policy):
                                                                                d_ph, gamma, noise_clip, r_ph,
                                                                                target_noise, x2_ph, x_ph)
 
-            bc_pi_loss, l2_loss = self.bc_graph(ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id,
-                                                bc_l2_coef, pi)
+            bc_pi_loss, l2_loss = self.bc_graph(ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, bc_l2_coef, pi)
 
             td3_plus_bc_pi_loss = td3_pi_loss + bc_pi_loss
 
@@ -244,8 +243,6 @@ class TD3Policy(Policy):
         self.test_rollouts_per_epoch = test_rollouts_per_epoch
         self.last_test_obs = None
         self.reward_logger = None
-        self.times = defaultdict(list)
-        self.actions_log_file = None
 
         self.reset_noise()
 
@@ -413,17 +410,11 @@ class TD3Policy(Policy):
             action = self.train_step(self.obs1)
 
         # Step the env
-        timer = TimerContext(name=None, stdout=False)
-        with timer:
-            obs2, reward, done, _ = self.train_env.step(action)
-        self.times['env'].append(timer.duration_s)
+        obs2, reward, done, _ = self.train_env.step(action)
         self.n_serial_steps += 1
 
         # Maybe replace rewards with e.g. predicted rewards
-        timer = TimerContext(name=None, stdout=False)
-        with timer:
-            reward = self.process_rewards(obs2, reward)
-        self.times['process_rewards'].append(timer.duration_s)
+        reward = self.process_rewards(obs2, reward)
         self.reward_logger.log([reward], [done])
 
         if not self.reward_predictor_warmup_phase:
@@ -471,10 +462,7 @@ class TD3Policy(Policy):
         if cycle_done:
             print(f"Cycle {self.cycle_n} done")
 
-            timer = TimerContext(name=None, stdout=False)
-            with timer:
-                self._train_rl()
-            self.times['train_rl'].append(timer.duration_s)
+            self._train_rl()
 
             for n in range(self.act_dim):
                 self.logger.logkv(f'policy_{self.name}/actions_mean_{n}', self.action_stats.mean[n])
@@ -487,10 +475,6 @@ class TD3Policy(Policy):
             self.logger.logkv(f'policy_{self.name}/n_total_steps', self.n_total_steps())
             self.logger.measure_rate(f'policy_{self.name}/n_total_steps', self.n_total_steps(),
                                      f'policy_{self.name}/n_total_steps_per_second')
-
-            for key, times in self.times.items():
-                self.logger.log_list_stats(f'policy_{self.name}/time_key', times)
-            self.times = defaultdict(list)
 
             if self.cycle_n and self.cycle_n % self.cycles_per_epoch == 0:
                 self.epoch_n += 1
