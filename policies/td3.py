@@ -17,6 +17,7 @@ from baselines.common.running_stat import RunningStat
 from baselines.common.vec_env import VecEnv
 from baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise
 from utils import TimerContext, LimitedRunningStat
+from wrappers.fetch_reach import FetchReachObsWrapper
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from policies.base_policy import Policy, PolicyTrainMode, EpisodeRewardLogger
@@ -672,7 +673,23 @@ class TD3Policy(Policy):
         self.test_env = env
         self.last_test_obs = self.test_env.reset()[0]
 
-    def use_demonstrations(self, demonstrations: RolloutsByHash):
+    @staticmethod
+    def determine_sqil_reward(obs2, env_id):
+        if not global_variables.goal_sqil:
+            return SQIL_REWARD
+
+        if 'Reach' in env_id:
+            obs_decode_fn = FetchReachObsWrapper.decode
+        else:
+            raise Exception(f"Unsure of obs decode function for env '{env_id}'")
+
+        if np.linalg.norm(obs_decode_fn(obs2)['goal_rel_grip']) < 0.05:
+            reward = SQIL_REWARD
+        else:
+            reward = 0
+        return reward
+
+    def use_demonstrations(self, demonstrations: RolloutsByHash, env_id):
         def f():
             while True:
                 for demonstration_hash in demonstrations.keys():
@@ -687,7 +704,8 @@ class TD3Policy(Policy):
                     assert len(o1s) == len(acts) == len(o2s) == len(dones), \
                         (len(o1s), len(acts), len(o2s), len(dones))
                     for o1, a, o2, done in zip(o1s, acts, o2s, dones):
-                        self.demonstrations_buffer.store(obs=o1, act=a, next_obs=o2, done=done, rew=SQIL_REWARD)
+                        reward = self.determine_sqil_reward(o2, env_id)
+                        self.demonstrations_buffer.store(obs=o1, act=a, next_obs=o2, done=done, rew=reward)
                     self.seen_demonstrations.add(demonstration_hash)
                 self.logger.logkv(f'policy_{self.name}/replay_buffer_demo_ptr', self.demonstrations_buffer.ptr)
                 time.sleep(1)

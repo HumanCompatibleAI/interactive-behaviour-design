@@ -33,7 +33,7 @@ class PolicyCollection:
             policy.init_logger(self.log_dir)
             policy.set_training_env(self.train_env, self.log_dir)
             policy.set_test_env(self.test_env, self.log_dir)
-            policy.use_demonstrations(self.demonstrations)
+            policy.use_demonstrations(self.demonstrations, self.train_env.id)
             policy.start_training()
             if isinstance(policy, TD3Policy):
                 web_app.web_globals._demonstrations_replay_buffer = policy.demonstrations_buffer
