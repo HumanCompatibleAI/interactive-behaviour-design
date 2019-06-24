@@ -102,7 +102,7 @@ def main():
 
 
 def escape(name):
-    return name.replace(' ', '_').replace('-', '').replace('.', 'p').replace('=', '_').replace(';', '_')
+    return name.replace(' ', '_').replace('-', '').replace('.', 'p').replace('=', '_').replace(',', '_')
 
 
 def get_initial_prefs_config(extra_args, test):
