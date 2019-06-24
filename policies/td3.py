@@ -130,7 +130,8 @@ class TD3Policy(Policy):
                                                                                d_ph, gamma, noise_clip, r_ph,
                                                                                target_noise, x2_ph, x_ph)
 
-            bc_pi_loss, l2_loss = self.bc_graph(ac_kwargs, act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, bc_l2_coef, pi)
+            bc_pi_loss, l2_loss = self.bc_graph(ac_kwargs,
+                                                act_dim, actor_critic, bc_a_ph, bc_x_ph, env_id, bc_l2_coef, pi)
 
             td3_plus_bc_pi_loss = td3_pi_loss + bc_pi_loss
 
