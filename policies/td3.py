@@ -246,8 +246,6 @@ class TD3Policy(Policy):
         self.reward_logger = None
         self.times = defaultdict(list)
         self.actions_log_file = None
-        self.pi_lr = pi_lr
-        self.q_lr = q_lr
 
         self.reset_noise()
 
@@ -503,9 +501,7 @@ class TD3Policy(Policy):
 
     def _train_rl(self):
         results = defaultdict(list)
-        self.logger.logkv(f'policy_{self.name}/batches_per_cycle', self.batches_per_cycle)  # TODO debugging; deleteme
-        self.logger.logkv(f'policy_{self.name}/pi_lr', self.pi_lr)  # TODO debugging; deleteme
-        self.logger.logkv(f'policy_{self.name}/q_lr', self.q_lr)  # TODO debugging; deleteme
+        self.logger.logkv(f'policy_{self.name}/batches_per_cycle', self.batches_per_cycle)
         for batch_n in range(self.batches_per_cycle):
             # Experience from normal replay buffer for regular Q-learning
             explore_batch = self.replay_buffer.sample_batch(self.batch_size)
