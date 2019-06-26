@@ -8,12 +8,13 @@ import traceback
 import easy_tf_log
 from cloudpickle import cloudpickle
 
+import global_variables
 import throttler
 from drlhp.pref_db import PrefDBTestTrain
 from drlhp.reward_predictor import RewardPredictor
 from global_constants import MAIN_PROCESS_LOAD_REWARD_PREDICTOR_EVERY_N_SECONDS, \
     REWARD_PREDICTOR_TRAINING_PROCESS_SAVE_EVERY_N_SECONDS
-from utils import load_cpu_config, find_latest_checkpoint, LogMilliseconds, Timer
+from utils import load_cpu_config, LogMilliseconds, Timer
 
 FORCE_SAVE_FNAME = 'reward_predictor_force_save'
 FORCE_LOAD_FNAME = 'reward_predictor_force_load'
@@ -77,19 +78,23 @@ def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
         try:
             force_load_event_pipe.get_event()
         except NoEventError:
-            event = False
+            force_load = False
         else:
-            event = True
+            force_load = True
 
-        if not event and not load_timer.done():
+        if not force_load and not load_timer.done():
             time.sleep(1)
             continue
 
         load_timer.reset()
 
         try:
-            latest_ckpt_path = find_latest_checkpoint(ckpt_path)
-            reward_predictor.load(latest_ckpt_path)
+            latest_ckpt_path = reward_predictor.get_latest_checkpoint(ckpt_path)
+            if force_load:
+                reward_predictor.load(latest_ckpt_path)
+            else:
+                reward_predictor.load_polyak(latest_ckpt_path,
+                                             polyak_coef=global_variables.reward_predictor_load_polyak_coef)
             n_successful_loads += 1
             logger.logkv('reward_predictor_load_loop/n_loads', n_successful_loads)
         except:
@@ -98,7 +103,7 @@ def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
 
         print("Reward predictor loading thread: loaded checkpoint")
 
-        if event:
+        if force_load:
             force_load_event_pipe.send_ack()
 
 

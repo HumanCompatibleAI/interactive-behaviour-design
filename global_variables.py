@@ -30,5 +30,6 @@ reward_selector = None
 n_rl_steps_per_interaction = None
 frames_per_segment = None
 rollout_noise_sigma = None
+reward_predictor_load_polyak_coef = None  # type: float
 
 pids_to_proc_names = {}
