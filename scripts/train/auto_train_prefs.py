@@ -108,7 +108,7 @@ def main():
         start_kill_oracle_after_n_interactions_thread(args.max_interactions, args.log_dir, oracle_window_name)
         if not args.no_pretrain:
             wait_for_initial_demonstrations(base_url, args.n_initial_demos)
-        if args.training_mode in ['reward_only', 'reward_plus_bc']:
+        if 'reward' in args.training_mode:
             # We assume we already have sufficient initial preferences from initial demonstrations
             start_reward_predictor_training(base_url)
             if not args.no_pretrain:
@@ -136,7 +136,7 @@ def main():
         start_kill_oracle_after_n_interactions_thread(args.max_interactions, args.log_dir, oracle_window_name)
         if not args.no_pretrain:
             wait_for_initial_preferences(base_url, args.n_initial_prefs)
-        if args.training_mode in ['reward_only', 'reward_plus_bc']:
+        if 'reward' in args.training_mode:
             start_reward_predictor_training(base_url)
             if not args.no_pretrain:
                 print("Pretraining reward predictor...")
@@ -324,7 +324,7 @@ def start_training(base_url, training_mode, segment_generation):
     requests.get(base_url + '/run_cmd?cmd=config_demos&explore=False').raise_for_status()
     requests.get(base_url + '/run_cmd?cmd=use_policy&name=master').raise_for_status()
     requests.get(base_url + f'/run_cmd?cmd=training_mode&mode={training_mode}')
-    if training_mode in ['reward_only', 'reward_plus_bc']:
+    if 'reward' in training_mode:
         requests.get(base_url + '/run_cmd?cmd=set_reward_source&src=drlhp').raise_for_status()
 
 
