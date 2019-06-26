@@ -124,10 +124,9 @@ class RewardPredictor:
 
         print("Restored reward predictor from checkpoint '{}'".format(latest_checkpoint_path))
 
-    def load_polyak(self, path, polyak_coef=0.995):
+    def load_polyak(self, ckpt_path, polyak_coef=0.995):
         cur_variable_value_dict = self.get_variable_value_dict()
-        latest_checkpoint_path = self.get_latest_checkpoint(path)
-        new_variable_name_value_dict = joblib.load(latest_checkpoint_path)
+        new_variable_name_value_dict = joblib.load(ckpt_path)
         assert len(cur_variable_value_dict) == len(new_variable_name_value_dict)
 
         # TODO this is also going to leak memory
@@ -141,7 +140,7 @@ class RewardPredictor:
 
         self.sess.run(restores)
 
-        print("Restored reward predictor (with polyak) from checkpoint '{}'".format(latest_checkpoint_path))
+        print("Restored reward predictor (with polyak) from checkpoint '{}'".format(ckpt_path))
 
         self.polyak_min *= polyak_coef
         self.logger.logkv('reward_predictor/polyak_min', self.polyak_min)
