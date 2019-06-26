@@ -16,12 +16,11 @@ from gym.wrappers import TimeLimit
 from tensorflow.python.framework.errors_impl import NotFoundError
 
 import global_variables
-from baselines.common.distributions import OrnsteinUhlenbeckActionNoise
 from global_constants import ROLLOUT_FPS
 from global_variables import RolloutMode, RolloutRandomness
 from rollouts import CompressedRollout
 from utils import EnvState, get_noop_action, save_video, make_small_change, find_latest_checkpoint, load_cpu_config, \
-    unwrap_to
+    unwrap_to, OrnsteinUhlenbeckActionNoise
 from wrappers.util_wrappers import ResetMode
 
 
