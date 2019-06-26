@@ -19,6 +19,10 @@ FORCE_SAVE_FNAME = 'reward_predictor_force_save'
 FORCE_LOAD_FNAME = 'reward_predictor_force_load'
 
 
+class NoEventError(Exception):
+    pass
+
+
 class FileBasedEventPipe:
     def __init__(self, pipe_path):
         os.mkfifo(pipe_path)
@@ -27,14 +31,14 @@ class FileBasedEventPipe:
         self.ack_pipe_path = pipe_path + '_ack'
         os.mkfifo(self.ack_pipe_path)
 
-    def check_for_event(self):
+    def get_event(self):
         try:
             event = os.read(self.event_pipe, 512)
         except BlockingIOError:
-            return False
+            raise NoEventError
         if not event:
-            return False
-        return True
+            raise NoEventError
+        return event
 
     def send_ack(self, ack_str='ack'):
         # We have to wait until someone is listening before opening the pipe;
@@ -70,7 +74,13 @@ def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
 
     n_successful_loads = 0
     while True:
-        event = force_load_event_pipe.check_for_event()
+        try:
+            force_load_event_pipe.get_event()
+        except NoEventError:
+            event = False
+        else:
+            event = True
+
         if not event and not load_timer.done():
             time.sleep(1)
             continue
@@ -142,7 +152,7 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
                 time.sleep(1.0)
                 continue
 
-        event = save_ckpt_event_pipe.check_for_event()
+        event = save_ckpt_event_pipe.get_event()
         if event or save_ckpt_timer.done():
             with LogMilliseconds('reward_predictor_train_loop/ckpt_save_time_ms', logger):
                 reward_predictor.save(save_ckpt_path)
