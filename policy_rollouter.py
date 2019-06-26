@@ -71,7 +71,7 @@ class RolloutWorker:
         env = None
 
         while True:
-            policy_name, env_state, noise, rollout_len_frames, show_frames, group_serial, deterministic, just_explore = env_state_queue.get()
+            policy_name, env_state, noise, rollout_len_frames, show_frames, group_serial, deterministic, just_explore, ou_noise = env_state_queue.get()
 
             if env is not None:
                 if hasattr(env.unwrapped, 'close'):
@@ -80,9 +80,7 @@ class RolloutWorker:
                     env.unwrapped.close()
             env = env_state.env
 
-            mu = np.zeros(env.action_space.shape)
-            sigma = global_variables.rollout_noise_sigma * np.ones(env.action_space.shape)
-            self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma)
+            self.ou_noise = ou_noise
 
             if policy_name == 'redo':
                 self.redo_rollout(env, env_state, group_serial)
@@ -239,6 +237,11 @@ class PolicyRollouter:
         self.show_from_end_seconds = show_from_end_seconds
         self.just_explore = True
 
+        mu = np.zeros(env.action_space.shape)
+        assert isinstance(global_variables.rollout_noise_sigma, float)
+        sigma = global_variables.rollout_noise_sigma * np.ones(env.action_space.shape)
+        self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma, seed=0)
+
         # 'spawn' -> start a fresh process
         # (TensorFlow is not fork-safe)
         self.ctx = multiprocessing.get_context('spawn')
@@ -266,6 +269,7 @@ class PolicyRollouter:
         rollout_hashes = []
         if env_state.done or force_reset:
             env_state = self.get_reset_state(env_state)
+            self.ou_noise.reset()
         group_serial = str(time.time())
         n_rollouts = 0
         rollout_len_frames = int(self.rollout_len_seconds * ROLLOUT_FPS)
@@ -280,7 +284,7 @@ class PolicyRollouter:
                 else:
                     deterministic = (policy_name != 'random')
                 self.env_state_queue.put((policy_name, env_state, add_extra_noise,
-                                          rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore))
+                                          rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore, self.ou_noise))
                 n_rollouts += 1
         elif global_variables.rollout_mode == RolloutMode.CUR_POLICY:
             if global_variables.rollout_randomness == RolloutRandomness.SAMPLE_ACTION:
@@ -294,13 +298,13 @@ class PolicyRollouter:
                 raise Exception('Invalid rollout randomness', global_variables.rollout_randomness)
             for _ in range(global_variables.n_cur_policy):
                 self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
-                                          rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore))
+                                          rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore, self.ou_noise))
                 n_rollouts += 1
             # Also add a trajectory sampled directly from the policy
             add_extra_noise = False
             deterministic = True
             self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
-                                      rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore))
+                                      rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore, self.ou_noise))
             n_rollouts += 1
         else:
             raise Exception("Invalid rollout mode", global_variables.rollout_mode)
