@@ -491,7 +491,7 @@ class TD3Policy(Policy):
                 self.logger.logkv(f'policy_{self.name}/actions_mean_{n}', self.action_stats.mean[n])
                 self.logger.logkv(f'policy_{self.name}/actions_std_{n}', self.action_stats.std[n])
                 self.logger.logkv(f'policy_{self.name}/noise_mean_{n}', self.noise_stats.mean[n])
-                self.logger.logkv(f'policy_{self.name}/noise_std_{n}', self.noise_stats.var[n])
+                self.logger.logkv(f'policy_{self.name}/noise_std_{n}', self.noise_stats.std[n])
             self.logger.logkv(f'policy_{self.name}/replay_buffer_ptr', self.replay_buffer.ptr)
             self.logger.logkv(f'policy_{self.name}/replay_buffer_demo_ptr', self.demonstrations_buffer.ptr)
             self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
