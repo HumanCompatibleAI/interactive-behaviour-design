@@ -109,9 +109,8 @@ class RewardPredictor:
         for path in checkpoint_paths[:-max_to_keep]:
             os.remove(path)
 
-    def load(self, path):
-        latest_checkpoint_path = self.get_latest_checkpoint(path)
-        variable_values = joblib.load(latest_checkpoint_path)
+    def load(self, ckpt_path):
+        variable_values = joblib.load(ckpt_path)
         with self.graph.as_default():
             variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
         assert len(variables) == len(variable_values)
@@ -122,7 +121,7 @@ class RewardPredictor:
 
         self.sess.run(restores)
 
-        print("Restored reward predictor from checkpoint '{}'".format(latest_checkpoint_path))
+        print("Restored reward predictor from checkpoint '{}'".format(ckpt_path))
 
     def load_polyak(self, ckpt_path, polyak_coef=0.995):
         cur_variable_value_dict = self.get_variable_value_dict()
