@@ -59,7 +59,7 @@ class FileBasedEventPipe:
     @staticmethod
     def wait_for_ack(pipe_path):
         pipe = open(pipe_path + '_ack')
-        s = pipe.read()
+        pipe.read()
 
 
 def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):

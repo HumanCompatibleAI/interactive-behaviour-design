@@ -19,9 +19,9 @@ def parse_args():
     parser.add_argument('--lrschedule', help='Learning rate schedule',
                         choices=['constant', 'linear'], default='constant')
     parser.add_argument('--n_envs', type=int, default=16)
-    parser.add_argument('--load_sdrlhp_demos') #runs/[run_dir]/experience/demonstration_rollouts.pkl
-    parser.add_argument('--load_sdrlhp_prefs') #runs/[run_dir]/experience/pref_db.pkl
-    parser.add_argument('--load_experience_dir') #runs/[run_dir]/experience/ for classifier/reset_states
+    parser.add_argument('--load_sdrlhp_demos')  # runs/[run_dir]/experience/demonstration_rollouts.pkl
+    parser.add_argument('--load_sdrlhp_prefs')  # runs/[run_dir]/experience/pref_db.pkl
+    parser.add_argument('--load_experience_dir')  # runs/[run_dir]/experience/ for classifier/reset_states
     parser.add_argument('--load_classifier_ckpt')
     parser.add_argument('--load_policy_ckpt_dir')
     parser.add_argument('--load_drlhp_prefs')

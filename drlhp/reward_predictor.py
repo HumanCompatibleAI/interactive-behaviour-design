@@ -91,17 +91,8 @@ class RewardPredictor:
 
         return summaries
 
-    def init_network(self, load_ckpt_dir=None):
-        if load_ckpt_dir:
-            ckpt_file = tf.train.latest_checkpoint(load_ckpt_dir)
-            if ckpt_file is None:
-                msg = "No reward predictor checkpoint found in '{}'".format(
-                    load_ckpt_dir)
-                raise FileNotFoundError(msg)
-            self.saver.restore(self.sess, ckpt_file)
-            print("Loaded reward predictor checkpoint from '{}'".format(ckpt_file))
-        else:
-            self.sess.run(self.init_op)
+    def init_network(self):
+        self.sess.run(self.init_op)
 
     def save(self, path, max_to_keep=5):
         save_path = f"{path}.{self.ckpt_n}"
@@ -114,7 +105,7 @@ class RewardPredictor:
         self.ckpt_n += 1
 
         checkpoint_paths = glob.glob(path + '.*')
-        checkpoint_paths.sort(key=lambda path: os.path.getmtime(path))
+        checkpoint_paths.sort(key=lambda p: os.path.getmtime(p))
         for path in checkpoint_paths[:-max_to_keep]:
             os.remove(path)
 
@@ -158,7 +149,7 @@ class RewardPredictor:
     @staticmethod
     def get_latest_checkpoint(path):
         checkpoints = glob.glob(path + '.*')
-        checkpoints.sort(key=lambda path: os.path.getmtime(path))
+        checkpoints.sort(key=lambda p: os.path.getmtime(p))
         latest_checkpoint_path = checkpoints[-1]
         return latest_checkpoint_path
 

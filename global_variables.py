@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Union
 
 
 class RolloutMode(Enum):
@@ -15,11 +16,11 @@ class RolloutRandomness(Enum):
 segment_save_mode = None
 max_segs = None
 render_segments = None
-rollout_random_action_prob = None  # type: float
-rollout_random_correlation = None  # type: float
-rollout_mode = None  # type: RolloutMode
-rollout_randomness = None  # type: RolloutRandomness
-n_cur_policy = None  # type: int
+rollout_random_action_prob = None  # type: Union[float, None]
+rollout_random_correlation = None  # type: Union[float, None]
+rollout_mode = None  # type: Union[RolloutMode, None]
+rollout_randomness = None  # type: Union[RolloutRandomness, None]
+n_cur_policy = None  # type: Union[int, None]
 # ALE is generally safe to use from multiple threads, but we do need to be careful about
 # two threads creating environments at the same time:
 # https://github.com/mgbellemare/Arcade-Learning-Environment/issues/86
@@ -30,6 +31,6 @@ reward_selector = None
 n_rl_steps_per_interaction = None
 frames_per_segment = None
 rollout_noise_sigma = None
-reward_predictor_load_polyak_coef = None  # type: float
+reward_predictor_load_polyak_coef = None  # type: Union[float, None]
 
 pids_to_proc_names = {}
