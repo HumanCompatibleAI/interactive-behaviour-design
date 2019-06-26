@@ -65,6 +65,7 @@ class RewardPredictor:
         self.log_interval = 20
 
         self.ckpt_n = 0
+        self.polyak_min = 1
 
         self.step_rate = RateMeasure()
         self.step_rate.reset(self.n_steps)
@@ -149,9 +150,13 @@ class RewardPredictor:
 
         self.sess.run(restores)
 
-        print("Restored reward predictor from checkpoint '{}'".format(latest_checkpoint_path))
+        print("Restored reward predictor (with polyak) from checkpoint '{}'".format(latest_checkpoint_path))
 
-    def get_latest_checkpoint(self, path):
+        self.polyak_min *= polyak_coef
+        self.logger.logkv('reward_predictor/polyak_min', self.polyak_min)
+
+    @staticmethod
+    def get_latest_checkpoint(path):
         checkpoints = glob.glob(path + '.*')
         checkpoints.sort(key=lambda path: os.path.getmtime(path))
         latest_checkpoint_path = checkpoints[-1]
