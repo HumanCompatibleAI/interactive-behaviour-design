@@ -32,4 +32,4 @@ def test_play(env_id):
 
 if __name__ == '__main__':
     register()
-    test_play('FetchBlockStackingDenseBinaryGripper-v0')
+    test_play('FetchBlockStackingDenseRepeat5BinaryGripper-v0')

@@ -11,7 +11,7 @@ from wrappers.wrappers_debug import DrawRewards
 
 
 def test_play():
-    env = gym.make('FetchReach-Custom-v0')
+    env = gym.make('FetchReach-CustomRepeat5-v0')
     env._max_episode_steps = None
     env._max_episode_seconds = None
     env = SaveObsToInfo(env)

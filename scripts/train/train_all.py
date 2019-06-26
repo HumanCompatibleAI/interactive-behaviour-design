@@ -26,8 +26,8 @@ prefs_envs = [
     # the current state
     ('fetchpp',
      'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-NonDelta-GripperBonuses-v0'),
-    ('fetchr', 'FetchReach-Custom-v0'),
-    ('fetchs', 'FetchBlockStackingDense-v0'),
+    ('fetchr', 'FetchReach-CustomRepeat5-v0'),
+    ('fetchs', 'FetchBlockStackingDenseRepeat5-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 

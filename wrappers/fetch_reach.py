@@ -1,4 +1,5 @@
 from collections import deque
+from functools import partial
 
 import gym
 import numpy as np
@@ -8,7 +9,7 @@ from gym.envs.robotics import FetchReachEnv
 from gym.spaces import Discrete
 from gym.wrappers import FlattenDictWrapper
 
-from wrappers.util_wrappers import CollectEpisodeStats
+from wrappers.util_wrappers import CollectEpisodeStats, RepeatActions
 
 
 def decode_fetch_reach_obs(obs):
@@ -115,13 +116,17 @@ class FetchReachStatsWrapper(CollectEpisodeStats):
         return obs, reward, done, info
 
 
-def make_env():
+def make_env(action_repeat):
     env = FetchReachEnv(reward_type='dense')
     env = FlattenDictWrapper(env, ['observation', 'desired_goal'])
     env = FetchReachStatsWrapper(env)
     env = FetchReachObsWrapper(env)
+    env = RepeatActions(env, action_repeat)
     return env
 
 
 def register():
-    gym_register('FetchReach-Custom-v0', entry_point=make_env, max_episode_steps=250)
+    for action_repeat in [1, 5]:
+        gym_register(f'FetchReach-CustomRepeat{action_repeat}-v0',
+                     entry_point=partial(make_env, action_repeat=action_repeat),
+                     max_episode_steps=250)
