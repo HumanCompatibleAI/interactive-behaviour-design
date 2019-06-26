@@ -71,7 +71,6 @@ class RewardPredictor:
 
         self.init_network()
 
-
     def add_summary_ops(self):
         summary_ops = []
 
@@ -106,13 +105,8 @@ class RewardPredictor:
     def save(self, path, max_to_keep=5):
         save_path = f"{path}.{self.ckpt_n}"
 
-        with self.graph.as_default():
-            variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-        assert len(variables) > 0
-        variable_values = self.sess.run(variables)
-        save_dict = {variable.name: value
-                     for variable, value in zip(variables, variable_values)}
-
+        variable_value_dict = self.get_variable_value_dict()
+        save_dict = {variable.name: value for variable, value in variable_value_dict.items()}
         joblib.dump(save_dict, save_path)
 
         print("Saved reward predictor checkpoint to '{}'".format(save_path))
@@ -123,22 +117,53 @@ class RewardPredictor:
         for path in checkpoint_paths[:-max_to_keep]:
             os.remove(path)
 
-
     def load(self, path):
-        checkpoints = glob.glob(path + '.*')
-        checkpoints.sort(key=lambda path: os.path.getmtime(path))
-        latest_checkpoint_path = checkpoints[-1]
-
+        latest_checkpoint_path = self.get_latest_checkpoint(path)
         variable_values = joblib.load(latest_checkpoint_path)
         with self.graph.as_default():
             variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
         assert len(variables) == len(variable_values)
+
+        # TODO this is going to leak memory, because we add operations to the graph on every call
         restores = [variable.assign(variable_values[variable.name])
                     for variable in variables]
 
         self.sess.run(restores)
 
         print("Restored reward predictor from checkpoint '{}'".format(latest_checkpoint_path))
+
+    def load_polyak(self, path, polyak_coef=0.995):
+        cur_variable_value_dict = self.get_variable_value_dict()
+        latest_checkpoint_path = self.get_latest_checkpoint(path)
+        new_variable_name_value_dict = joblib.load(latest_checkpoint_path)
+        assert len(cur_variable_value_dict) == len(new_variable_name_value_dict)
+
+        # TODO this is also going to leak memory
+        restores = []
+        for variable in cur_variable_value_dict.keys():
+            cur_value = cur_variable_value_dict[variable]
+            new_value = new_variable_name_value_dict[variable.name]
+            polyakked_new_value = polyak_coef * cur_value + (1 - polyak_coef) * new_value
+            assign = variable.assign(polyakked_new_value)
+            restores.append(assign)
+
+        self.sess.run(restores)
+
+        print("Restored reward predictor from checkpoint '{}'".format(latest_checkpoint_path))
+
+    def get_latest_checkpoint(self, path):
+        checkpoints = glob.glob(path + '.*')
+        checkpoints.sort(key=lambda path: os.path.getmtime(path))
+        latest_checkpoint_path = checkpoints[-1]
+        return latest_checkpoint_path
+
+    def get_variable_value_dict(self):
+        with self.graph.as_default():
+            variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+        assert len(variables) > 0
+        variable_values = self.sess.run(variables)
+        return {variable: value
+                for variable, value in zip(variables, variable_values)}
 
     def raw_rewards(self, obs):
         """

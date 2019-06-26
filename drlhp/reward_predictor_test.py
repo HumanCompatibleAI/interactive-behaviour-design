@@ -69,6 +69,7 @@ class TestRewardPredictor(unittest.TestCase):
             self._test_save_load_basic(net, network_args, obs_shape)
             self._test_load_latest_checkpoint(net, network_args, obs_shape)
             self._test_remove_old_checkpoints(net, network_args, obs_shape)
+            self._test_polyak_save_load(net, network_args, obs_shape)
 
     def _test_save_load_basic(self, net, network_args, obs_shape):
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -102,6 +103,51 @@ class TestRewardPredictor(unittest.TestCase):
             rp.save(ckpt_path, max_to_keep=2)
             self.assertEqual(glob.glob(ckpt_path + '.*'), [ckpt_path + '.1', ckpt_path + '.2'])
 
+    def _test_polyak_save_load(self, net, network_args, obs_shape):
+        obs = np.random.random_sample(obs_shape)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            rp1, rp2 = self.get_reward_predictor_pair(net, network_args, obs_shape, tmp_dir)
+            ckpt_path = os.path.join(tmp_dir, 'checkpoint')
+
+            self.check_reward_predictors_different(rp1, rp2)
+            r2_old = self.predict_reward(rp2, obs)
+            self.save_load_reward_predictor_polyak(rp1, rp2, ckpt_path, polyak_coef=1.0)
+            # With a polyak coefficient of 1.0, we should have kept all the old parameter values,
+            # so we should get exactly the old result
+            r2_new = self.predict_reward(rp2, obs)
+            self.check_reward_predictors_different(rp1, rp2)
+            self.assertEqual(r2_old, r2_new)
+            r2_old = r2_new
+
+            self.save_load_reward_predictor_polyak(rp1, rp2, ckpt_path, polyak_coef=0.0)
+            # This time, we should have loaded exactly the parameter values from the first reward predictor
+            r2_new = self.predict_reward(rp2, obs)
+            with self.assertRaises(AssertionError):
+                self.assertEqual(r2_new, r2_old)
+            r1 = self.predict_reward(rp1, obs)
+            self.assertEqual(r2_new, r1)
+            r2_old = r2_new
+
+            self.train_reward_predictor(rp1)
+            self.save_load_reward_predictor_polyak(rp1, rp2, ckpt_path, polyak_coef=0.5)
+            # Now we should get something different from rp1, and also different from the old rp2
+            r1 = self.predict_reward(rp1, obs)
+            r2_new = self.predict_reward(rp2, obs)
+            with self.assertRaises(AssertionError):
+                self.assertEqual(r2_new, r1)
+            with self.assertRaises(AssertionError):
+                self.assertEqual(r2_new, r2_old)
+
+            # If we call load on rp2 a bunch of times, it should get closer to rp1
+            r1 = self.predict_reward(rp1, obs)
+            r2 = self.predict_reward(rp2, obs)
+            with self.assertRaises(AssertionError):
+                np.testing.assert_approx_equal(r2, r1, significant=5)
+            for _ in range(20):
+                self.save_load_reward_predictor_polyak(rp1, rp2, ckpt_path, polyak_coef=0.1)
+            r2 = self.predict_reward(rp2, obs)
+            np.testing.assert_approx_equal(r2, r1, significant=5)
+
     def get_reward_predictor_pair(self, net, network_args, obs_shape, tmp_dir):
         rp1 = self.get_reward_predictor(net, network_args, obs_shape, tmp_dir, seed=0)
         rp2 = self.get_reward_predictor(net, network_args, obs_shape, tmp_dir, seed=1)
@@ -130,6 +176,10 @@ class TestRewardPredictor(unittest.TestCase):
     def save_load_reward_predictor(self, rp1, rp2, ckpt_path):
         rp1.save(ckpt_path)
         rp2.load(ckpt_path)
+
+    def save_load_reward_predictor_polyak(self, rp1, rp2, ckpt_path, polyak_coef):
+        rp1.save(ckpt_path)
+        rp2.load_polyak(ckpt_path, polyak_coef)
 
     def train_reward_predictor(self, reward_predictor):
         prefs_train, prefs_val = PrefDB(maxlen=10), PrefDB(maxlen=10)
