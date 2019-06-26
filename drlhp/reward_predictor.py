@@ -1,9 +1,11 @@
 import contextlib
+import glob
 import logging
+import os
 import os.path as osp
-import time
 
 import easy_tf_log
+import joblib
 import numpy as np
 import tensorflow as tf
 from numpy.testing import assert_equal
@@ -22,6 +24,7 @@ class RewardPredictor:
     def __init__(self, obs_shape, network, network_args, r_std, name, lr=1e-4, log_dir=None, seed=None, gpu_n=None):
         self.obs_shape = obs_shape
         graph = tf.Graph()
+        self.graph = graph
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
         self.sess = tf.Session(graph=graph, config=config)
@@ -41,11 +44,6 @@ class RewardPredictor:
                                                    obs_shape=obs_shape,
                                                    lr=lr)]
                 self.init_op = tf.global_variables_initializer()
-            # Why save_relative_paths=True?
-            # So that the plain-text 'checkpoint' file written uses relative paths,
-            # which seems to be needed in order to avoid confusing saver.restore()
-            # when restoring from FloydHub runs.
-            self.saver = tf.train.Saver(max_to_keep=5, save_relative_paths=True)
             self.summaries = self.add_summary_ops()
 
         self.train_writer = tf.summary.FileWriter(
@@ -105,14 +103,42 @@ class RewardPredictor:
         else:
             self.sess.run(self.init_op)
 
-    def save(self, path):
-        ckpt_name = self.saver.save(self.sess, path, self.ckpt_n)
-        print("Saved reward predictor checkpoint to '{}'".format(ckpt_name))
+    def save(self, path, max_to_keep=5):
+        save_path = f"{path}.{self.ckpt_n}"
+
+        with self.graph.as_default():
+            variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+        assert len(variables) > 0
+        variable_values = self.sess.run(variables)
+        save_dict = {variable.name: value
+                     for variable, value in zip(variables, variable_values)}
+
+        joblib.dump(save_dict, save_path)
+
+        print("Saved reward predictor checkpoint to '{}'".format(save_path))
         self.ckpt_n += 1
 
+        checkpoint_paths = glob.glob(path + '.*')
+        checkpoint_paths.sort(key=lambda path: os.path.getmtime(path))
+        for path in checkpoint_paths[:-max_to_keep]:
+            os.remove(path)
+
+
     def load(self, path):
-        self.saver.restore(self.sess, path)
-        print("Restored reward predictor from checkpoint '{}'".format(path))
+        checkpoints = glob.glob(path + '.*')
+        checkpoints.sort(key=lambda path: os.path.getmtime(path))
+        latest_checkpoint_path = checkpoints[-1]
+
+        variable_values = joblib.load(latest_checkpoint_path)
+        with self.graph.as_default():
+            variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+        assert len(variables) == len(variable_values)
+        restores = [variable.assign(variable_values[variable.name])
+                    for variable in variables]
+
+        self.sess.run(restores)
+
+        print("Restored reward predictor from checkpoint '{}'".format(latest_checkpoint_path))
 
     def raw_rewards(self, obs):
         """
