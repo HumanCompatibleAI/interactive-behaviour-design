@@ -24,7 +24,7 @@ class RewardSelector:
         self.cur_reward_source = reward_source
 
     def _rewards_from_reward_predictor(self, obs):
-        rewards = self.reward_predictor.raw_rewards(np.array([obs]))[0][0]
+        rewards = self.reward_predictor.raw_rewards(obs)[0]
         assert rewards.shape == (obs.shape[0],)
         return rewards
 
