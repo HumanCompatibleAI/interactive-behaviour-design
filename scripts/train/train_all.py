@@ -149,7 +149,7 @@ def get_rollout_len_config(env_id, extra_args):
     if 'rollout_length_seconds' in extra_args:
         return ''
     if 'Fetch' in env_id:
-        rollout_length_seconds = 0.5
+        rollout_length_seconds = 1.5
     elif 'Breakout' in env_id:
         # Long enough to stretch from hitting the ball to the ball bouncing off a block
         rollout_length_seconds = 1.5
