@@ -157,7 +157,12 @@ def drlhp_train_loop(make_reward_predictor_fn_cloudpickle,
                 time.sleep(1.0)
                 continue
 
-        event = save_ckpt_event_pipe.get_event()
+        try:
+            save_ckpt_event_pipe.get_event()
+        except NoEventError:
+            event = False
+        else:
+            event = True
         if event or save_ckpt_timer.done():
             with LogMilliseconds('reward_predictor_train_loop/ckpt_save_time_ms', logger):
                 reward_predictor.save(save_ckpt_path)
