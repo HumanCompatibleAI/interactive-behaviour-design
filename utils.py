@@ -665,17 +665,18 @@ def read_events_file(events_filename):
 # From Baselines DDPG
 # Based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
 class OrnsteinUhlenbeckActionNoise(ActionNoise):
-    def __init__(self, mu, sigma, theta=.15, dt=1e-2, x0=None):
+    def __init__(self, mu, sigma, theta=.15, dt=1e-2, x0=None, seed=0):
         self.theta = theta
         self.mu = mu
         self.sigma = sigma
         self.dt = dt
         self.x0 = x0
+        self.np_random = np.random.RandomState(seed=seed)
         self.reset()
 
     def __call__(self):
-        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(
-            self.dt) * np.random.normal(size=self.mu.shape)
+        rand_normal = self.np_random.normal(size=self.mu.shape)
+        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(self.dt) * rand_normal
         self.x_prev = x
         return x
 
