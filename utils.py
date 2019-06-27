@@ -539,7 +539,7 @@ def save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus):
         json.dump(d, f)
 
 
-def configure_cpus(log_dir, n_rollouter_cpus=4, n_drlhp_training_cpus=4):
+def configure_cpus(log_dir, n_rollouter_cpus=6, n_drlhp_training_cpus=4):
     if hasattr(os, 'sched_getaffinity'):
         available_cpus = list(os.sched_getaffinity(0))
     else:
