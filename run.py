@@ -428,7 +428,11 @@ def parse_policy_args(policy_args_str):
                    for k, v in [a.split('=')
                                 for a in policy_args_str.split(',')]}
     for k, v in policy_args.items():
-        if any([c in v for c in ['.', 'e']]):
+        if v == 'True':
+            policy_args[k] = True
+        elif v == 'False':
+            policy_args[k] = False
+        elif any([c in v for c in ['.', 'e']]):
             policy_args[k] = float(v)
         else:
             policy_args[k] = int(v)
