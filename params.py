@@ -60,7 +60,7 @@ def parse_args():
     parser.add_argument('--policy_args')
     parser.add_argument('--generate_expert_demonstrations', action='store_true')
     parser.add_argument('--target_n_prefs_per_24h', type=float, default=5e3)
-    parser.add_argument('--rollout_noise_sigma', type=float, default=0.2)
+    parser.add_argument('--rollout_noise_sigma', type=float, default=0.05)
     # Default: new parameters = 0 * old parameters + 1 * loaded parameters
     parser.add_argument('--reward_predictor_load_polyak_coef', type=float, default=0.0)
     args = parser.parse_args()
