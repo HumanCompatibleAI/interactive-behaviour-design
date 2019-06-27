@@ -158,11 +158,14 @@ class RewardGrapher:
 
         height = 100
 
-        frame[self.y, 5:5+self.width, :] = 255
-        frame[self.y + height, 5:5+self.width, :] = 255
-        frame[self.y + height // 2, 5:5+self.width, :] = 255
-        frame[self.y:self.y + height, 5, :] = 255
-        frame[self.y:self.y + height, 5 + self.width, :] = 255
+        try:
+            frame[self.y, 5:5+self.width, :] = 255
+            frame[self.y + height, 5:5+self.width, :] = 255
+            frame[self.y + height // 2, 5:5+self.width, :] = 255
+            frame[self.y:self.y + height, 5, :] = 255
+            frame[self.y:self.y + height, 5 + self.width, :] = 255
+        except IndexError:
+            return
 
         if self.scale is None:
             scale = np.max(np.abs(self.values))
@@ -171,9 +174,12 @@ class RewardGrapher:
         else:
             scale = self.scale
 
-        for x, val in enumerate(self.values):
-            val_y = int((val / scale) * (height / 2))
-            frame[self.y + height // 2 - val_y, 5 + x, :] = 255
+        try:
+            for x, val in enumerate(self.values):
+                val_y = int((val / scale) * (height / 2))
+                frame[self.y + height // 2 - val_y, 5 + x, :] = 255
+        except IndexError:
+            return
 
         # For some reason putText can't draw directly on the original frame...?
         frame_copy = np.copy(frame)
