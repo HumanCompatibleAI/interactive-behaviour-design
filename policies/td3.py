@@ -437,8 +437,9 @@ class TD3Policy(Policy):
         self.n_serial_steps += 1
 
         # Maybe replace rewards with e.g. predicted rewards
+        orig_reward = np.copy(reward)
         reward = self.process_rewards(obs2, reward)
-        self.reward_logger.log([reward], [done])
+        self.reward_logger.log([orig_reward], [reward], [done])
 
         if not self.reward_predictor_warmup_phase:
             # Store experience to replay buffer
