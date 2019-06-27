@@ -433,6 +433,7 @@ class TD3Policy(Policy):
 
         if self.reward_predictor_warmup_phase or self.initial_exploration_phase:
             action = self.get_noise()
+            action = np.clip(action, -self.act_limit, self.act_limit)
         else:
             action = self.train_step(self.obs1)
 
