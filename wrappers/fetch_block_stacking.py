@@ -120,8 +120,56 @@ class BinaryGripperWrapper(ActionWrapper):
         return action
 
 
-def make_env(binary_gripper, action_repeat):
+class RandomBlockPositions(Wrapper):
+    def reset(self):
+        self.env.reset()
+
+        pos0 = self._get_random_pos()
+        while True:
+            pos1 = self._get_random_pos()
+            if np.linalg.norm(pos1 - pos0) > 0.2:
+                break
+
+        # Open gripper
+        self.env.unwrapped._set_action(np.array([0., 0., 0., 1.]))
+        for _ in range(10):
+            self.env.unwrapped.sim.step()
+
+        gripper_target = np.copy(pos0)
+        # Make sure we're above the table
+        gripper_target[2] += 0.01
+        gripper_rotation = np.array([1., 0., 1., 0.])
+        self.env.unwrapped.sim.data.set_mocap_pos('robot0:mocap', gripper_target)
+        self.env.unwrapped.sim.data.set_mocap_quat('robot0:mocap', gripper_rotation)
+        for _ in range(10):
+            self.env.unwrapped.sim.step()
+
+        for object_n, pos in [(0, pos0), (1, pos1)]:
+            object_name = f'object{object_n}:joint'
+
+            rotation_quat = np.array([1, 0, 1, 0])
+            qpos = np.concatenate([pos, rotation_quat])
+            self.env.unwrapped.sim.data.set_joint_qpos(object_name, qpos)
+
+            # In case we knocked the block while moving the gripper
+            qvel = self.env.unwrapped.sim.data.get_joint_qvel(object_name)
+            self.env.unwrapped.sim.data.set_joint_qvel(object_name, np.zeros_like(qvel))
+        self.env.unwrapped.sim.forward()
+
+        obs = self.env.unwrapped._get_obs()
+        return obs
+
+    def _get_random_pos(self):
+        x = np.random.uniform(low=1.1, high=1.5)
+        y = np.random.uniform(low=0.45, high=1.0)
+        z = 0.425
+        return np.array([x, y, z])
+
+
+def make_env(binary_gripper, action_repeat, random_pos):
     env = FetchBlockStackingEnv()
+    if random_pos:
+        env = RandomBlockPositions(env)
     env = FlattenDictWrapper(env, ['observation'])
     env = FetchBlockStackingStatsWrapper(env)
     env = FetchBlockStackingRewardWrapper(env)
@@ -134,12 +182,15 @@ def make_env(binary_gripper, action_repeat):
 
 def register():
     for action_repeat in [1, 5]:
-        gym_register(f'FetchBlockStackingDenseRepeat{action_repeat}-v0',
-                     entry_point=partial(make_env, binary_gripper=False, action_repeat=action_repeat),
-                     max_episode_steps=250)
-        gym_register(f'FetchBlockStackingDenseRepeat{action_repeat}BinaryGripper-v0',
-                     entry_point=partial(make_env, binary_gripper=True, action_repeat=action_repeat),
-                     max_episode_steps=250)
+        for random_pos, random_pos_suffix in [(True, 'RandomPos'), (False, 'FixedPos')]:
+            for binary_gripper, binary_gripper_suffix in [(True, 'BinaryGripper'), (False, 'ContGripper')]:
+                gym_register(
+                    f'FetchBlockStacking_Dense_Repeat{action_repeat}_{binary_gripper_suffix}_{random_pos_suffix}-v0',
+                    entry_point=partial(make_env,
+                                        binary_gripper=binary_gripper,
+                                        action_repeat=action_repeat,
+                                        random_pos=random_pos),
+                    max_episode_steps=250)
 
 
 class FetchBlockStackingStatsWrapper(CollectEpisodeStats):

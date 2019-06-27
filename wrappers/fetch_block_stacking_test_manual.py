@@ -14,7 +14,7 @@ def test_play(env_id):
     print(f"Using env {env_id}")
     env = gym.make(env_id)
     env._max_episode_steps = None
-    env._max_episode_seconds = None
+    env._max_episode_seconds = 5
     # env = SaveObsToInfo(env)
     # env = DrawRewards(env)
     # env = DrawObses(env, decode_fn=FetchBlockStackingObsWrapper.decode)
@@ -32,4 +32,4 @@ def test_play(env_id):
 
 if __name__ == '__main__':
     register()
-    test_play('FetchBlockStackingDenseRepeat5BinaryGripper-v0')
+    test_play('FetchBlockStacking_Dense_Repeat5_BinaryGripper_FixedPos-v0')
