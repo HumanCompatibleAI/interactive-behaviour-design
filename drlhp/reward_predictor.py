@@ -300,7 +300,7 @@ class RewardPredictor:
         # Why do we only check the loss from the first reward predictor?
         # As a quick hack to get adaptive L2 regularization working quickly,
         # assuming we're only using one reward predictor.
-        ops = [self.rps[0].loss, self.summaries, [rp.train for rp in self.rps]]
+        ops = [self.rps[0].prediction_loss, self.summaries, [rp.train for rp in self.rps]]
         loss, summaries, _ = self.sess.run(ops, feed_dict)
         if self.n_steps % self.log_interval == 0:
             self.train_writer.add_summary(summaries, self.n_steps)
@@ -322,7 +322,7 @@ class RewardPredictor:
             feed_dict[rp.s2] = s2s
             feed_dict[rp.pref] = prefs
             feed_dict[rp.training] = False
-        loss, summaries = self.sess.run([self.rps[0].loss, self.summaries], feed_dict)
+        loss, summaries = self.sess.run([self.rps[0].prediction_loss, self.summaries], feed_dict)
         if self.n_steps % self.log_interval == 0:
             self.test_writer.add_summary(summaries, self.n_steps)
         return loss
@@ -431,6 +431,7 @@ class RewardPredictorNetwork:
         # reduce_sum is for when you have e.g. a matrix and you want to sum over one row.
         # If you want to sum over elements of a list, you use add_n.
         l2_reg_loss = tf.add_n(l2_reg_losses)
+        self.prediction_loss = loss
         loss += l2_reg_loss
 
         if core_network == net_cnn:
