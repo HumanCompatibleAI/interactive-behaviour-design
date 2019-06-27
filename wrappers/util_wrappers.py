@@ -712,5 +712,5 @@ class CheckActionLimit(Wrapper):
         self.limit = limit + eps
 
     def step(self, action: np.ndarray):
-        assert np.all(np.abs(action) <= self.limit)
+        assert np.all(np.abs(action) <= self.limit), action
         return self.env.step(action)
