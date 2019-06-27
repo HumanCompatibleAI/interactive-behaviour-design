@@ -142,11 +142,12 @@ class DrawRewards(Wrapper):
 
 
 class RewardGrapher:
-    def __init__(self, scale=None, y=20):
+    def __init__(self, name, scale=None, y=20):
         self.scale = scale
         self.y = y
         self.width = 400
         self.values = None
+        self.name = name
         self.reset()
 
     def reset(self):
@@ -184,7 +185,7 @@ class RewardGrapher:
         # For some reason putText can't draw directly on the original frame...?
         frame_copy = np.copy(frame)
         cv2.putText(frame_copy,
-                    "{:.3f}".format(self.values[-1]),
+                    "{}: {:.3f}".format(self.name, self.values[-1]),
                     org=(5, self.y - 5),
                     fontFace=cv2.FONT_HERSHEY_PLAIN,
                     fontScale=1,
