@@ -136,7 +136,7 @@ def register():
     for action_repeat in [1, 5]:
         gym_register(f'FetchBlockStackingDenseRepeat{action_repeat}-v0',
                      entry_point=partial(make_env, binary_gripper=False, action_repeat=action_repeat),
-                     max_episode_steps=250)
+                     max_episode_steps=int(250/action_repeat))
         gym_register(f'FetchBlockStackingDenseRepeat{action_repeat}BinaryGripper-v0',
                      entry_point=partial(make_env, binary_gripper=True, action_repeat=action_repeat),
                      max_episode_steps=250)
