@@ -99,7 +99,8 @@ class TD3Policy(Policy):
                  n_initial_episodes=100, replay_size=int(1e6),
                  bc_l2_coef=1e-4, train_mode=PolicyTrainMode.R_ONLY,
                  hidden_sizes=(128, 128, 128),
-                 sess_config=None, test_rollouts_per_epoch=10):
+                 sess_config=None, test_rollouts_per_epoch=10,
+                 pi_adam=True):
         assert policy_delay < batches_per_cycle
         assert noise_type in ['gaussian', 'ou']
         Policy.__init__(self, name, env_id, obs_space, ac_space, n_envs, seed)
@@ -136,7 +137,10 @@ class TD3Policy(Policy):
             td3_plus_bc_pi_loss = td3_pi_loss + bc_pi_loss
 
             # Separate train ops for pi, q
-            pi_optimizer = tf.train.AdamOptimizer(learning_rate=pi_lr)
+            if pi_adam:
+                pi_optimizer = tf.train.AdamOptimizer(learning_rate=pi_lr)
+            els:
+                pi_optimizer = tf.train.GradientDescentOptimizer(learning_rate=pi_lr)
             train_pi_r_only_op = pi_optimizer.minimize(td3_pi_loss, var_list=get_vars('main/pi'))
             train_pi_bc_only_op = pi_optimizer.minimize(bc_pi_loss, var_list=get_vars('main/pi'))
             train_pi_td3_plus_bc_op = pi_optimizer.minimize(td3_plus_bc_pi_loss, var_list=get_vars('main/pi'))
