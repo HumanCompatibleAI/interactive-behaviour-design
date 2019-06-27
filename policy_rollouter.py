@@ -10,7 +10,7 @@ from typing import Dict
 import gym
 import numpy as np
 from cloudpickle import cloudpickle
-from gym.spaces import seed
+from gym.spaces import prng
 from gym.utils import atomic_write
 from gym.wrappers import TimeLimit
 from tensorflow.python.framework.errors_impl import NotFoundError
@@ -26,7 +26,6 @@ from wrappers.util_wrappers import ResetMode
 
 def save_global_variables():
     d = {}
-    k: str
     for k, v in global_variables.__dict__.items():
         if k.startswith('_'):
             continue
@@ -51,7 +50,7 @@ class RolloutWorker:
 
         np.random.seed(worker_n)
         # Important so that different workers get different actions from env.action_space.sample()
-        gym.spaces.seed(worker_n)
+        gym.spaces.prng.seed(worker_n)
 
         restore_global_variables(gv_dict)
         # Since we're in our own process, this lock isn't actually needed,
@@ -71,7 +70,8 @@ class RolloutWorker:
         env = None
 
         while True:
-            policy_name, env_state, noise, rollout_len_frames, show_frames, group_serial, deterministic, just_explore, ou_noise = env_state_queue.get()
+            policy_name, env_state, noise, rollout_len_frames, show_frames, \
+                group_serial, deterministic, just_explore, ou_noise = env_state_queue.get()
 
             if env is not None:
                 if hasattr(env.unwrapped, 'close'):
@@ -94,7 +94,8 @@ class RolloutWorker:
     def load_policy_checkpoint(self, policy_name):
         while True:
             try:
-                last_ckpt_name = find_latest_checkpoint(os.path.join(self.checkpoint_dir, 'policy-{}-'.format(policy_name)))
+                ckpt_path = os.path.join(self.checkpoint_dir, 'policy-{}-'.format(policy_name))
+                last_ckpt_name = find_latest_checkpoint(ckpt_path)
                 self.policy.load_checkpoint(last_ckpt_name)
             except NotFoundError:
                 # If e.g. the checkpoint got replaced with a newer one
@@ -107,6 +108,7 @@ class RolloutWorker:
                 break
 
     def redo_rollout(self, env, env_state, group_serial):
+        # noinspection PyTypeChecker
         rollout = CompressedRollout(final_env_state=env_state,
                                     obses=None,
                                     frames=None,
@@ -125,7 +127,8 @@ class RolloutWorker:
 
         self.rollout_queue.put((group_serial, rollout_hash))
 
-    def rollout(self, policy_name, env, obs, group_serial, noise, rollout_len_frames, show_frames, deterministic, just_explore):
+    def rollout(self, policy_name, env, obs, group_serial, noise, rollout_len_frames,
+                show_frames, deterministic, just_explore):
         obses = []
         frames = []
         actions = []
@@ -259,13 +262,12 @@ class PolicyRollouter:
             proc.start()
             global_variables.pids_to_proc_names[proc.pid] = f'rollout_worker_{n}'
 
-    def generate_rollouts_from_reset(self, policies, softmax_temp):
+    def generate_rollouts_from_reset(self, policies):
         env_state = self.get_reset_state()
-        group_serial = self.generate_rollout_group(env_state, 'dummy_last_policy_name', policies, softmax_temp, False)
+        group_serial = self.generate_rollout_group(env_state, 'dummy_last_policy_name', policies, False)
         return group_serial
 
-    def generate_rollout_group(self, env_state: EnvState, last_policy_name, policy_names,
-                               softmax_temp, force_reset):
+    def generate_rollout_group(self, env_state: EnvState, last_policy_name, policy_names, force_reset):
         rollout_hashes = []
         if env_state.done or force_reset:
             env_state = self.get_reset_state(env_state)
@@ -284,7 +286,8 @@ class PolicyRollouter:
                 else:
                     deterministic = (policy_name != 'random')
                 self.env_state_queue.put((policy_name, env_state, add_extra_noise,
-                                          rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore, self.ou_noise))
+                                          rollout_len_frames, show_frames, group_serial, deterministic,
+                                          self.just_explore, self.ou_noise))
                 n_rollouts += 1
         elif global_variables.rollout_mode == RolloutMode.CUR_POLICY:
             if global_variables.rollout_randomness == RolloutRandomness.SAMPLE_ACTION:
@@ -298,13 +301,15 @@ class PolicyRollouter:
                 raise Exception('Invalid rollout randomness', global_variables.rollout_randomness)
             for _ in range(global_variables.n_cur_policy):
                 self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
-                                          rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore, self.ou_noise))
+                                          rollout_len_frames, show_frames, group_serial, deterministic,
+                                          self.just_explore, self.ou_noise))
                 n_rollouts += 1
             # Also add a trajectory sampled directly from the policy
             add_extra_noise = False
             deterministic = True
             self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
-                                      rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore, self.ou_noise))
+                                      rollout_len_frames, show_frames, group_serial, deterministic,
+                                      self.just_explore, self.ou_noise))
             n_rollouts += 1
         else:
             raise Exception("Invalid rollout mode", global_variables.rollout_mode)
