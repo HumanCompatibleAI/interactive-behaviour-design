@@ -16,7 +16,7 @@ from drlhp.pref_db import PrefDB
 from drlhp.reward_predictor_core_network import net_cnn
 from utils import batch_iter, RateMeasure
 
-MIN_L2_REG_COEF = 0.1
+MIN_L2_REG_COEF = 0.001
 
 
 class RewardPredictor:
@@ -37,7 +37,7 @@ class RewardPredictor:
         with graph.as_default():
             if seed is not None:
                 tf.set_random_seed(seed)
-            self.l2_reg_coef = MIN_L2_REG_COEF
+            self.l2_reg_coef = MIN_L2_REG_COEF*1000
             with device_context:
                 self.rps = [RewardPredictorNetwork(core_network=network,
                                                    network_args=network_args,
@@ -272,10 +272,10 @@ class RewardPredictor:
             val_loss = np.mean(val_losses)
             ratio = val_loss / train_loss
             self.logger.logkv('reward_predictor/test_train_loss_ratio', ratio)
-            if ratio > 1.3:
+            if ratio > 1.5:
                 self.l2_reg_coef *= 1.5
-            elif ratio < 1.3:
-                self.l2_reg_coef = max(self.l2_reg_coef / 1.5, MIN_L2_REG_COEF)
+            elif ratio < 1.1:
+                self.l2_reg_coef = max(self.l2_reg_coef / 1.1, MIN_L2_REG_COEF)
             self.logger.logkv('reward_predictor/reg_coef', self.l2_reg_coef)
 
         self.n_epochs += 1
