@@ -29,20 +29,7 @@ def set_timeouts(env):
     # Needed to prevent random resets in the demonstration environment
     env._max_episode_seconds = None
 
-    if isinstance(env.unwrapped, (FetchEnv, FetchEnvTwoBlock)):
-        if 'Repeat3' in env.unwrapped.spec.id:
-            max_seconds = 5
-        else:
-            max_seconds = 10
-    elif isinstance(env.unwrapped, AtariEnv):
-        max_minutes = 5
-        max_seconds = max_minutes * 60
-    elif isinstance(env.unwrapped, LunarLanderStateful):
-        max_seconds = 20
-    else:
-        raise Exception()
-
-    env._max_episode_steps = ROLLOUT_FPS * max_seconds
+    env._max_episode_steps = 100
 
 
 def make_envs(env_id, num_env, seed, log_dir,
