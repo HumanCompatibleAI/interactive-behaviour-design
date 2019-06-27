@@ -130,6 +130,6 @@ def make_env(action_repeat, action_limit):
 def register():
     for action_limit in [0.2, 1]:
         for action_repeat in [1, 5]:
-            gym_register(f'FetchReach-CustomRepeat{action_repeat}ActionLimit{action_limit}-v0',
+            gym_register(f'FetchReach-CustomActionRepeat{action_repeat}ActionLimit{action_limit}-v0',
                          entry_point=partial(make_env, action_repeat=action_repeat, action_limit=action_limit),
                          max_episode_steps=250)
