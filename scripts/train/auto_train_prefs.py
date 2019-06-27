@@ -48,6 +48,7 @@ def get_args():
     parser.add_argument('--decay_label_rate', action='store_true')
     parser.add_argument('--gpus', default='')
     parser.add_argument('--no_pretrain', action='store_true')
+    parser.add_argument('--port', type=int, default=-1)
     parser.add_argument('--tags')
     parser.add_argument('--group')
     parser.add_argument('--just_pretrain', action='store_true')
@@ -81,7 +82,11 @@ def main():
         return
 
     save_args(args, args.log_dir, 'auto_train_args.txt')
-    port = get_open_port()
+    if args.port < 0:
+        port = get_open_port()
+    else:
+        port = args.port
+    print('launching on port: {}'.format(port))
     base_url = f'http://localhost:{port}'
 
     train_window_name = start_app(base_url, args.env_id, args.n_envs, port, args.seed, args.log_dir, args.tmux_sess,
@@ -149,7 +154,7 @@ def main():
 
     else:
         raise Exception()
-    configure_env_resets(base_url)
+    # configure_env_resets(base_url)
     start_training(base_url, args.training_mode, args.segment_generation)
 
 
