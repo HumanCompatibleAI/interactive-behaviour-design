@@ -43,7 +43,8 @@ def restore_global_variables(d):
 
 
 class RolloutWorker:
-    def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n, gv_dict):
+    def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n, gv_dict, log_actions,
+                 action_shape):
         # Workers shouldn't take up precious GPU memory
         os.environ["CUDA_VISIBLE_DEVICES"] = ''
         load_cpu_config(log_dir, 'rollouters')
@@ -66,12 +67,18 @@ class RolloutWorker:
         self.checkpoint_dir = os.path.join(log_dir, 'checkpoints')
         self.rollouts_dir = os.path.join(log_dir, 'demonstrations')
         self.last_action = None
-        self.ou_noise = None
+        self.log_dir = log_dir
+        self.log_actions = log_actions
         env = None
+
+        mu = np.zeros(action_shape)
+        assert isinstance(global_variables.rollout_noise_sigma, float)
+        sigma = global_variables.rollout_noise_sigma * np.ones(action_shape)
+        self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma, seed=None)
 
         while True:
             policy_name, env_state, noise, rollout_len_frames, show_frames, \
-                group_serial, deterministic, just_explore, ou_noise = env_state_queue.get()
+                group_serial, deterministic, just_explore = env_state_queue.get()
 
             if env is not None:
                 if hasattr(env.unwrapped, 'close'):
@@ -79,8 +86,6 @@ class RolloutWorker:
                     # Otherwise it leaks memory.
                     env.unwrapped.close()
             env = env_state.env
-
-            self.ou_noise = ou_noise
 
             if policy_name == 'redo':
                 self.redo_rollout(env, env_state, group_serial)
@@ -203,6 +208,8 @@ class RolloutWorker:
             noise = self.ou_noise()
             action += noise
             action = np.clip(action, env.action_space.low[0], env.action_space.high[0])
+            if self.log_actions:
+                self.append_action_to_log(noise, action)
         elif env.action_space.dtype == np.int64:
             if np.random.rand() < global_variables.rollout_random_action_prob:
                 if global_variables.rollout_randomness == RolloutRandomness.RANDOM_ACTION:
@@ -219,6 +226,12 @@ class RolloutWorker:
                 self.last_action = None
         return action
 
+    def append_action_to_log(self, noise, action):
+        log_file = os.path.join(self.log_dir, f'actions_worker_{self.worker_n}.log')
+        np.set_printoptions(precision=3, floatmode='fixed', sign=' ', suppress=True)
+        with open(log_file, 'a') as f:
+            print(f"{noise}", file=f)
+
 
 class PolicyRollouter:
     cur_rollouts: Dict[str, CompressedRollout]
@@ -227,7 +240,8 @@ class PolicyRollouter:
                  reset_state_queue_in: multiprocessing.Queue,
                  reset_mode_value: multiprocessing.Value,
                  log_dir, make_policy_fn, redo_policy, noisy_policies,
-                 rollout_len_seconds, show_from_end_seconds):
+                 rollout_len_seconds, show_from_end_seconds,
+                 log_actions=False):
         self.env = env
         self.save_dir = save_dir
         self.reset_state_queue = reset_state_queue_in
@@ -239,11 +253,6 @@ class PolicyRollouter:
             show_from_end_seconds = rollout_len_seconds
         self.show_from_end_seconds = show_from_end_seconds
         self.just_explore = True
-
-        mu = np.zeros(env.action_space.shape)
-        assert isinstance(global_variables.rollout_noise_sigma, float)
-        sigma = global_variables.rollout_noise_sigma * np.ones(env.action_space.shape)
-        self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma, seed=0)
 
         # 'spawn' -> start a fresh process
         # (TensorFlow is not fork-safe)
@@ -258,7 +267,9 @@ class PolicyRollouter:
                                           self.env_state_queue,
                                           self.rollout_queue,
                                           n,
-                                          gv))
+                                          gv,
+                                          log_actions,
+                                          env.action_space.shape))
             proc.start()
             global_variables.pids_to_proc_names[proc.pid] = f'rollout_worker_{n}'
 
@@ -271,7 +282,6 @@ class PolicyRollouter:
         rollout_hashes = []
         if env_state.done or force_reset:
             env_state = self.get_reset_state(env_state)
-            self.ou_noise.reset()
         group_serial = str(time.time())
         n_rollouts = 0
         rollout_len_frames = int(self.rollout_len_seconds * ROLLOUT_FPS)
@@ -287,7 +297,7 @@ class PolicyRollouter:
                     deterministic = (policy_name != 'random')
                 self.env_state_queue.put((policy_name, env_state, add_extra_noise,
                                           rollout_len_frames, show_frames, group_serial, deterministic,
-                                          self.just_explore, self.ou_noise))
+                                          self.just_explore))
                 n_rollouts += 1
         elif global_variables.rollout_mode == RolloutMode.CUR_POLICY:
             if global_variables.rollout_randomness == RolloutRandomness.SAMPLE_ACTION:
@@ -302,14 +312,14 @@ class PolicyRollouter:
             for _ in range(global_variables.n_cur_policy):
                 self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
                                           rollout_len_frames, show_frames, group_serial, deterministic,
-                                          self.just_explore, self.ou_noise))
+                                          self.just_explore))
                 n_rollouts += 1
             # Also add a trajectory sampled directly from the policy
             add_extra_noise = False
             deterministic = True
             self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
                                       rollout_len_frames, show_frames, group_serial, deterministic,
-                                      self.just_explore, self.ou_noise))
+                                      self.just_explore))
             n_rollouts += 1
         else:
             raise Exception("Invalid rollout mode", global_variables.rollout_mode)
