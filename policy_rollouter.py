@@ -78,7 +78,7 @@ class RolloutWorker:
 
         while True:
             policy_name, env_state, noise, rollout_len_frames, show_frames, \
-                group_serial, deterministic, just_explore = env_state_queue.get()
+                group_serial, deterministic, noop_actions = env_state_queue.get()
 
             if env is not None:
                 if hasattr(env.unwrapped, 'close'):
@@ -92,7 +92,7 @@ class RolloutWorker:
             else:
                 self.load_policy_checkpoint(policy_name)
                 self.rollout(policy_name, env, env_state.obs, group_serial,
-                             noise, rollout_len_frames, show_frames, deterministic, just_explore)
+                             noise, rollout_len_frames, show_frames, deterministic, noop_actions)
             # is sometimes slow to flush in processes; be more proactive so output is less confusing
             sys.stdout.flush()
 
@@ -133,7 +133,7 @@ class RolloutWorker:
         self.rollout_queue.put((group_serial, rollout_hash))
 
     def rollout(self, policy_name, env, obs, group_serial, noise, rollout_len_frames,
-                show_frames, deterministic, just_explore):
+                show_frames, deterministic, noop_actions):
         obses = []
         frames = []
         actions = []
@@ -143,7 +143,7 @@ class RolloutWorker:
         for _ in range(rollout_len_frames):
             obses.append(np.copy(obs))
             frames.append(env.render(mode='rgb_array'))
-            if just_explore:
+            if noop_actions:
                 action = np.zeros(env.action_space.shape)
             else:
                 action = self.policy.step(obs, deterministic=deterministic)
@@ -252,7 +252,7 @@ class PolicyRollouter:
         if show_from_end_seconds is None:
             show_from_end_seconds = rollout_len_seconds
         self.show_from_end_seconds = show_from_end_seconds
-        self.just_explore = True
+        self.noop_actions = True
 
         # 'spawn' -> start a fresh process
         # (TensorFlow is not fork-safe)
@@ -288,7 +288,7 @@ class PolicyRollouter:
         show_frames = int(self.show_from_end_seconds * ROLLOUT_FPS)
 
         if global_variables.rollout_mode == RolloutMode.PRIMITIVES:
-            self.just_explore = False
+            self.noop_actions = False
             for policy_name in policy_names:
                 add_extra_noise = (last_policy_name == 'redo')
                 if 'LunarLander' in str(self.env):
@@ -297,7 +297,7 @@ class PolicyRollouter:
                     deterministic = (policy_name != 'random')
                 self.env_state_queue.put((policy_name, env_state, add_extra_noise,
                                           rollout_len_frames, show_frames, group_serial, deterministic,
-                                          self.just_explore))
+                                          self.noop_actions))
                 n_rollouts += 1
         elif global_variables.rollout_mode == RolloutMode.CUR_POLICY:
             if global_variables.rollout_randomness == RolloutRandomness.SAMPLE_ACTION:
@@ -312,14 +312,14 @@ class PolicyRollouter:
             for _ in range(global_variables.n_cur_policy):
                 self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
                                           rollout_len_frames, show_frames, group_serial, deterministic,
-                                          self.just_explore))
+                                          self.noop_actions))
                 n_rollouts += 1
             # Also add a trajectory sampled directly from the policy
             add_extra_noise = False
             deterministic = True
             self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
                                       rollout_len_frames, show_frames, group_serial, deterministic,
-                                      self.just_explore))
+                                      self.noop_actions))
             n_rollouts += 1
         else:
             raise Exception("Invalid rollout mode", global_variables.rollout_mode)

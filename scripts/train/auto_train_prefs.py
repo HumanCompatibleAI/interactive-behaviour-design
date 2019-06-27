@@ -321,7 +321,7 @@ def start_reward_predictor_training(base_url):
 
 def start_training(base_url, training_mode, segment_generation):
     print("Starting training...")
-    requests.get(base_url + '/run_cmd?cmd=config_demos&explore=False').raise_for_status()
+    requests.get(base_url + '/run_cmd?cmd=config_demos&noop_actions=False').raise_for_status()
     requests.get(base_url + '/run_cmd?cmd=use_policy&name=master').raise_for_status()
     requests.get(base_url + f'/run_cmd?cmd=training_mode&mode={training_mode}')
     if 'reward' in training_mode:
