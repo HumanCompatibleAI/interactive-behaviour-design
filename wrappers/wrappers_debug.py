@@ -142,26 +142,27 @@ class DrawRewards(Wrapper):
 
 
 class RewardGrapher:
-    def __init__(self, scale=None):
+    def __init__(self, scale=None, y=20):
         self.scale = scale
+        self.y = y
+        self.width = 400
         self.values = None
         self.reset()
 
     def reset(self):
-        self.values = deque(maxlen=100)
+        self.values = deque(maxlen=self.width)
 
     def draw(self, frame):
         if not self.values:
             return
 
-        y = 20
         height = 100
 
-        frame[y, 5:-5, :] = 255
-        frame[y + height, 5:-5, :] = 255
-        frame[y + height // 2, 5:-5, :] = 255
-        frame[y:y + height, 5, :] = 255
-        frame[y:y + height, -5, :] = 255
+        frame[self.y, 5:5+self.width, :] = 255
+        frame[self.y + height, 5:5+self.width, :] = 255
+        frame[self.y + height // 2, 5:5+self.width, :] = 255
+        frame[self.y:self.y + height, 5, :] = 255
+        frame[self.y:self.y + height, 5 + self.width, :] = 255
 
         if self.scale is None:
             scale = np.max(np.abs(self.values))
@@ -172,13 +173,13 @@ class RewardGrapher:
 
         for x, val in enumerate(self.values):
             val_y = int((val / scale) * (height / 2))
-            frame[y + height // 2 - val_y, 5 + x, :] = 255
+            frame[self.y + height // 2 - val_y, 5 + x, :] = 255
 
         # For some reason putText can't draw directly on the original frame...?
         frame_copy = np.copy(frame)
         cv2.putText(frame_copy,
                     "{:.3f}".format(self.values[-1]),
-                    org=(5, 15),
+                    org=(5, self.y - 5),
                     fontFace=cv2.FONT_HERSHEY_PLAIN,
                     fontScale=1,
                     color=[255, 255, 255],

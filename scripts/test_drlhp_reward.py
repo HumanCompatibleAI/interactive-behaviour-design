@@ -29,13 +29,14 @@ class DrawRewards(Wrapper):
     def __init__(self, env, reward_predictor: RewardPredictor):
         super().__init__(env)
         self.reward_predictor = reward_predictor
-        self.grapher_true_reward = RewardGrapher()
-        self.grapher_predicted_reward = RewardGrapher()
+        self.grapher_true_reward = RewardGrapher(scale=1, y=20)
+        self.grapher_predicted_reward = RewardGrapher(scale=1, y=150)
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         self.grapher_true_reward.values.append(reward)
-        self.grapher_predicted_reward.values.append(reward_predictor.raw_rewards(obs)[0])
+        predicted_reward = reward_predictor.raw_rewards(np.array([obs]))[0][0]
+        self.grapher_predicted_reward.values.append(predicted_reward)
         return obs, reward, done, info
 
     def render(self, mode='human', **kwargs):
@@ -82,7 +83,7 @@ reward_predictor = RewardPredictor(network=net,
                                    name='test')
 reward_predictor.load(args.drlhp_ckpt)
 
-env = DrawPredictedReward(env, reward_predictor)
+env = DrawRewards(env, reward_predictor)
 env = RenderObs(env)
 if 'Fetch' in args.env_id:
     env = FetchDiscreteActions(env)
