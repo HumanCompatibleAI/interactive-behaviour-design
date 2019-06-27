@@ -622,6 +622,7 @@ class FetchDiscreteActions(Wrapper):
         Wrapper.__init__(self, env)
         self.action_space = Discrete(9)
         self.closed = False
+        self.limit = env.action_space.high[0]
 
     def get_action_meanings(self):
         return ['NOOP',
@@ -650,21 +651,21 @@ class FetchDiscreteActions(Wrapper):
         if action == self.get_action_meanings().index('NOOP'):
             caction = [0.0, 0.0, 0.0, 0.0]
         elif action == self.get_action_meanings().index('BACKWARD'):
-            caction = [1.0, 0.0, 0.0, 0.0]
+            caction = [self.limit, 0.0, 0.0, 0.0]
         elif action == self.get_action_meanings().index('FORWARD'):
-            caction = [-1.0, 0.0, 0.0, 0.0]
+            caction = [-self.limit, 0.0, 0.0, 0.0]
         elif action == self.get_action_meanings().index('RIGHT'):
-            caction = [0.0, 1.0, 0.0, 0.0]
+            caction = [0.0, self.limit, 0.0, 0.0]
         elif action == self.get_action_meanings().index('LEFT'):
-            caction = [0.0, -1.0, 0.0, 0.0]
+            caction = [0.0, -self.limit, 0.0, 0.0]
         elif action == self.get_action_meanings().index('UP'):
-            caction = [0.0, 0.0, 1.0, 0.0]
+            caction = [0.0, 0.0, self.limit, 0.0]
         elif action == self.get_action_meanings().index('DOWN'):
-            caction = [0.0, 0.0, -1.0, 0.0]
+            caction = [0.0, 0.0, -self.limit, 0.0]
         elif action == self.get_action_meanings().index('OPEN'):
-            caction = [0.0, 0.0, 0.0, 1.0]
+            caction = [0.0, 0.0, 0.0, self.limit]
         elif action == self.get_action_meanings().index('CLOSE'):
-            caction = [0.0, 0.0, 0.0, -1.0]
+            caction = [0.0, 0.0, 0.0, -self.limit]
         else:
             raise RuntimeError(action)
 
@@ -707,8 +708,9 @@ class CheckActionLimit(Wrapper):
     def __init__(self, env, limit):
         super().__init__(env)
         assert isinstance(env.action_space, Box)
-        self.limit = limit
+        eps = 1e-6
+        self.limit = limit + eps
 
     def step(self, action: np.ndarray):
-        assert np.all(np.abs(action) < self.limit)
+        assert np.all(np.abs(action) <= self.limit)
         return self.env.step(action)
