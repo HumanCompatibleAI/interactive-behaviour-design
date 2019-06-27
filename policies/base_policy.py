@@ -116,17 +116,31 @@ class EpisodeRewardLogger():
         self.logger = easy_tf_log.Logger(os.path.join(log_dir, 'processed_reward_logger'))
         self.n_steps = n_steps
         self.n_envs = n_envs
-        self.reward = 0
+        self.cumulative_rewards = [0 for _ in range(n_envs)]
+        self.episode_n = [0 for _ in range(n_envs)]
+        self.log_files = []
+        for env_n in range(n_envs):
+            f = open(os.path.join(log_dir, f'reward_log_env_{env_n}.log'), 'w')
+            self.log_files.append(f)
 
-    def log(self, mb_rewards, mb_dones):
-        mb_rewards = np.array(mb_rewards)
-        mb_dones = np.array(mb_dones)
-        assert mb_rewards.shape == (self.n_steps, self.n_envs)
-        assert mb_dones.shape == (self.n_steps, self.n_envs)
-        mb_rewards_env0 = mb_rewards[:, 0]
-        mb_dones_env0 = mb_dones[:, 0]
-        for n in range(len(mb_rewards)):
-            self.reward += mb_rewards_env0[n]
-            if mb_dones_env0[n]:
-                self.logger.logkv('processed_reward', self.reward)
-                self.reward = 0
+    def log(self, env_rewards, predicted_rewards, dones):
+        env_rewards = np.array(env_rewards)
+        predicted_rewards = np.array(predicted_rewards)
+        dones = np.array(dones)
+        assert env_rewards.shape == (self.n_steps, self.n_envs)
+        assert predicted_rewards.shape == (self.n_steps, self.n_envs)
+        assert dones.shape == (self.n_steps, self.n_envs)
+        for env_n in range(self.n_envs):
+            env_rewards_n = env_rewards[:, env_n]
+            predicted_rewards_n = predicted_rewards[:, env_n]
+            dones_n = dones[:, env_n]
+            for n in range(len(predicted_rewards_n)):
+                env_reward = env_rewards_n[n]
+                predicted_reward = predicted_rewards_n[n]
+                self.log_files[env_n].write(f'{env_reward} {predicted_reward}\n')
+                self.cumulative_rewards[env_n] += predicted_reward
+                if dones_n[n]:
+                    self.logger.logkv('processed_reward', self.cumulative_rewards[env_n])
+                    self.cumulative_rewards[env_n] = 0
+                    self.episode_n[env_n] += 1
+                    self.log_files[env_n].write(f'\nEpisode {self.episode_n[env_n]}\n')

@@ -519,7 +519,10 @@ def load_cpu_config(log_dir, name):
         cpus = json.load(f)[name]
     # This specifically needs to be done before starting the TensorFlow execution engine so that child threads
     # have their affinity also set.
-    os.sched_setaffinity(0, cpus)
+    if hasattr(os, 'sched_setaffinity'):
+        os.sched_setaffinity(0, cpus)
+    else:
+        assert sys.platform == 'darwin'
     # The first session created in a process seems to set the options for the execution engine used for all subsequent
     # session in that process. So this should be called before anything else.
     config = tf.ConfigProto(inter_op_parallelism_threads=len(cpus), intra_op_parallelism_threads=len(cpus))
@@ -536,10 +539,14 @@ def save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus):
         json.dump(d, f)
 
 
-def configure_cpus(log_dir, n_gpus):
-    available_cpus = list(os.sched_getaffinity(0))
-    rollouter_cpus = [available_cpus.pop() for _ in range(4)]
-    n_drlhp_training_cpus = 4
+def configure_cpus(log_dir, n_rollouter_cpus=4, n_drlhp_training_cpus=4):
+    if hasattr(os, 'sched_getaffinity'):
+        available_cpus = list(os.sched_getaffinity(0))
+    else:
+        assert sys.platform == 'darwin'
+        available_cpus = list(range(multiprocessing.cpu_count()))
+    rollouter_cpus = [available_cpus.pop() for _ in range(n_rollouter_cpus)]
+    n_drlhp_training_cpus = n_drlhp_training_cpus
     drlhp_training_cpus = [available_cpus.pop() for _ in range(n_drlhp_training_cpus)]
     main_cpus = available_cpus
     save_cpu_config(log_dir, main_cpus, rollouter_cpus, drlhp_training_cpus)
@@ -665,19 +672,24 @@ def read_events_file(events_filename):
 # From Baselines DDPG
 # Based on http://math.stackexchange.com/questions/1287634/implementing-ornstein-uhlenbeck-in-matlab
 class OrnsteinUhlenbeckActionNoise(ActionNoise):
-    def __init__(self, mu, sigma, theta=.15, dt=1e-2, x0=None):
+    def __init__(self, mu, sigma, seed, theta=.15, dt=1e-2, x0=None):
         self.theta = theta
         self.mu = mu
         self.sigma = sigma
         self.dt = dt
         self.x0 = x0
+        self.np_random = None
+        self.reseed(seed)
         self.reset()
 
     def __call__(self):
-        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(
-            self.dt) * np.random.normal(size=self.mu.shape)
+        rand_normal = self.np_random.normal(size=self.mu.shape)
+        x = self.x_prev + self.theta * (self.mu - self.x_prev) * self.dt + self.sigma * np.sqrt(self.dt) * rand_normal
         self.x_prev = x
         return x
+
+    def reseed(self, seed):
+        self.np_random = np.random.RandomState(seed=seed)
 
     def reset(self):
         self.x_prev = self.x0 if self.x0 is not None else np.zeros_like(self.mu)

@@ -13,8 +13,8 @@ rl_envs = [
     ('breakout', 'BreakoutDeepMind-v0'),
     ('fetchpp',
      'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-Delta-GripperBonuses-v0'),
-    ('fetchr', 'FetchReach-Custom-v0'),
-    ('fetchs', 'FetchBlockStackingDense-v0'),
+    ('fetchr', 'FetchReach-CustomRepeat5-v0'),
+    ('fetchs', 'FetchBlockStacking_Dense_Repeat5_ContGripper_FixedPos-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
@@ -27,7 +27,7 @@ prefs_envs = [
     ('fetchpp',
      'FetchPickAndPlace-Repeat1-ContGripper-WithGripObs-InfInitialBlockPos-FixedGoal-NonDelta-GripperBonuses-v0'),
     ('fetchr', 'FetchReach-CustomRepeat5-v0'),
-    ('fetchs', 'FetchBlockStackingDenseRepeat5-v0'),
+    ('fetchs', 'FetchBlockStacking_Dense_Repeat5_ContGripper_FixedPos-v0'),
     ('lunarlander', 'LunarLanderStatefulStats-v0'),
 ]
 
@@ -66,7 +66,7 @@ def main():
     for env_shortname, env_id in rl_envs:
         for seed in seeds:
             run_name = f"{env_shortname}-{seed}-rl"
-            print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} --extra_args ' {args.extra_args}'"
+            print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} --extra_args ' {args.extra_args}' "
                   f"{gpu_arg} "
                   f"--tags rl,{env_shortname}")
 

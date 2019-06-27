@@ -10,7 +10,7 @@ from typing import Dict
 import gym
 import numpy as np
 from cloudpickle import cloudpickle
-from gym.spaces import seed
+from gym.spaces import prng
 from gym.utils import atomic_write
 from gym.wrappers import TimeLimit
 from tensorflow.python.framework.errors_impl import NotFoundError
@@ -26,7 +26,6 @@ from wrappers.util_wrappers import ResetMode
 
 def save_global_variables():
     d = {}
-    k: str
     for k, v in global_variables.__dict__.items():
         if k.startswith('_'):
             continue
@@ -44,14 +43,15 @@ def restore_global_variables(d):
 
 
 class RolloutWorker:
-    def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n, gv_dict):
+    def __init__(self, make_policy_fn_pickle, log_dir, env_state_queue, rollout_queue, worker_n, gv_dict, log_actions,
+                 action_shape):
         # Workers shouldn't take up precious GPU memory
         os.environ["CUDA_VISIBLE_DEVICES"] = ''
         load_cpu_config(log_dir, 'rollouters')
 
         np.random.seed(worker_n)
         # Important so that different workers get different actions from env.action_space.sample()
-        gym.spaces.seed(worker_n)
+        gym.spaces.prng.seed(worker_n)
 
         restore_global_variables(gv_dict)
         # Since we're in our own process, this lock isn't actually needed,
@@ -67,11 +67,18 @@ class RolloutWorker:
         self.checkpoint_dir = os.path.join(log_dir, 'checkpoints')
         self.rollouts_dir = os.path.join(log_dir, 'demonstrations')
         self.last_action = None
-        self.ou_noise = None
+        self.log_dir = log_dir
+        self.log_actions = log_actions
         env = None
 
+        mu = np.zeros(action_shape)
+        assert isinstance(global_variables.rollout_noise_sigma, float)
+        sigma = global_variables.rollout_noise_sigma * np.ones(action_shape)
+        self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma, seed=None)
+
         while True:
-            policy_name, env_state, noise, rollout_len_frames, show_frames, group_serial, deterministic, just_explore = env_state_queue.get()
+            policy_name, env_state, noise, rollout_len_frames, show_frames, \
+                group_serial, deterministic, noop_actions = env_state_queue.get()
 
             if env is not None:
                 if hasattr(env.unwrapped, 'close'):
@@ -80,23 +87,20 @@ class RolloutWorker:
                     env.unwrapped.close()
             env = env_state.env
 
-            mu = np.zeros(env.action_space.shape)
-            sigma = global_variables.rollout_noise_sigma * np.ones(env.action_space.shape)
-            self.ou_noise = OrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma)
-
             if policy_name == 'redo':
                 self.redo_rollout(env, env_state, group_serial)
             else:
                 self.load_policy_checkpoint(policy_name)
                 self.rollout(policy_name, env, env_state.obs, group_serial,
-                             noise, rollout_len_frames, show_frames, deterministic, just_explore)
+                             noise, rollout_len_frames, show_frames, deterministic, noop_actions)
             # is sometimes slow to flush in processes; be more proactive so output is less confusing
             sys.stdout.flush()
 
     def load_policy_checkpoint(self, policy_name):
         while True:
             try:
-                last_ckpt_name = find_latest_checkpoint(os.path.join(self.checkpoint_dir, 'policy-{}-'.format(policy_name)))
+                ckpt_path = os.path.join(self.checkpoint_dir, 'policy-{}-'.format(policy_name))
+                last_ckpt_name = find_latest_checkpoint(ckpt_path)
                 self.policy.load_checkpoint(last_ckpt_name)
             except NotFoundError:
                 # If e.g. the checkpoint got replaced with a newer one
@@ -109,6 +113,7 @@ class RolloutWorker:
                 break
 
     def redo_rollout(self, env, env_state, group_serial):
+        # noinspection PyTypeChecker
         rollout = CompressedRollout(final_env_state=env_state,
                                     obses=None,
                                     frames=None,
@@ -127,7 +132,8 @@ class RolloutWorker:
 
         self.rollout_queue.put((group_serial, rollout_hash))
 
-    def rollout(self, policy_name, env, obs, group_serial, noise, rollout_len_frames, show_frames, deterministic, just_explore):
+    def rollout(self, policy_name, env, obs, group_serial, noise, rollout_len_frames,
+                show_frames, deterministic, noop_actions):
         obses = []
         frames = []
         actions = []
@@ -137,7 +143,7 @@ class RolloutWorker:
         for _ in range(rollout_len_frames):
             obses.append(np.copy(obs))
             frames.append(env.render(mode='rgb_array'))
-            if just_explore:
+            if noop_actions:
                 action = np.zeros(env.action_space.shape)
             else:
                 action = self.policy.step(obs, deterministic=deterministic)
@@ -202,6 +208,8 @@ class RolloutWorker:
             noise = self.ou_noise()
             action += noise
             action = np.clip(action, env.action_space.low[0], env.action_space.high[0])
+            if self.log_actions:
+                self.append_action_to_log(noise, action)
         elif env.action_space.dtype == np.int64:
             if np.random.rand() < global_variables.rollout_random_action_prob:
                 if global_variables.rollout_randomness == RolloutRandomness.RANDOM_ACTION:
@@ -218,6 +226,12 @@ class RolloutWorker:
                 self.last_action = None
         return action
 
+    def append_action_to_log(self, noise, action):
+        log_file = os.path.join(self.log_dir, f'actions_worker_{self.worker_n}.log')
+        np.set_printoptions(precision=3, floatmode='fixed', sign=' ', suppress=True)
+        with open(log_file, 'a') as f:
+            print(f"{noise}", file=f)
+
 
 class PolicyRollouter:
     cur_rollouts: Dict[str, CompressedRollout]
@@ -226,7 +240,8 @@ class PolicyRollouter:
                  reset_state_queue_in: multiprocessing.Queue,
                  reset_mode_value: multiprocessing.Value,
                  log_dir, make_policy_fn, redo_policy, noisy_policies,
-                 rollout_len_seconds, show_from_end_seconds):
+                 rollout_len_seconds, show_from_end_seconds,
+                 log_actions=False):
         self.env = env
         self.save_dir = save_dir
         self.reset_state_queue = reset_state_queue_in
@@ -237,7 +252,7 @@ class PolicyRollouter:
         if show_from_end_seconds is None:
             show_from_end_seconds = rollout_len_seconds
         self.show_from_end_seconds = show_from_end_seconds
-        self.just_explore = True
+        self.noop_actions = True
 
         # 'spawn' -> start a fresh process
         # (TensorFlow is not fork-safe)
@@ -252,17 +267,18 @@ class PolicyRollouter:
                                           self.env_state_queue,
                                           self.rollout_queue,
                                           n,
-                                          gv))
+                                          gv,
+                                          log_actions,
+                                          env.action_space.shape))
             proc.start()
             global_variables.pids_to_proc_names[proc.pid] = f'rollout_worker_{n}'
 
-    def generate_rollouts_from_reset(self, policies, softmax_temp):
+    def generate_rollouts_from_reset(self, policies):
         env_state = self.get_reset_state()
-        group_serial = self.generate_rollout_group(env_state, 'dummy_last_policy_name', policies, softmax_temp, False)
+        group_serial = self.generate_rollout_group(env_state, 'dummy_last_policy_name', policies, False)
         return group_serial
 
-    def generate_rollout_group(self, env_state: EnvState, last_policy_name, policy_names,
-                               softmax_temp, force_reset):
+    def generate_rollout_group(self, env_state: EnvState, last_policy_name, policy_names, force_reset):
         rollout_hashes = []
         if env_state.done or force_reset:
             env_state = self.get_reset_state(env_state)
@@ -272,7 +288,7 @@ class PolicyRollouter:
         show_frames = int(self.show_from_end_seconds * ROLLOUT_FPS)
 
         if global_variables.rollout_mode == RolloutMode.PRIMITIVES:
-            self.just_explore = False
+            self.noop_actions = False
             for policy_name in policy_names:
                 add_extra_noise = (last_policy_name == 'redo')
                 if 'LunarLander' in str(self.env):
@@ -280,7 +296,8 @@ class PolicyRollouter:
                 else:
                     deterministic = (policy_name != 'random')
                 self.env_state_queue.put((policy_name, env_state, add_extra_noise,
-                                          rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore))
+                                          rollout_len_frames, show_frames, group_serial, deterministic,
+                                          self.noop_actions))
                 n_rollouts += 1
         elif global_variables.rollout_mode == RolloutMode.CUR_POLICY:
             if global_variables.rollout_randomness == RolloutRandomness.SAMPLE_ACTION:
@@ -294,13 +311,15 @@ class PolicyRollouter:
                 raise Exception('Invalid rollout randomness', global_variables.rollout_randomness)
             for _ in range(global_variables.n_cur_policy):
                 self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
-                                          rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore))
+                                          rollout_len_frames, show_frames, group_serial, deterministic,
+                                          self.noop_actions))
                 n_rollouts += 1
             # Also add a trajectory sampled directly from the policy
             add_extra_noise = False
             deterministic = True
             self.env_state_queue.put((policy_names[0], env_state, add_extra_noise,
-                                      rollout_len_frames, show_frames, group_serial, deterministic, self.just_explore))
+                                      rollout_len_frames, show_frames, group_serial, deterministic,
+                                      self.noop_actions))
             n_rollouts += 1
         else:
             raise Exception("Invalid rollout mode", global_variables.rollout_mode)

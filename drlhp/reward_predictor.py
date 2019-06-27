@@ -94,7 +94,7 @@ class RewardPredictor:
     def init_network(self):
         self.sess.run(self.init_op)
 
-    def save(self, path, max_to_keep=5):
+    def save(self, path, max_to_keep=1000):
         save_path = f"{path}.{self.ckpt_n}"
 
         variable_value_dict = self.get_variable_value_dict()

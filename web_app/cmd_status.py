@@ -227,14 +227,14 @@ def run_cmd():
         finally:
             sys.stdout = orig_stdout
     elif cmd == 'config_demos':
-        explore = request.args['explore']
-        if explore == 'True':
-            explore = True
-        elif explore == 'False':
-            explore = False
+        noop_actions = request.args['noop_actions']
+        if noop_actions == 'True':
+            noop_actions = True
+        elif noop_actions == 'False':
+            noop_actions = False
         else:
-            raise Exception(f"Invalid explore value '{explore}")
-        _policy_rollouter.just_explore = explore
+            raise Exception(f"Invalid noop actions value '{noop_actions}")
+        _policy_rollouter.noop_actions = noop_actions
     elif cmd == 'checkpoint':
         _checkpointer.checkpoint()
     else:

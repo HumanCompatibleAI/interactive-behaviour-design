@@ -93,7 +93,7 @@ def main():
     # check_env(args.env)
 
     gpu_ns = get_available_gpu_ns()
-    configure_cpus(log_dir, len(gpu_ns))
+    configure_cpus(log_dir)
     load_cpu_config(log_dir, 'main')
 
     np.random.seed(args.seed)

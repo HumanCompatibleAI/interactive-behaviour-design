@@ -58,8 +58,7 @@ def generate_rollouts():
         policy_names_list = policies_str.split(',')
 
     trajectory_serial = start_new_trajectory()
-    group_serial = _policy_rollouter.generate_rollouts_from_reset(policy_names_list,
-                                                                  softmax_temp=1.0)
+    group_serial = _policy_rollouter.generate_rollouts_from_reset(policy_names_list)
     trajectory_for_group_dict[group_serial] = trajectory_serial
 
     return ""
@@ -167,9 +166,7 @@ def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollo
             logger.logkv('demonstrations/n_trajectories_demonstrated', n_trajectories_demonstrated.value)
 
     group_serial = _policy_rollouter.generate_rollout_group(continue_with_rollout.final_env_state,
-                                                            continue_with_rollout.generating_policy,
-                                                            policy_names,
-                                                            softmax_temp,
+                                                            continue_with_rollout.generating_policy, policy_names,
                                                             force_reset)
     trajectory_for_group_dict[group_serial] = trajectory_serial
 

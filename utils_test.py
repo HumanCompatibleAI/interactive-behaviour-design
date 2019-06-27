@@ -1,10 +1,13 @@
+import pickle
 import random
 import unittest
 from math import ceil
 
 import numpy as np
 
+from basicfetch.baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise as DDPGOrnsteinUhlenbeckActionNoise
 from utils import batch_iter, RunningProportion
+from utils import OrnsteinUhlenbeckActionNoise as UtilsOrnsteinUhlenbeckActionNoise
 
 
 class TestUtils(unittest.TestCase):
@@ -69,6 +72,26 @@ class TestUtils(unittest.TestCase):
             actual = rp.v
             expected = l[:i + 1].count(True) / (i + 1)
             self.assertEqual(actual, expected)
+
+    def test_ornstein_uhlenbeck_correctness(self):
+        mu = np.array([0])
+        sigma = np.array([0.2])
+        np.random.seed(0)
+        ou_ddpg = DDPGOrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma)
+        ou_utils = UtilsOrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma, seed=0)
+        for _ in range(10):
+            self.assertEqual(ou_utils(), ou_ddpg())
+
+    def test_ornstein_uhlenbeck_pickling(self):
+        mu = np.array([0])
+        sigma = np.array([0.2])
+        ou = UtilsOrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma)
+        # Get to a noise state which is good and random
+        for _ in range(10):
+            ou()
+        ou2 = pickle.loads(pickle.dumps(ou))
+        for _ in range(10):
+            self.assertEqual(ou2(), ou())
 
 
 if __name__ == '__main__':

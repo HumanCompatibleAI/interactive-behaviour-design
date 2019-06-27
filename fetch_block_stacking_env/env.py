@@ -198,10 +198,6 @@ class FetchEnvTwoBlock(robot_env.RobotEnv):
         # so put the block back where it's supposed to be
         for name, value in initial_qpos.items():
             self.sim.data.set_joint_qpos(name, value)
-        # The intial block position is slightly into the table...?
-        # Let's wait for it to rise out.
-        for _ in range(10):
-            self.sim.step()
 
         # Extract information for sampling goals.
         self.initial_gripper_xpos = self.sim.data.get_site_xpos('robot0:grip').copy()
@@ -218,8 +214,8 @@ class FetchBlockStackingEnv(FetchEnvTwoBlock, gym.utils.EzPickle):
             'robot0:slide0': 0.405,
             'robot0:slide1': 0.48,
             'robot0:slide2': 0.0,
-            'object0:joint': [1.25, 0.53, 0.4, 1., 0., 0., 0.],
-            'object1:joint': [1.25, 0.83, 0.4, 1., 0., 0., 0.],
+            'object0:joint': [1.25, 0.53, 0.425, 1., 0., 0., 0.],
+            'object1:joint': [1.25, 0.83, 0.425, 1., 0., 0., 0.],
         }
         FetchEnvTwoBlock.__init__(
             self, 'fetch/block_stacking.xml', has_object=True, block_gripper=False, n_substeps=20,
