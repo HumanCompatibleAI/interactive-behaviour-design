@@ -686,3 +686,29 @@ class SaveObsToInfo(Wrapper):
         obs, reward, done, info = self.env.step(action)
         info['obs'] = np.copy(obs)
         return obs, reward, done, info
+
+
+class LimitActions(Wrapper):
+    def __init__(self, env, limit):
+        super().__init__(env)
+        assert isinstance(env.action_space, Box)
+        self.action_space = Box(low=-limit,
+                                high=limit,
+                                shape=env.action_space.shape)
+
+    def step(self, action):
+        return self.env.step(action)
+
+    def reset(self):
+        return self.env.reset()
+
+
+class CheckActionLimit(Wrapper):
+    def __init__(self, env, limit):
+        super().__init__(env)
+        assert isinstance(env.action_space, Box)
+        self.limit = limit
+
+    def step(self, action: np.ndarray):
+        assert np.all(np.abs(action) < self.limit)
+        return self.env.step(action)

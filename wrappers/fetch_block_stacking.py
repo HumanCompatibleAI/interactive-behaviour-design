@@ -10,7 +10,7 @@ from gym.wrappers import FlattenDictWrapper
 
 from fetch_block_stacking_env.env import FetchBlockStackingEnv
 from utils import RunningProportion
-from wrappers.util_wrappers import CollectEpisodeStats, RepeatActions
+from wrappers.util_wrappers import CollectEpisodeStats, RepeatActions, LimitActions, CheckActionLimit
 
 """
 Put object0 (black) on object1 (red).
@@ -166,7 +166,7 @@ class RandomBlockPositions(Wrapper):
         return np.array([x, y, z])
 
 
-def make_env(binary_gripper, action_repeat, random_pos):
+def make_env(binary_gripper, action_repeat, action_limit, random_pos):
     env = FetchBlockStackingEnv()
     if random_pos:
         env = RandomBlockPositions(env)
@@ -177,20 +177,25 @@ def make_env(binary_gripper, action_repeat, random_pos):
         env = BinaryGripperWrapper(env)
     env = FetchBlockStackingObsWrapper(env)
     env = RepeatActions(env, action_repeat)
+    env = CheckActionLimit(env, action_limit)
+    env = LimitActions(env, action_limit)
     return env
 
 
 def register():
-    for action_repeat in [1, 5]:
-        for random_pos, random_pos_suffix in [(True, 'RandomPos'), (False, 'FixedPos')]:
-            for binary_gripper, binary_gripper_suffix in [(True, 'BinaryGripper'), (False, 'ContGripper')]:
-                gym_register(
-                    f'FetchBlockStacking_Dense_Repeat{action_repeat}_{binary_gripper_suffix}_{random_pos_suffix}-v0',
-                    entry_point=partial(make_env,
-                                        binary_gripper=binary_gripper,
-                                        action_repeat=action_repeat,
-                                        random_pos=random_pos),
-                    max_episode_steps=250)
+    for action_limit in [0.2, 1.0]:
+        for action_repeat in [1, 5]:
+            for random_pos, random_pos_suffix in [(True, 'RandomPos'), (False, 'FixedPos')]:
+                for binary_gripper, binary_gripper_suffix in [(True, 'BinaryGripper'), (False, 'ContGripper')]:
+                    gym_register(
+                        f'FetchBlockStacking_Dense_'
+                        f'ActionRepeat{action_repeat}_ActionLimit{action_limit}_{binary_gripper_suffix}_{random_pos_suffix}-v0',
+                        entry_point=partial(make_env,
+                                            binary_gripper=binary_gripper,
+                                            action_repeat=action_repeat,
+                                            action_limit=action_limit,
+                                            random_pos=random_pos),
+                        max_episode_steps=250)
 
 
 class FetchBlockStackingStatsWrapper(CollectEpisodeStats):
