@@ -139,7 +139,7 @@ class TD3Policy(Policy):
             # Separate train ops for pi, q
             if pi_adam:
                 pi_optimizer = tf.train.AdamOptimizer(learning_rate=pi_lr)
-            els:
+            else:
                 pi_optimizer = tf.train.GradientDescentOptimizer(learning_rate=pi_lr)
             train_pi_r_only_op = pi_optimizer.minimize(td3_pi_loss, var_list=get_vars('main/pi'))
             train_pi_bc_only_op = pi_optimizer.minimize(bc_pi_loss, var_list=get_vars('main/pi'))
