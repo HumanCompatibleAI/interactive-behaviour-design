@@ -92,13 +92,13 @@ class LockedReplayBuffer(ReplayBuffer):
 
 class TD3Policy(Policy):
     def __init__(self, name, env_id, obs_space, ac_space, n_envs, seed=0,
-                 batch_size=256, batches_per_cycle=50, cycles_per_epoch=50, rollouts_per_worker=2,
-                 gamma=0.99, polyak=0.999995, pi_lr=1e-3, q_lr=1e-3,
-                 act_noise=0.1, target_noise=0.2, noise_clip=0.5, policy_delay=2,
-                 noise_type='ou', noise_sigma=0.2,
+                 batch_size=256, batches_per_cycle=20, cycles_per_epoch=50, rollouts_per_worker=1,
+                 gamma=0.99, polyak=0.9995, pi_lr=3e-4, q_lr=1e-3,
+                 act_noise=0.01, target_noise=0.2, noise_clip=0.5, policy_delay=2,
+                 noise_type='ou', noise_sigma=0.05,
                  n_initial_episodes=100, replay_size=int(1e6),
                  bc_l2_coef=1e-4, train_mode=PolicyTrainMode.R_ONLY,
-                 hidden_sizes=(256, 256, 256, 256),
+                 hidden_sizes=(128, 128, 128),
                  sess_config=None, test_rollouts_per_epoch=10):
         assert policy_delay < batches_per_cycle
         assert noise_type in ['gaussian', 'ou']
