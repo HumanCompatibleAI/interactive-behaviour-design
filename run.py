@@ -120,7 +120,7 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
 
     while True:
         predicted_rewards_raw = reward_predictor.raw_rewards(obses)[0]
-        predicted_rewards_normalized = reward_predictor.reward(obses)
+        predicted_rewards_normalized = reward_predictor.reward(obses, update_normalisation=False)
         assert true_rewards.shape == predicted_rewards_raw.shape, (predicted_rewards_raw.shape, true_rewards.shape)
 
         predicted_rewards_rescaled = np.copy(predicted_rewards_raw)

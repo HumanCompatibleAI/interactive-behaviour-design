@@ -185,7 +185,7 @@ class RewardPredictor:
         assert_equal(rs.shape, (n_preds, n_steps))
         return rs
 
-    def reward(self, obs):
+    def reward(self, obs, update_normalisation=True):
         """
         Return (normalized) reward for each frame of a single segment.
 
@@ -227,9 +227,10 @@ class RewardPredictor:
         assert_equal(ensemble_rs.shape, (n_preds, n_steps))
         ensemble_rs = ensemble_rs.transpose()
         assert_equal(ensemble_rs.shape, (n_steps, n_preds))
-        for ensemble_rs_step in ensemble_rs:
-            self.r_norm_limited.push(ensemble_rs_step[0])
-            self.r_norm.push(ensemble_rs_step[0])
+        if update_normalisation:
+            for ensemble_rs_step in ensemble_rs:
+                self.r_norm_limited.push(ensemble_rs_step[0])
+                self.r_norm.push(ensemble_rs_step[0])
         ensemble_rs -= self.r_norm.mean
         ensemble_rs /= (self.r_norm.std + 1e-12)
         ensemble_rs *= self.r_std
