@@ -98,6 +98,10 @@ def load_reference_trajectory(env_id):
     return traj
 
 
+def calculate_slopes(num_list):
+    num_list = np.array(num_list)
+    return num_list[1:] - num_list[:-1]
+
 def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewardTuple],
                                              reward_predictor: RewardPredictor,
                                              log_dir):
@@ -118,11 +122,13 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
         predicted_rewards_rescaled *= (np.max(true_rewards) - np.min(true_rewards))
         predicted_rewards_rescaled -= np.min(true_rewards)
 
-        difference = np.linalg.norm(true_rewards - predicted_rewards_rescaled, ord=1)
+        true_slopes = np.sign(calculate_slopes(true_rewards))
+        predicted_slopes = np.sign(calculate_slopes(predicted_rewards))
+        slope_match = np.sum(true_slopes == predicted_slopes)
 
         logger.logkv('reference_trajectory/predicted_reward_mean', np.mean(predicted_rewards))
         logger.logkv('reference_trajectory/predicted_reward_std', np.std(predicted_rewards))
-        logger.logkv('reference_trajectory/true_vs_predicted_l1', difference)
+        logger.logkv('reference_trajectory/slope_match', slope_match)
 
         log_file.write(f'Test {test_n}\n')
         for i in range(len(predicted_rewards)):
