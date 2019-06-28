@@ -26,7 +26,7 @@ from gym.envs.box2d import LunarLander
 from gym.envs.mujoco import MujocoEnv
 from gym.envs.robotics import FetchEnv
 from gym.envs.robotics.robot_env import RobotEnv
-from matplotlib.pyplot import figure, clf, plot, savefig, grid, legend
+from matplotlib.pyplot import figure, clf, plot, savefig, grid, legend, ylim
 
 import global_variables
 import throttler
@@ -148,6 +148,7 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
         plot(predicted_rewards_normalized, label='Predicted rewards (normalized)')
         plot(predicted_rewards_rescaled, label='Predicted rewards (rescaled)')
         plot(true_rewards, label='Environment rewards')
+        ylim([-4, 3])
         legend()
         savefig(os.path.join(imgs_dir, '{}.png'.format(test_n)))
 
