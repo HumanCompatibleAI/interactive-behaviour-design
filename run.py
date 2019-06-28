@@ -123,8 +123,8 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
         assert true_rewards.shape == predicted_rewards.shape, (predicted_rewards.shape, true_rewards.shape)
 
         predicted_rewards_rescaled = np.copy(predicted_rewards)
-        predicted_rewards_rescaled -= np.min(predicted_rewards)
-        predicted_rewards_rescaled /= np.max(predicted_rewards)
+        predicted_rewards_rescaled -= np.min(predicted_rewards_rescaled)
+        predicted_rewards_rescaled /= np.max(predicted_rewards_rescaled)
         predicted_rewards_rescaled *= (np.max(true_rewards) - np.min(true_rewards))
         predicted_rewards_rescaled -= np.min(true_rewards)
 

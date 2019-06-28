@@ -124,10 +124,11 @@ class EpisodeRewardLogger():
         self.n_envs = n_envs
         self.env_rewards_by_env_n = [[] for _ in range(n_envs)]
         self.predicted_rewards_by_env_n = [[] for _ in range(n_envs)]
-        self.queue = multiprocessing.Queue()
         self.log_dir = log_dir
         self.n_envs = n_envs
-        self.proc = multiprocessing.Process(target=self.loop)
+        ctx = multiprocessing.get_context('spawn')
+        self.queue = ctx.Queue()
+        self.proc = ctx.Process(target=self.loop)
         self.proc.start()
 
     def log(self, env_rewards, predicted_rewards, dones):
@@ -175,11 +176,13 @@ class EpisodeRewardLogger():
                 f.write(f'{rewards.env_rewards[n]} {rewards.predicted_rewards[n]}\n')
             f.write('\n')
 
-            predicted_rewards_rescaled = np.copy(rewards.predicted_rewards)
-            predicted_rewards_rescaled -= np.min(rewards.predicted_rewards)
-            predicted_rewards_rescaled /= np.max(rewards.predicted_rewards)
-            predicted_rewards_rescaled *= (np.max(rewards.env_rewards) - np.min(rewards.env_rewards))
-            predicted_rewards_rescaled -= np.min(rewards.env_rewards)
+            true_rewards = rewards.env_rewards
+            predicted_rewards = rewards.predicted_rewards
+            predicted_rewards_rescaled = np.copy(predicted_rewards)
+            predicted_rewards_rescaled -= np.min(predicted_rewards_rescaled)
+            predicted_rewards_rescaled /= np.max(predicted_rewards_rescaled)
+            predicted_rewards_rescaled *= (np.max(true_rewards) - np.min(true_rewards))
+            predicted_rewards_rescaled -= np.min(true_rewards)
 
             clf()
             plot(rewards.predicted_rewards, label='Predicted rewards')
