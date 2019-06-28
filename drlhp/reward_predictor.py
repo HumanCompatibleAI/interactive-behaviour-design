@@ -97,7 +97,7 @@ class RewardPredictor:
     def init_network(self):
         self.sess.run(self.init_op)
 
-    def save(self, path, max_to_keep=1000):
+    def save(self, path, max_to_keep=None):
         save_path = f"{path}.{self.ckpt_n}"
 
         variable_value_dict = self.get_variable_value_dict()
@@ -109,8 +109,9 @@ class RewardPredictor:
 
         checkpoint_paths = glob.glob(path + '.*')
         checkpoint_paths.sort(key=lambda p: os.path.getmtime(p))
-        for path in checkpoint_paths[:-max_to_keep]:
-            os.remove(path)
+        if max_to_keep is not None:
+            for path in checkpoint_paths[:-max_to_keep]:
+                os.remove(path)
 
     def load(self, ckpt_path):
         variable_values = joblib.load(ckpt_path)
