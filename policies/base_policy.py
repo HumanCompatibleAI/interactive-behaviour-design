@@ -1,11 +1,14 @@
+import multiprocessing
 import os
 from abc import abstractmethod
+from collections import namedtuple
 from enum import Enum
 from threading import Thread
 
 import easy_tf_log
 import numpy as np
 from gym.utils.atomic_write import atomic_write
+from matplotlib.pyplot import figure, clf, plot, savefig
 
 from global_constants import DEFAULT_BC_COEF
 from rollouts import RolloutsByHash
@@ -111,17 +114,21 @@ class PolicyTrainMode(Enum):
     NO_TRAINING = 6
 
 
+Rewards = namedtuple('Rewards', 'env_n env_rewards predicted_rewards')
+
+
 class EpisodeRewardLogger():
     def __init__(self, log_dir, n_steps, n_envs):
         self.logger = easy_tf_log.Logger(os.path.join(log_dir, 'processed_reward_logger'))
         self.n_steps = n_steps
         self.n_envs = n_envs
-        self.cumulative_rewards = [0 for _ in range(n_envs)]
-        self.episode_n = [0 for _ in range(n_envs)]
-        self.log_files = []
-        for env_n in range(n_envs):
-            f = open(os.path.join(log_dir, f'reward_log_env_{env_n}.log'), 'w')
-            self.log_files.append(f)
+        self.env_rewards_by_env_n = [[] for _ in range(n_envs)]
+        self.predicted_rewards_by_env_n = [[] for _ in range(n_envs)]
+        self.queue = multiprocessing.Queue()
+        self.log_dir = log_dir
+        self.n_envs = n_envs
+        self.proc = multiprocessing.Process(target=self.loop)
+        self.proc.start()
 
     def log(self, env_rewards, predicted_rewards, dones):
         env_rewards = np.array(env_rewards)
@@ -137,10 +144,49 @@ class EpisodeRewardLogger():
             for n in range(len(predicted_rewards_n)):
                 env_reward = env_rewards_n[n]
                 predicted_reward = predicted_rewards_n[n]
-                self.log_files[env_n].write(f'{env_reward} {predicted_reward}\n')
-                self.cumulative_rewards[env_n] += predicted_reward
+                self.env_rewards_by_env_n[env_n].append(env_reward)
+                self.predicted_rewards_by_env_n[env_n].append(predicted_reward)
                 if dones_n[n]:
-                    self.logger.logkv('processed_reward', self.cumulative_rewards[env_n])
-                    self.cumulative_rewards[env_n] = 0
-                    self.episode_n[env_n] += 1
-                    self.log_files[env_n].write(f'\nEpisode {self.episode_n[env_n]}\n')
+                    self.queue.put(Rewards(env_n=env_n,
+                                           env_rewards=self.env_rewards_by_env_n[env_n],
+                                           predicted_rewards=self.predicted_rewards_by_env_n[env_n]))
+                    self.logger.logkv('processed_reward', sum(self.predicted_rewards_by_env_n[env_n]))
+                    self.predicted_rewards_by_env_n[env_n] = []
+
+    def loop(self):
+        self.episode_n = [0 for _ in range(self.n_envs)]
+
+        log_files = []
+        for env_n in range(self.n_envs):
+            f = open(os.path.join(self.log_dir, f'reward_log_env_{env_n}.log'), 'w')
+            log_files.append(f)
+
+        image_dir = os.path.join(self.log_dir, 'train_env_rewards')
+        os.makedirs(image_dir)
+
+        figure()
+
+        while True:
+            rewards = self.queue.get()  # type: Rewards
+            f = log_files[rewards.env_n]
+            f.write(f'\nEpisode {self.episode_n[rewards.env_n]}\n')
+            assert len(rewards.predicted_rewards) == len(rewards.env_rewards)
+            for n in range(len(rewards.predicted_rewards)):
+                f.write(f'{rewards.env_rewards[n]} {rewards.predicted_rewards[n]}\n')
+            f.write('\n')
+
+            predicted_rewards_rescaled = np.copy(rewards.predicted_rewards)
+            predicted_rewards_rescaled -= np.min(rewards.predicted_rewards)
+            predicted_rewards_rescaled /= np.max(rewards.predicted_rewards)
+            predicted_rewards_rescaled *= (np.max(rewards.env_rewards) - np.min(rewards.env_rewards))
+            predicted_rewards_rescaled -= np.min(rewards.env_rewards)
+
+            clf()
+            plot(rewards.predicted_rewards, label='Predicted rewards')
+            plot(predicted_rewards_rescaled, label='Predicted rewards (rescaled)')
+            plot(rewards.env_rewards, label='Environment rewards')
+
+            savefig(os.path.join(image_dir, 'env_{}_episode_{}.png'.format(rewards.env_n,
+                                                                           self.episode_n[rewards.env_n])))
+
+            self.episode_n[rewards.env_n] += 1

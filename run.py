@@ -26,6 +26,7 @@ from gym.envs.box2d import LunarLander
 from gym.envs.mujoco import MujocoEnv
 from gym.envs.robotics import FetchEnv
 from gym.envs.robotics.robot_env import RobotEnv
+from matplotlib.pyplot import figure, clf, plot, savefig, grid, legend
 
 import global_variables
 import throttler
@@ -110,8 +111,13 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
     obses = np.array([tup.obs for tup in reference_trajectory])
     logger = easy_tf_log.Logger(reference_trajectory_rewards_log_dir)
     log_file = open(os.path.join(reference_trajectory_rewards_log_dir, 'predicted_rewards.txt'), 'w')
+    imgs_dir = os.path.join(log_dir, 'reference_trajectory_reward_images')
+    os.makedirs(imgs_dir)
 
     test_n = 0
+
+    figure()
+
     while True:
         predicted_rewards = reward_predictor.raw_rewards(obses)[0]
         assert true_rewards.shape == predicted_rewards.shape, (predicted_rewards.shape, true_rewards.shape)
@@ -134,6 +140,14 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
         for i in range(len(predicted_rewards)):
             log_file.write(f'{true_rewards[i]} {predicted_rewards[i]}\n')
         log_file.write('\n')
+
+        clf()
+        grid()
+        plot(predicted_rewards, label='Predicted rewards')
+        plot(predicted_rewards_rescaled, label='Predicted rewards (rescaled)')
+        plot(true_rewards, label='Environment rewards')
+        legend()
+        savefig(os.path.join(imgs_dir, '{}.png'.format(test_n)))
 
         test_n += 1
         time.sleep(10)
