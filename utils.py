@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections import deque
+from collections import deque, namedtuple
 from functools import partial
 from multiprocessing import Queue
 from os import path as osp
@@ -696,3 +696,6 @@ class OrnsteinUhlenbeckActionNoise(ActionNoise):
 
     def __repr__(self):
         return 'OrnsteinUhlenbeckActionNoise(mu={}, sigma={})'.format(self.mu, self.sigma)
+
+
+ObsRewardTuple = namedtuple('ObsRewardTuple', 'obs reward')

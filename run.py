@@ -5,13 +5,16 @@ import glob
 import multiprocessing
 import os
 import os.path as osp
+import pickle
 import platform
 import random
 import re
 import threading
 import time
 from multiprocessing import Queue, Process
+from typing import List
 
+import easy_tf_log
 import gym
 import numpy as np
 import psutil
@@ -47,7 +50,7 @@ from reward_switcher import RewardSelector
 from rollouts import RolloutsByHash, CompressedRollout
 from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import find_latest_checkpoint, MemoryProfiler, configure_cpus, \
-    load_cpu_config, register_debug_handler, get_available_gpu_ns
+    load_cpu_config, register_debug_handler, get_available_gpu_ns, ObsRewardTuple
 from web_app.app import run_web_app
 from web_app.comparisons import monitor_segments_dir_loop, write_segments_loop
 from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro, \
@@ -84,6 +87,50 @@ def check_env(env_id):
                       'FetchBasic-v0']
     if env_id not in supported_envs:
         raise Exception(f"Env {env_id} not supported; try", ','.join(supported_envs))
+
+
+def load_reference_trajectory(env_id):
+    if env_id == 'FetchReach-CustomActionRepeat5ActionLimit0.2-v0':
+        with open('reference_trajectories/reach_reference_trajectory.pkl', 'rb') as f:
+            traj = pickle.load(f)
+    else:
+        traj = None
+    return traj
+
+
+def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewardTuple],
+                                             reward_predictor: RewardPredictor,
+                                             log_dir):
+    reference_trajectory_rewards_log_dir = os.path.join(log_dir, 'reference_trajectory_rewards')
+    true_rewards = np.array([tup.reward for tup in reference_trajectory])
+    obses = np.array([tup.obs for tup in reference_trajectory])
+    logger = easy_tf_log.Logger(reference_trajectory_rewards_log_dir)
+    log_file = open(os.path.join(reference_trajectory_rewards_log_dir, 'predicted_rewards.txt'), 'w')
+
+    test_n = 0
+    while True:
+        predicted_rewards = reward_predictor.raw_rewards(obses)[0]
+        assert true_rewards.shape == predicted_rewards.shape, (predicted_rewards.shape, true_rewards.shape)
+
+        predicted_rewards_rescaled = np.copy(predicted_rewards)
+        predicted_rewards_rescaled -= np.min(predicted_rewards)
+        predicted_rewards_rescaled /= np.max(predicted_rewards)
+        predicted_rewards_rescaled *= (np.max(true_rewards) - np.min(true_rewards))
+        predicted_rewards_rescaled -= np.min(true_rewards)
+
+        difference = np.linalg.norm(true_rewards - predicted_rewards_rescaled, ord=1)
+
+        logger.logkv('reference_trajectory/predicted_reward_mean', np.mean(predicted_rewards))
+        logger.logkv('reference_trajectory/predicted_reward_std', np.std(predicted_rewards))
+        logger.logkv('reference_trajectory/true_vs_predicted_l1', difference)
+
+        log_file.write(f'Test {test_n}\n')
+        for i in range(len(predicted_rewards)):
+            log_file.write(f'{true_rewards[i]} {predicted_rewards[i]}\n')
+        log_file.write('\n')
+
+        test_n += 1
+        time.sleep(10)
 
 
 def main():
@@ -390,6 +437,12 @@ def main():
         log_name = f'memory-{proc_name}.txt'
         mp = MemoryProfiler(pid=child.pid, log_path=os.path.join(log_dir, log_name))
         mp.start()
+
+    reference_trajectory = load_reference_trajectory(args.env)
+    if reference_trajectory is not None:
+        predict_reference_trajectory_reward_thread = threading.Thread(
+            target=lambda: predict_reference_trajectory_reward_loop(reference_trajectory, reward_predictor, log_dir))
+        predict_reference_trajectory_reward_thread.start()
 
     # Run
 
