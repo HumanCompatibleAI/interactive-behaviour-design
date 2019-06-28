@@ -273,7 +273,7 @@ class RewardPredictor:
         if val_losses:
             train_loss = np.mean(train_losses)
             val_loss = np.mean(val_losses)
-            ratio = val_loss / train_loss
+            ratio = val_loss / (train_loss + 1e-8)
             self.logger.logkv('reward_predictor/test_train_loss_ratio', ratio)
             if ratio > 1.5:
                 self.l2_reg_coef *= 1.5
