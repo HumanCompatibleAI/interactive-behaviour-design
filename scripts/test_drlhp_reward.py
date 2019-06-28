@@ -30,8 +30,8 @@ class DrawRewards(Wrapper):
     def __init__(self, env, reward_predictor: RewardPredictor):
         super().__init__(env)
         self.reward_predictor = reward_predictor
-        self.grapher_true_reward = RewardGrapher(scale=1, y=20, name='True reward')
-        self.grapher_predicted_reward = RewardGrapher(scale=0.2, y=150, name='Predicted reward')
+        self.grapher_true_reward = RewardGrapher(scale=3, y=20, name='True reward')
+        self.grapher_predicted_reward = RewardGrapher(scale=2, y=150, name='Predicted reward')
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
