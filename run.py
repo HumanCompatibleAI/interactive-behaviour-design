@@ -119,31 +119,33 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
     figure()
 
     while True:
-        predicted_rewards = reward_predictor.raw_rewards(obses)[0]
-        assert true_rewards.shape == predicted_rewards.shape, (predicted_rewards.shape, true_rewards.shape)
+        predicted_rewards_raw = reward_predictor.raw_rewards(obses)[0]
+        predicted_rewards_normalized = reward_predictor.reward(obses)
+        assert true_rewards.shape == predicted_rewards_raw.shape, (predicted_rewards_raw.shape, true_rewards.shape)
 
-        predicted_rewards_rescaled = np.copy(predicted_rewards)
+        predicted_rewards_rescaled = np.copy(predicted_rewards_raw)
         predicted_rewards_rescaled -= np.min(predicted_rewards_rescaled)
         predicted_rewards_rescaled /= np.max(predicted_rewards_rescaled)
         predicted_rewards_rescaled *= (np.max(true_rewards) - np.min(true_rewards))
         predicted_rewards_rescaled -= np.min(true_rewards)
 
         true_slopes = np.sign(calculate_slopes(true_rewards))
-        predicted_slopes = np.sign(calculate_slopes(predicted_rewards))
+        predicted_slopes = np.sign(calculate_slopes(predicted_rewards_raw))
         slope_match = np.sum(true_slopes == predicted_slopes)
 
-        logger.logkv('reference_trajectory/predicted_reward_mean', np.mean(predicted_rewards))
-        logger.logkv('reference_trajectory/predicted_reward_std', np.std(predicted_rewards))
+        logger.logkv('reference_trajectory/predicted_reward_mean', np.mean(predicted_rewards_raw))
+        logger.logkv('reference_trajectory/predicted_reward_std', np.std(predicted_rewards_raw))
         logger.logkv('reference_trajectory/slope_match', slope_match)
 
         log_file.write(f'Test {test_n}\n')
-        for i in range(len(predicted_rewards)):
-            log_file.write(f'{true_rewards[i]} {predicted_rewards[i]}\n')
+        for i in range(len(predicted_rewards_raw)):
+            log_file.write(f'{true_rewards[i]} {predicted_rewards_raw[i]}\n')
         log_file.write('\n')
 
         clf()
         grid()
-        plot(predicted_rewards, label='Predicted rewards')
+        plot(predicted_rewards_raw, label='Predicted rewards')
+        plot(predicted_rewards_normalized, label='Predicted rewards (normalized)')
         plot(predicted_rewards_rescaled, label='Predicted rewards (rescaled)')
         plot(true_rewards, label='Environment rewards')
         legend()
