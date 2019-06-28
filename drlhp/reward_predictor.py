@@ -82,6 +82,9 @@ class RewardPredictor:
             name = 'reward_predictor/loss_{}'.format(pred_n)
             op = tf.summary.scalar(name, rp.loss)
             summary_ops.append(op)
+            name = 'reward_predictor/prediction_loss_{}'.format(pred_n)
+            op = tf.summary.scalar(name, rp.prediction_loss)
+            summary_ops.append(op)
             l2_reg_losses = [rp.l2_reg_loss for rp in self.rps]
             mean_reg_loss = tf.reduce_mean(l2_reg_losses)
             op = tf.summary.scalar('reward_predictor/l2_loss_mean', mean_reg_loss)
