@@ -216,6 +216,7 @@ def main():
                         compare(args.url)
             except (NoRolloutsError, NoSegmentsError):
                 time.sleep(1.0)
+                print("No rollouts/segments available")
                 continue
             except:
                 traceback.print_exc()
