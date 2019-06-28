@@ -42,6 +42,24 @@ class Experiment:
         self.no_primitives_config = no_primitives_config
 
 
+def split_preserving_seps(s, seps=('_', '-')):
+    """
+    'foo-bar_1' => ['foo', '-', 'bar', '_', '1']
+    """
+    arr = []
+    cur = ""
+    for c in s:
+        if c in seps:
+            if cur:
+                arr.append(cur)
+            arr.append(c)
+            cur = ""
+        else:
+            cur += c
+    arr.append(cur)
+    return arr
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--seeds', default='0')
@@ -66,12 +84,14 @@ def main():
     for env_shortname, env_id in rl_envs:
         for seed in seeds:
             run_name = f"{env_shortname}-{seed}-rl"
-            print(f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} --extra_args ' {args.extra_args}' "
-                  f"{gpu_arg} "
-                  f"--tags rl,{env_shortname}")
+            print(
+                f"python3 scripts/train/auto_train_rl.py {seed} {env_id} {run_name} --extra_args ' {args.extra_args}' "
+                f"{gpu_arg} "
+                f"--tags rl,{env_shortname}")
 
     if args.extra_args:
         run_suffix = '_' + escape(args.extra_args.lstrip())
+        run_suffix = ''.join([w[:3] for w in split_preserving_seps(run_suffix)])
     else:
         run_suffix = ''
     for env_shortname, env_id in prefs_envs:
