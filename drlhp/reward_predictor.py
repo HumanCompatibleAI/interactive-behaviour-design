@@ -10,6 +10,7 @@ import numpy as np
 import tensorflow as tf
 from numpy.testing import assert_equal
 
+import global_variables
 import throttler
 from drlhp.drlhp_utils import LimitedRunningStat, RunningStat
 from drlhp.pref_db import PrefDB
@@ -236,7 +237,7 @@ class RewardPredictor:
         assert_equal(ensemble_rs.shape, (n_preds, n_steps))
 
         self.reward_call_n += 1
-        if self.reward_call_n % 1000 == 0:
+        if self.reward_call_n % global_variables.log_reward_normalisation_every_n_calls == 0:
             self.logger.logkv('reward_predictor/r_norm_mean_recent', self.r_norm_limited.mean)
             self.logger.logkv('reward_predictor/r_norm_std_recent', self.r_norm_limited.std)
             self.logger.logkv('reward_predictor/r_norm_mean', self.r_norm.mean)

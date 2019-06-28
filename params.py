@@ -66,6 +66,7 @@ def parse_args():
     parser.add_argument('--reward_predictor_load_polyak_coef', type=float, default=0.0)
     parser.add_argument('--predicted_reward_normalisation',
                         choices=['normalise', 'no_normalise'], default='no_normalise')
+    parser.add_argument('--log_reward_normalisation_every_n_calls', type=int, default=1000)
     args = parser.parse_args()
 
     global_variables.segment_save_mode = args.segment_save_mode
@@ -81,6 +82,7 @@ def parse_args():
     global_variables.reward_predictor_load_polyak_coef = args.reward_predictor_load_polyak_coef
     global_variables.predicted_reward_normalisation_mode = \
         PredictedRewardNormalisationMode[args.predicted_reward_normalisation.upper()]
+    global_variables.log_reward_normalisation_every_n_calls = args.log_reward_normalisation_every_n_calls
 
     if args.target_n_prefs_per_24h == 0:
         global_variables.n_rl_steps_per_interaction = 0
