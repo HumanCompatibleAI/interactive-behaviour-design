@@ -127,7 +127,7 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
         predicted_rewards_rescaled -= np.min(predicted_rewards_rescaled)
         predicted_rewards_rescaled /= np.max(predicted_rewards_rescaled)
         predicted_rewards_rescaled *= (np.max(true_rewards) - np.min(true_rewards))
-        predicted_rewards_rescaled -= np.min(true_rewards)
+        predicted_rewards_rescaled += np.min(true_rewards)
 
         true_slopes = np.sign(calculate_slopes(true_rewards))
         predicted_slopes = np.sign(calculate_slopes(predicted_rewards_raw))
