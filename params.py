@@ -9,6 +9,7 @@ import global_constants
 import global_variables
 from global_variables import RolloutMode, RolloutRandomness
 from baselines import logger
+from reward_switcher import PredictedRewardNormalisationMode
 from utils import save_args, get_git_rev
 
 
@@ -63,6 +64,8 @@ def parse_args():
     parser.add_argument('--rollout_noise_sigma', type=float, default=0.05)
     # Default: new parameters = 0 * old parameters + 1 * loaded parameters
     parser.add_argument('--reward_predictor_load_polyak_coef', type=float, default=0.0)
+    parser.add_argument('--predicted_reward_normalisation',
+                        choices=['normalise', 'no_normalise'], default='no_normalise')
     args = parser.parse_args()
 
     global_variables.segment_save_mode = args.segment_save_mode
@@ -76,6 +79,8 @@ def parse_args():
     global_variables.frames_per_segment = int(args.rollout_length_seconds * global_constants.ROLLOUT_FPS)
     global_variables.rollout_noise_sigma = args.rollout_noise_sigma
     global_variables.reward_predictor_load_polyak_coef = args.reward_predictor_load_polyak_coef
+    global_variables.predicted_reward_normalisation_mode = \
+        PredictedRewardNormalisationMode[args.predicted_reward_normalisation.upper()]
 
     if args.target_n_prefs_per_24h == 0:
         global_variables.n_rl_steps_per_interaction = 0

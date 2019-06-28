@@ -1,6 +1,7 @@
 from enum import Enum
 import numpy as np
 
+import global_variables
 from classifier_collection import ClassifierCollection
 from drlhp.reward_predictor import RewardPredictor
 
@@ -10,6 +11,11 @@ class RewardSource(Enum):
     DRLHP = 1
     ENV = 2
     NONE = 3
+
+
+class PredictedRewardNormalisationMode(Enum):
+    NORMALISE = 0
+    NO_NORMALISE = 1
 
 
 class RewardSelector:
@@ -24,7 +30,12 @@ class RewardSelector:
         self.cur_reward_source = reward_source
 
     def _rewards_from_reward_predictor(self, obs):
-        rewards = self.reward_predictor.raw_rewards(obs)[0]
+        if global_variables.predicted_reward_normalisation_mode == PredictedRewardNormalisationMode.NORMALISE:
+            rewards = self.reward_predictor.reward(obs)
+        elif global_variables.predicted_reward_normalisation_mode == PredictedRewardNormalisationMode.NO_NORMALISE:
+            rewards = self.reward_predictor.raw_rewards(obs)[0]
+        else:
+            raise RuntimeError()
         assert rewards.shape == (obs.shape[0],)
         return rewards
 

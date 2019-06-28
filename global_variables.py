@@ -32,5 +32,6 @@ n_rl_steps_per_interaction = None
 frames_per_segment = None
 rollout_noise_sigma = None
 reward_predictor_load_polyak_coef = None  # type: Union[float, None]
+predicted_reward_normalisation_mode = None
 
 pids_to_proc_names = {}
