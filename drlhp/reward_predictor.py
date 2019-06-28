@@ -82,6 +82,9 @@ class RewardPredictor:
             name = 'reward_predictor/loss_{}'.format(pred_n)
             op = tf.summary.scalar(name, rp.loss)
             summary_ops.append(op)
+            name = 'reward_predictor/prediction_loss_{}'.format(pred_n)
+            op = tf.summary.scalar(name, rp.prediction_loss)
+            summary_ops.append(op)
             l2_reg_losses = [rp.l2_reg_loss for rp in self.rps]
             mean_reg_loss = tf.reduce_mean(l2_reg_losses)
             op = tf.summary.scalar('reward_predictor/l2_loss_mean', mean_reg_loss)
@@ -270,7 +273,7 @@ class RewardPredictor:
         if val_losses:
             train_loss = np.mean(train_losses)
             val_loss = np.mean(val_losses)
-            ratio = val_loss / train_loss
+            ratio = val_loss / (train_loss + 1e-8)
             self.logger.logkv('reward_predictor/test_train_loss_ratio', ratio)
             if ratio > 1.5:
                 self.l2_reg_coef *= 1.5
@@ -322,7 +325,7 @@ class RewardPredictor:
             feed_dict[rp.s2] = s2s
             feed_dict[rp.pref] = prefs
             feed_dict[rp.training] = False
-        loss, summaries = self.sess.run([self.rps[0].loss, self.summaries], feed_dict)
+        loss, summaries = self.sess.run([self.rps[0].prediction_loss, self.summaries], feed_dict)
         if self.n_steps % self.log_interval == 0:
             self.test_writer.add_summary(summaries, self.n_steps)
         return loss
