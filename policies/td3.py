@@ -421,6 +421,7 @@ class TD3Policy(Policy):
         if self.train_mode == PolicyTrainMode.NO_TRAINING:
             # Just run the environment to e.g. generate segments for DRLHP
             action = self.get_noise()
+            action = np.clip(action, -self.act_limit, self.act_limit)
             _, _, dones, _ = self.train_env.step(action)
             for n, done in enumerate(dones):
                 if done:
