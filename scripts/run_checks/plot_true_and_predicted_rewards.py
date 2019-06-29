@@ -24,24 +24,29 @@ for episode_n in range(args.start, 100000000000):
             elines = lines[n+1:n+1+100]
 
     data = np.array([list(map(float, l.split(' '))) for l in elines])
-    plot(data[:, 0], label='Environment reward')
 
-    data[:, 1] += np.random.randint(-5, 5)
-    data[:, 1] *= np.random.rand() * 2
+    env_rewards = data[:, 0]
+    pred_rewards = data[:, 1]
+    pred_rewards_rescaled = np.copy(pred_rewards)
 
-    plot(data[:, 1], label='Predicted reward')
+    scale = (max(env_rewards) - min(env_rewards)) / (max(pred_rewards) - min(pred_rewards))
+    pred_rewards_rescaled *= scale
+    shift = min(env_rewards) - min(pred_rewards_rescaled)
+    pred_rewards_rescaled += shift
 
-    env_rew_min, env_rew_max = min(data[:, 0]), max(data[:, 0])
-    delta = env_rew_max - env_rew_min
-    predicted_rewards = data[:, 1]
-    predicted_rewards = (predicted_rewards - min(predicted_rewards)) / (max(predicted_rewards) - min(predicted_rewards)) * (env_rew_max - env_rew_min) + env_rew_min
-    plot(predicted_rewards, label='Predicted reward (rescaled)')
+    pred_rewards_rescaled = pred_rewards * scale + shift
+    print(scale, shift)
 
-    predicted_rewards = data[:, 1]
-    predicted_rewards = log(exp(predicted_rewards - logsumexp(predicted_rewards)))
-    plot(predicted_rewards, label='Predicted reward (Boltzmann)')
+    print(np.mean(pred_rewards))
+    print(np.std(pred_rewards))
+    pred_rewards -= np.mean(pred_rewards)
+    pred_rewards /= np.std(pred_rewards)
 
-    ylim([-10, 4])
+    plot(env_rewards, label='Environment reward')
+    plot(pred_rewards, label='Predicted reward')
+    plot(pred_rewards_rescaled, label='Predicted reward (rescaled)')
+
+    # ylim([-10, 4])
 
 
     legend()

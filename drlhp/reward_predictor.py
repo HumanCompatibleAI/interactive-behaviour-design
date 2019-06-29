@@ -23,6 +23,8 @@ MIN_L2_REG_COEF = 0.001
 class RewardPredictor:
 
     def __init__(self, obs_shape, network, network_args, r_std, name, lr=1e-4, log_dir=None, seed=None, gpu_n=None):
+        self.min_reward_obs_so_far = None
+        self.max_reward_obs_so_far = None
         self.obs_shape = obs_shape
         graph = tf.Graph()
         self.graph = graph
@@ -232,29 +234,66 @@ class RewardPredictor:
                 self.r_norm_limited.push(ensemble_rs_step[0])
                 self.r_norm.push(ensemble_rs_step[0])
 
-        if global_variables.predicted_rewards_normalize_params is not None:
-            scale, shift = map(float, global_variables.predicted_rewards_normalize_params.split(','))
-            ensemble_rs *= scale
-            ensemble_rs += shift
+        assert ensemble_rs.shape[1] == 1
+        rs = ensemble_rs[:, 0]
+
+        if self.max_reward_obs_so_far is not None:
+            max_reward, min_reward = self.raw_rewards(np.array([self.max_reward_obs_so_far,
+                                                                self.min_reward_obs_so_far]))[0]
         else:
-            ensemble_rs -= self.r_norm.mean
-            ensemble_rs /= (self.r_norm.std + 1e-12)
+            max_reward = float('-inf')
+            min_reward = float('inf')
 
-        ensemble_rs *= self.r_std
-        ensemble_rs = ensemble_rs.transpose()
-        assert_equal(ensemble_rs.shape, (n_preds, n_steps))
+        if np.max(rs) > max_reward:
+            self.max_reward_obs_so_far = obs[np.argmax(rs)]
+            max_reward = np.max(rs)
+        if np.min(rs) < min_reward:
+            self.min_reward_obs_so_far = obs[np.argmin(rs)]
+            min_reward = np.min(rs)
 
-        self.reward_call_n += 1
-        if self.reward_call_n % global_variables.log_reward_normalisation_every_n_calls == 0:
-            self.logger.logkv('reward_predictor/r_norm_mean_recent', self.r_norm_limited.mean)
-            self.logger.logkv('reward_predictor/r_norm_std_recent', self.r_norm_limited.std)
-            self.logger.logkv('reward_predictor/r_norm_mean', self.r_norm.mean)
-            self.logger.logkv('reward_predictor/r_norm_std', self.r_norm.std)
+        scale = max_reward - min_reward
+        shift = - (min_reward + max_reward) / 2
 
-        # "...and then averaging the results."
-        rs = np.mean(ensemble_rs, axis=0)
-        assert_equal(rs.shape, (n_steps,))
-        logging.debug("After ensemble averaging:\n%s", rs)
+        self.logger.logkv('reward_predictor/min_reward_cur_batch', np.min(rs))
+        self.logger.logkv('reward_predictor/max_reward_cur_batch', np.max(rs))
+        if len(rs) > 100:
+            self.logger.logkv('reward_predictor/min_reward_reference', np.min(rs))
+            self.logger.logkv('reward_predictor/max_reward_reference', np.max(rs))
+        self.logger.logkv('reward_predictor/max_reward', max_reward)
+        self.logger.logkv('reward_predictor/min_reward', min_reward)
+        self.logger.logkv('reward_predictor/scale', scale)
+        self.logger.logkv('reward_predictor/shift', shift)
+
+        rs /= scale
+        rs += shift
+
+        return rs
+
+        # if global_variables.predicted_rewards_normalize_params is not None:
+        #     scale, shift = map(float, global_variables.predicted_rewards_normalize_params.split(','))
+        #     ensemble_rs *= scale
+        #     ensemble_rs += shift
+        # else:
+        #     ensemble_rs -= self.r_norm.mean
+        #     ensemble_rs /= (self.r_norm.std + 1e-12)
+        #
+        #
+        #
+        # ensemble_rs *= self.r_std
+        # ensemble_rs = ensemble_rs.transpose()
+        # assert_equal(ensemble_rs.shape, (n_preds, n_steps))
+        #
+        # self.reward_call_n += 1
+        # if self.reward_call_n % global_variables.log_reward_normalisation_every_n_calls == 0:
+        #     self.logger.logkv('reward_predictor/r_norm_mean_recent', self.r_norm_limited.mean)
+        #     self.logger.logkv('reward_predictor/r_norm_std_recent', self.r_norm_limited.std)
+        #     self.logger.logkv('reward_predictor/r_norm_mean', self.r_norm.mean)
+        #     self.logger.logkv('reward_predictor/r_norm_std', self.r_norm.std)
+        #
+        # # "...and then averaging the results."
+        # rs = np.mean(ensemble_rs, axis=0)
+        # assert_equal(rs.shape, (n_steps,))
+        # logging.debug("After ensemble averaging:\n%s", rs)
 
         return rs
 
