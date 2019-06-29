@@ -30,7 +30,7 @@ def get_args():
     parser.add_argument('env_id')
     parser.add_argument('training_mode')
     parser.add_argument('segment_generation',
-                        choices=['demonstrations', 'drlhp', 'demonstrations-drlhp', 'sdrlhpnp', 'sdrlhpnp-drlhp'])
+                        choices=['demonstrations', 'drlhp', 'demonstrations-drlhp', 'sdrlhpnp', 'sdrlhpnp-drlhp', 'none'])
     parser.add_argument('run_name')
     parser.add_argument('--n_envs', type=int, default=16)
     parser.add_argument('--n_initial_prefs', type=int, default=500)
@@ -52,7 +52,18 @@ def get_args():
     parser.add_argument('--tags')
     parser.add_argument('--group')
     parser.add_argument('--just_pretrain', action='store_true')
+    parser.add_argument('--train_using_reward_predictor_checkpoint', action='store_true')
+    parser.add_argument('--reward_predictor_checkpoint')
     args = parser.parse_args()
+
+    if args.reward_predictor_checkpoint is not None and not args.train_using_reward_predictor_checkpoint:
+        raise argparse.ArgumentError("--reward_predictor_checkpoint should only be specified with "
+                                     "--train_using_reward_predictor_checkpoint")
+    if args.train_using_reward_predictor_checkpoint and args.reward_predictor_checkpoint is None:
+        raise argparse.ArgumentError("--reward_predictor_checkpoint must be specified for "
+                                     "--train_using_reward_predictor_checkpoint")
+    if args.train_using_reward_predictor_checkpoint and args.training_mode != 'reward_only':
+        raise argparse.ArgumentError("training_mode must reward_only for --train_using_reward_predictor_checkpoint")
 
     args.run_name += "_" + args.time
 
@@ -92,7 +103,11 @@ def main():
     train_window_name = start_app(base_url, args.env_id, args.n_envs, port, args.seed, args.log_dir, args.tmux_sess,
                                   args.disable_redo,
                                   args.extra_args, args.segment_generation, args.gpus)
-    if args.segment_generation == 'drlhp':
+
+    if args.train_using_reward_predictor_checkpoint:
+        add_master_policy(base_url)
+        load_reward_predictor_checkpoint(base_url, args.reward_predictor_checkpoint)
+    elif args.segment_generation == 'drlhp':
         # In DRLHP mode, the master policy itself generates segments, so it needs to be added right at the beginning
         add_master_policy(base_url)
         wait_for_drlhp_segments(base_url)
@@ -156,6 +171,10 @@ def main():
         raise Exception()
     # configure_env_resets(base_url)
     start_training(base_url, args.training_mode, args.segment_generation)
+
+
+def load_reward_predictor_checkpoint(base_url, ckpt_path):
+    requests.get(base_url + f'/run_cmd?cmd=load_rp_ckpt_path&path={ckpt_path}').raise_for_status()
 
 
 def wait_for_reward_predictor_n_epochs_trained(log_dir, n):

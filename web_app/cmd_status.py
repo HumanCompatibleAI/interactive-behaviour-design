@@ -3,12 +3,15 @@ import glob
 import io
 import json
 import os
+import shutil
 import sys
 
 from flask import request, render_template, Blueprint
 
+import drlhp.training
 from policies.base_policy import PolicyTrainMode
 from reward_switcher import RewardSource
+from drlhp.training import FileBasedEventPipe
 from web_app.utils import check_bc_losses
 from web_app.view_trajectories import get_trajectories
 from web_app.web_globals import _classifiers, _cur_label, _demonstration_rollouts, _log_dir, \
@@ -116,18 +119,11 @@ def run_cmd():
     elif cmd == 'set_ent_coef':
         coef = float(request.args['coef'])
         _policies.set_ent_coef(coef)
-    elif cmd == 'load_rp_ckpt':
-        ckpt_n = request.args['n']
-
-        search = os.path.join(_log_dir, 'checkpoints', 'drlhp*-{}.meta'.format(ckpt_n))
-        possible_ckpts = glob.glob(search)
-        if len(possible_ckpts) == 0:
-            return "No checkpoint found"
-        if len(possible_ckpts) > 1:
-            return "ckpt_n not specific"
-        ckpt_path = possible_ckpts[0].replace('.meta', '')
-
-        _reward_selector.reward_predictor.load(ckpt_path)
+    elif cmd == 'load_rp_ckpt_path':
+        ckpt_path = request.args['path']
+        shutil.copy(ckpt_path, os.path.join(_log_dir, 'checkpoints'))
+        FileBasedEventPipe.send_event(os.path.join(_log_dir, drlhp.training.FORCE_LOAD_FNAME))
+        FileBasedEventPipe.wait_for_ack(os.path.join(_log_dir, drlhp.training.FORCE_LOAD_FNAME))
     elif cmd == 'load_policy_ckpt':
         policy = request.args['policy']
         ckpt_n = request.args['n']
