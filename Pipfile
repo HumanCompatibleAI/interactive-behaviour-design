@@ -31,6 +31,7 @@ pims = "*"
 memory-profiler = "*"
 moviepy = "*"
 wandb = "*"
+requests = "*"
 
 [dev-packages]
 

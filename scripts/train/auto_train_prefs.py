@@ -22,7 +22,7 @@ from utils import save_args, get_git_rev, read_events_file
 import drlhp.training
 from drlhp.training import FileBasedEventPipe
 
-args = None
+global_args = None
 
 
 def get_args():
@@ -76,12 +76,13 @@ def get_args():
 
 
 def main():
-    global args
+    global global_args
 
     stagger = random.randint(1, 20)
     time.sleep(stagger)
 
     args = get_args()
+    global_args = args
     os.makedirs(args.log_dir, exist_ok=True)
 
     if not args.tmux_sess:
@@ -170,7 +171,7 @@ def main():
     else:
         raise Exception()
     # configure_env_resets(base_url)
-    start_training(base_url, args.training_mode, args.segment_generation)
+    start_training(base_url, args.training_mode)
 
 
 def load_reward_predictor_checkpoint(base_url, ckpt_path):
@@ -188,8 +189,8 @@ def wait_for_reward_predictor_n_epochs_trained(log_dir, n):
         if n_epochs != last_n_epochs:
             print(f"{n_epochs}/{n} epochs")
         last_n_epochs = n_epochs
-    force_reward_predictor_training_process_save(args.log_dir)
-    force_reward_predictor_load(args.log_dir)
+    force_reward_predictor_training_process_save(global_args.log_dir)
+    force_reward_predictor_load(global_args.log_dir)
 
 
 def get_reward_predictor_n_epochs_trained(log_dir):
@@ -288,7 +289,8 @@ def start_oracle(base_url, segment_generation, tmux_sess, log_dir, min_label_int
         segment_generation = 'demonstrations'
     decay_arg = '--decay_label_rate' if decay_label_rate else ''
     cmd = (
-        f'python -u oracle.py {base_url} {segment_generation} --seconds_per_label {min_label_interval_seconds} --log_dir {log_dir} {decay_arg}'
+        f'python -u oracle.py {base_url} {segment_generation} '
+        f'--seconds_per_label {min_label_interval_seconds} --log_dir {log_dir} {decay_arg}'
         f' 2>&1 | tee {log_dir}/oracle.log')
     oracle_window_name = run_in_tmux_sess(tmux_sess, cmd, "oracle", gpus='')
     return oracle_window_name
@@ -343,7 +345,7 @@ def start_reward_predictor_training(base_url):
     requests.get(base_url + '/run_cmd?cmd=start_drlhp_training').raise_for_status()
 
 
-def start_training(base_url, training_mode, segment_generation):
+def start_training(base_url, training_mode):
     print("Starting training...")
     requests.get(base_url + '/run_cmd?cmd=config_demos&noop_actions=False').raise_for_status()
     requests.get(base_url + '/run_cmd?cmd=use_policy&name=master').raise_for_status()
@@ -370,10 +372,10 @@ def get_n_demos(base_url):
 
 
 def start_tmux_sess_with_cmd(sess_name, cmd, gpus):
-    global args
-    cmd = f'WANDB_TAGS={args.tags} ' + cmd
-    cmd = f'WANDB_RUN_GROUP={args.group} ' + cmd
-    cmd = f'WANDB_DESCRIPTION={args.run_name} ' + cmd
+    global global_args
+    cmd = f'WANDB_TAGS={global_args.tags} ' + cmd
+    cmd = f'WANDB_RUN_GROUP={global_args.group} ' + cmd
+    cmd = f'WANDB_DESCRIPTION={global_args.run_name} ' + cmd
     cmd = f'CUDA_VISIBLE_DEVICES="{gpus}" ' + cmd
     cmd += '; echo; read -p "Press enter to exit..."'
     cmd = ['tmux', 'new-sess', '-d', '-s', sess_name, '-n', f'{sess_name}-main', cmd]
@@ -381,11 +383,11 @@ def start_tmux_sess_with_cmd(sess_name, cmd, gpus):
 
 
 def run_in_tmux_sess(sess_name, cmd, window_name, gpus):
-    global args
+    global global_args
     window_name += '_' + str(uuid.uuid4())[:4]
-    cmd = f'WANDB_TAGS={args.tags} ' + cmd
-    cmd = f'WANDB_RUN_GROUP={args.group} ' + cmd
-    cmd = f'WANDB_DESCRIPTION={args.run_name} ' + cmd
+    cmd = f'WANDB_TAGS={global_args.tags} ' + cmd
+    cmd = f'WANDB_RUN_GROUP={global_args.group} ' + cmd
+    cmd = f'WANDB_DESCRIPTION={global_args.run_name} ' + cmd
     cmd = f'CUDA_VISIBLE_DEVICES="{gpus}" ' + cmd
     cmd += '; echo; read -p "Press enter to exit..."'
     tmux_cmd = ['tmux', 'new-window', '-ad', '-t', f'{sess_name}-main', '-n', window_name, cmd]
