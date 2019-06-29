@@ -51,6 +51,9 @@ class FileBasedEventPipe:
     # Expected to be called from another process
     @staticmethod
     def send_event(pipe_path):
+        while not os.path.exists(pipe_path):
+            print(f"Waiting for pipe '{pipe_path}' to exist...")
+            time.sleep(1)
         pipe = os.open(pipe_path, os.O_WRONLY)
         os.write(pipe, b'event')  # Can be anything
         os.close(pipe)
@@ -63,6 +66,7 @@ class FileBasedEventPipe:
 
 
 def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
+    force_load_event_pipe = FileBasedEventPipe(os.path.join(log_dir, FORCE_LOAD_FNAME))
     logger = easy_tf_log.Logger(os.path.join(log_dir, 'drlhp_load_loop'))
 
     while not glob.glob(ckpt_path + '*'):
@@ -71,7 +75,6 @@ def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
 
     load_timer = Timer(MAIN_PROCESS_LOAD_REWARD_PREDICTOR_EVERY_N_SECONDS)
     load_timer.reset()
-    force_load_event_pipe = FileBasedEventPipe(os.path.join(log_dir, FORCE_LOAD_FNAME))
 
     n_successful_loads = 0
     while True:
