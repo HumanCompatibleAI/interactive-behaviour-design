@@ -430,7 +430,6 @@ class RewardPredictorNetwork:
         with tf.control_dependencies([c1]):
             loss = tf.reduce_sum(_loss)
 
-
         l2_reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         # l2_reg_losses is a list of L2 norms - one for each weight layer
         # (where each L2 norm is just a scalar - so this is a list of scalars)
@@ -438,15 +437,8 @@ class RewardPredictorNetwork:
         # reduce_sum is for when you have e.g. a matrix and you want to sum over one row.
         # If you want to sum over elements of a list, you use add_n.
         l2_reg_loss = tf.add_n(l2_reg_losses)
-        loss += l2_reg_loss
-
-        assert rs.shape.as_list() == [None, 2]
-        range_loss = 0
-        range_loss += tf.reduce_sum(tf.where(rs > 1.0, rs ** 2, tf.zeros_like(rs)))
-        range_loss += tf.reduce_sum(tf.where(rs < -1.0, rs ** 2, tf.zeros_like(rs)))
-        loss += range_loss
-
         self.prediction_loss = loss
+        loss += l2_reg_loss
 
         if core_network == net_cnn:
             batchnorm_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
