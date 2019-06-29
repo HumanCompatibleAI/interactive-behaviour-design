@@ -34,5 +34,6 @@ rollout_noise_sigma = None
 reward_predictor_load_polyak_coef = None  # type: Union[float, None]
 predicted_reward_normalisation_mode = None
 log_reward_normalisation_every_n_calls = None
+predicted_rewards_normalize_params = None
 
 pids_to_proc_names = {}

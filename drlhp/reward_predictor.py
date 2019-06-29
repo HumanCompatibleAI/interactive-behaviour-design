@@ -231,8 +231,15 @@ class RewardPredictor:
             for ensemble_rs_step in ensemble_rs:
                 self.r_norm_limited.push(ensemble_rs_step[0])
                 self.r_norm.push(ensemble_rs_step[0])
-        ensemble_rs -= self.r_norm.mean
-        ensemble_rs /= (self.r_norm.std + 1e-12)
+
+        if global_variables.predicted_rewards_normalize_params is not None:
+            scale, shift = map(float, global_variables.predicted_rewards_normalize_params.split(','))
+            ensemble_rs *= scale
+            ensemble_rs += shift
+        else:
+            ensemble_rs -= self.r_norm.mean
+            ensemble_rs /= (self.r_norm.std + 1e-12)
+
         ensemble_rs *= self.r_std
         ensemble_rs = ensemble_rs.transpose()
         assert_equal(ensemble_rs.shape, (n_preds, n_steps))
