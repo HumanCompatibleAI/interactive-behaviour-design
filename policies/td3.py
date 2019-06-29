@@ -241,6 +241,7 @@ class TD3Policy(Policy):
         self.graph = graph
         self.n_initial_episodes = n_initial_episodes
         self.n_reward_predictor_warmup_episodes = 200
+        self.n_q_pretrain_batches = 1000
         self.action_stats = LimitedRunningStat(shape=(act_dim,), len=1000)
         self.noise_stats = RunningStat(act_dim)
         self.ckpt_n = 0
@@ -540,8 +541,12 @@ class TD3Policy(Policy):
             }
             self.train_q(feed_dict, results)
             # Delayed policy update
-            if batch_n % self.policy_delay == 0:
+            if self.n_q_pretrain_batches == 0 and batch_n % self.policy_delay == 0:
                 self.train_pi(feed_dict, results)
+
+            self.n_q_pretrain_batches = max(0, self.n_q_pretrain_batches - 1)
+
+        self.logger.logkv(f'policy_{self.name}/n_q_pretrain_batches', self.n_q_pretrain_batches)
 
         self.check_specific_states_qs()
 
