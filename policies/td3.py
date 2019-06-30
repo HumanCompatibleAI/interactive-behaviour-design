@@ -241,7 +241,7 @@ class TD3Policy(Policy):
         self.graph = graph
         self.n_initial_episodes = n_initial_episodes
         self.n_reward_predictor_warmup_episodes = 200
-        self.n_q_pretrain_batches = 1000
+        self.n_q_pretrain_batches = 100
         self.action_stats = LimitedRunningStat(shape=(act_dim,), len=1000)
         self.noise_stats = RunningStat(act_dim)
         self.ckpt_n = 0
