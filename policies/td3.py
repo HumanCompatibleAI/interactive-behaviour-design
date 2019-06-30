@@ -496,10 +496,12 @@ class TD3Policy(Policy):
             self._train_rl()
 
             for n in range(self.act_dim):
-                self.logger.logkv(f'policy_{self.name}/actions_mean_{n}', self.action_stats.mean[n])
-                self.logger.logkv(f'policy_{self.name}/actions_std_{n}', self.action_stats.std[n])
-                self.logger.logkv(f'policy_{self.name}/noise_mean_{n}', self.noise_stats.mean[n])
-                self.logger.logkv(f'policy_{self.name}/noise_std_{n}', self.noise_stats.std[n])
+                if self.action_stats.n > 0:
+                    self.logger.logkv(f'policy_{self.name}/actions_mean_{n}', self.action_stats.mean[n])
+                    self.logger.logkv(f'policy_{self.name}/actions_std_{n}', self.action_stats.std[n])
+                if self.noise_stats.n > 0:
+                    self.logger.logkv(f'policy_{self.name}/noise_mean_{n}', self.noise_stats.mean[n])
+                    self.logger.logkv(f'policy_{self.name}/noise_std_{n}', self.noise_stats.std[n])
             self.logger.logkv(f'policy_{self.name}/replay_buffer_ptr', self.replay_buffer.ptr)
             self.logger.logkv(f'policy_{self.name}/replay_buffer_demo_ptr', self.demonstrations_buffer.ptr)
             self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
