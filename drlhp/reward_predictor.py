@@ -23,7 +23,8 @@ MIN_L2_REG_COEF = 0.001
 
 class RewardPredictor:
 
-    def __init__(self, obs_shape, network, network_args, r_std, name, lr=1e-4, log_dir=None, seed=None, gpu_n=None):
+    def __init__(self, obs_shape, network, network_args, r_std, name, lr=1e-4, log_dir=None, seed=None, gpu_n=None,
+                 rs_norm_regularization=False):
         self.min_reward_obs_so_far = None
         self.max_reward_obs_so_far = None
         self.obs_shape = obs_shape
@@ -46,7 +47,8 @@ class RewardPredictor:
                 self.rps = [RewardPredictorNetwork(core_network=network,
                                                    network_args=network_args,
                                                    obs_shape=obs_shape,
-                                                   lr=lr)]
+                                                   lr=lr,
+                                                   rs_norm_regularization=rs_norm_regularization)]
                 self.init_op = tf.global_variables_initializer()
             self.summaries = self.add_summary_ops()
 
@@ -272,6 +274,8 @@ class RewardPredictor:
             rewards = self.worst_and_best_state_normalize(rewards, obses, update_normalization)
         elif global_variables.predicted_reward_normalization == PredictedRewardNormalization.MANUAL:
             rewards = self.manual_normalize(rewards)
+        elif global_variables.predicted_reward_normalization == PredictedRewardNormalization.NORM:
+            pass
 
         self.reward_call_n += 1
 
@@ -333,10 +337,12 @@ class RewardPredictor:
         # Why do we only check the loss from the first reward predictor?
         # As a quick hack to get adaptive L2 regularization working quickly,
         # assuming we're only using one reward predictor.
-        ops = [self.rps[0].prediction_loss, self.summaries, [rp.train for rp in self.rps]]
-        loss, summaries, _ = self.sess.run(ops, feed_dict)
+        ops = [self.rps[0].prediction_loss, self.rps[0].rs_norm_loss,
+               self.summaries, [rp.train for rp in self.rps]]
+        loss, norm_loss, summaries, _ = self.sess.run(ops, feed_dict)
         if self.n_steps % self.log_interval == 0:
             self.train_writer.add_summary(summaries, self.n_steps)
+            self.logger.logkv('reward_predictor/rs_norm_loss', norm_loss)
         return loss
 
     def val_step(self, prefs_val):
@@ -386,7 +392,7 @@ class RewardPredictorNetwork:
     - pred      Predicted preference
     """
 
-    def __init__(self, core_network, network_args, obs_shape, lr):
+    def __init__(self, core_network, network_args, obs_shape, lr, rs_norm_regularization):
         training = tf.placeholder(tf.bool)
         obs_shape = tuple(obs_shape)
         # Each element of the batch is one trajectory segment.
@@ -441,6 +447,7 @@ class RewardPredictorNetwork:
         c1 = tf.assert_rank(_rs, 2)
         with tf.control_dependencies([c1]):
             rs = _rs
+
         _pred = tf.nn.softmax(rs)
         # Shape should be 'batch_size' x 2
         c1 = tf.assert_rank(_pred, 2)
@@ -467,6 +474,12 @@ class RewardPredictorNetwork:
         # If you want to sum over elements of a list, you use add_n.
         l2_reg_loss = tf.add_n(l2_reg_losses)
         loss += l2_reg_loss
+
+        if rs_norm_regularization:
+            rs_norm_loss = tf.norm(rs, ord=1)
+        else:
+            rs_norm_loss = tf.constant(0)
+        loss += rs_norm_loss
 
         if core_network == net_cnn:
             batchnorm_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -496,9 +509,12 @@ class RewardPredictorNetwork:
         self.train = train
         self.l2_reg_loss = l2_reg_loss
 
+        self.rs_norm_loss = rs_norm_loss
+
 
 class PredictedRewardNormalization(Enum):
     OFF = 0
     RUNNING_STATS = 1
     STATES = 2
     MANUAL = 3
+    NORM = 4
