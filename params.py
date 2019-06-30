@@ -63,7 +63,7 @@ def parse_args():
     parser.add_argument('--rollout_noise_sigma', type=float, default=0.05)
     # Default: new parameters = 0 * old parameters + 1 * loaded parameters
     parser.add_argument('--reward_predictor_load_polyak_coef', type=float, default=0.0)
-    parser.add_argument('--predicted_reward_normalization')
+    parser.add_argument('--predicted_reward_normalization', default='off')
     parser.add_argument('--log_reward_normalization_every_n_calls', type=int, default=1000)
     parser.add_argument('--predicted_rewards_normalize_mean_std')
     args = parser.parse_args()
