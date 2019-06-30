@@ -3,6 +3,7 @@ import glob
 import logging
 import os
 import os.path as osp
+from enum import Enum
 
 import easy_tf_log
 import joblib
@@ -40,7 +41,7 @@ class RewardPredictor:
         with graph.as_default():
             if seed is not None:
                 tf.set_random_seed(seed)
-            self.l2_reg_coef = MIN_L2_REG_COEF*1000
+            self.l2_reg_coef = MIN_L2_REG_COEF * 1000
             with device_context:
                 self.rps = [RewardPredictorNetwork(core_network=network,
                                                    network_args=network_args,
@@ -166,7 +167,7 @@ class RewardPredictor:
         return {variable: value
                 for variable, value in zip(variables, variable_values)}
 
-    def raw_rewards(self, obs):
+    def unnormalized_rewards(self, obs):
         """
         Return (unnormalized) reward for each frame of a single segment
         from each member of the ensemble.
@@ -187,115 +188,95 @@ class RewardPredictor:
         assert_equal(rs.shape, (n_preds, n_steps))
         return rs
 
-    def reward(self, obs, update_normalisation=True):
-        """
-        Return (normalized) reward for each frame of a single segment.
+    def running_stats_normalize(self, rewards, update_normalization):
+        rewards = np.copy(rewards)
+        if update_normalization:
+            for reward in rewards:
+                self.r_norm_limited.push(reward)
+                self.r_norm.push(reward)
 
-        (Normalization involves normalizing the rewards from each member of the
-        ensemble separately, then averaging the resulting rewards across all
-        ensemble members.)
-        """
-        assert_equal(obs.shape[1:], self.obs_shape)
-        n_steps = obs.shape[0]
+        if self.reward_call_n % global_variables.log_reward_normalisation_every_n_calls == 0:
+            self.logger.logkv('reward_predictor/r_norm_mean_recent', self.r_norm_limited.mean)
+            self.logger.logkv('reward_predictor/r_norm_std_recent', self.r_norm_limited.std)
+            self.logger.logkv('reward_predictor/r_norm_mean', self.r_norm.mean)
+            self.logger.logkv('reward_predictor/r_norm_std', self.r_norm.std)
 
-        # Get unnormalized rewards
+        rewards -= self.r_norm.mean
+        rewards /= (self.r_norm.std + 1e-12)
 
-        ensemble_rs = self.raw_rewards(obs)
-        logging.debug("Unnormalized rewards:\n%s", ensemble_rs)
+        return rewards
 
-        # Normalize rewards
-
-        # Note that we implement this here instead of in the network itself
-        # because:
-        # * It's simpler not to do it in TensorFlow
-        # * Preference prediction doesn't need normalized rewards. Only
-        #   rewards sent to the the RL algorithm need to be normalized.
-        #   So we can save on computation.
-
-        # Page 4:
-        # "We normalized the rewards produced by r^ to have zero mean and
-        #  constant standard deviation."
-        # Page 15: (Atari)
-        # "Since the reward predictor is ultimately used to compare two sums
-        #  over timesteps, its scale is arbitrary, and we normalize it to have
-        #  a standard deviation of 0.05"
-        # Page 5:
-        # "The estimate r^ is defined by independently normalizing each of
-        #  these predictors..."
-
-        # We want to keep track of running mean/stddev for each member of the
-        # ensemble separately, so we have to be a little careful here.
-        n_preds = 1
-        assert_equal(ensemble_rs.shape, (n_preds, n_steps))
-        ensemble_rs = ensemble_rs.transpose()
-        assert_equal(ensemble_rs.shape, (n_steps, n_preds))
-        if update_normalisation:
-            for ensemble_rs_step in ensemble_rs:
-                self.r_norm_limited.push(ensemble_rs_step[0])
-                self.r_norm.push(ensemble_rs_step[0])
-
-        assert ensemble_rs.shape[1] == 1
-        rs = ensemble_rs[:, 0]
+    def worst_and_best_state_normalize(self, obses, rewards, update_normalization):
+        rewards = np.copy(rewards)
+        if not update_normalization and self.max_reward_obs_so_far is None:
+            return rewards
 
         if self.max_reward_obs_so_far is not None:
-            max_reward, min_reward = self.raw_rewards(np.array([self.max_reward_obs_so_far,
-                                                                self.min_reward_obs_so_far]))[0]
+            max_reward, min_reward = self.unnormalized_rewards(np.array([self.max_reward_obs_so_far,
+                                                                         self.min_reward_obs_so_far]))[0]
         else:
             max_reward = float('-inf')
             min_reward = float('inf')
 
-        if np.max(rs) > max_reward:
-            self.max_reward_obs_so_far = obs[np.argmax(rs)]
-            max_reward = np.max(rs)
-        if np.min(rs) < min_reward:
-            self.min_reward_obs_so_far = obs[np.argmin(rs)]
-            min_reward = np.min(rs)
+        if np.max(rewards) > max_reward:
+            if update_normalization:
+                self.max_reward_obs_so_far = obses[np.argmax(rewards)]
+            max_reward = np.max(rewards)
+        if np.min(rewards) < min_reward:
+            if update_normalization:
+                self.min_reward_obs_so_far = obses[np.argmin(rewards)]
+            min_reward = np.min(rewards)
 
         scale = max_reward - min_reward
-        shift = - (min_reward + max_reward) / 2
+        shift = (min_reward + max_reward) / 2
 
-        self.logger.logkv('reward_predictor/min_reward_cur_batch', np.min(rs))
-        self.logger.logkv('reward_predictor/max_reward_cur_batch', np.max(rs))
-        if len(rs) > 100:
-            self.logger.logkv('reward_predictor/min_reward_reference', np.min(rs))
-            self.logger.logkv('reward_predictor/max_reward_reference', np.max(rs))
-        self.logger.logkv('reward_predictor/max_reward', max_reward)
-        self.logger.logkv('reward_predictor/min_reward', min_reward)
-        self.logger.logkv('reward_predictor/scale', scale)
-        self.logger.logkv('reward_predictor/shift', shift)
+        if self.reward_call_n % global_variables.log_reward_normalisation_every_n_calls == 0:
+            self.logger.logkv('reward_predictor/reward_cur_batch_min', np.min(rewards))
+            self.logger.logkv('reward_predictor/reward_cur_batch_max', np.max(rewards))
+            self.logger.logkv('reward_predictor/reward_max', max_reward)
+            self.logger.logkv('reward_predictor/reward_min', min_reward)
+            self.logger.logkv('reward_predictor/scale', scale)
+            self.logger.logkv('reward_predictor/shift', shift)
 
-        rs /= scale
-        rs += shift
+        rewards /= scale
+        rewards -= shift
 
-        return rs
+    @staticmethod
+    def manual_normalize(rewards):
+        rewards = np.copy(rewards)
+        assert global_variables.predicted_rewards_normalize_mean_std is not None, \
+            "--predicted_rewards_normalize_params not specified"
+        scale, shift = map(float, global_variables.predicted_rewards_normalize_mean_std.split(','))
+        rewards *= scale
+        rewards += shift
+        return rewards
 
-        # if global_variables.predicted_rewards_normalize_params is not None:
-        #     scale, shift = map(float, global_variables.predicted_rewards_normalize_params.split(','))
-        #     ensemble_rs *= scale
-        #     ensemble_rs += shift
-        # else:
-        #     ensemble_rs -= self.r_norm.mean
-        #     ensemble_rs /= (self.r_norm.std + 1e-12)
-        #
-        #
-        #
-        # ensemble_rs *= self.r_std
-        # ensemble_rs = ensemble_rs.transpose()
-        # assert_equal(ensemble_rs.shape, (n_preds, n_steps))
-        #
-        # self.reward_call_n += 1
-        # if self.reward_call_n % global_variables.log_reward_normalisation_every_n_calls == 0:
-        #     self.logger.logkv('reward_predictor/r_norm_mean_recent', self.r_norm_limited.mean)
-        #     self.logger.logkv('reward_predictor/r_norm_std_recent', self.r_norm_limited.std)
-        #     self.logger.logkv('reward_predictor/r_norm_mean', self.r_norm.mean)
-        #     self.logger.logkv('reward_predictor/r_norm_std', self.r_norm.std)
-        #
-        # # "...and then averaging the results."
-        # rs = np.mean(ensemble_rs, axis=0)
-        # assert_equal(rs.shape, (n_steps,))
-        # logging.debug("After ensemble averaging:\n%s", rs)
+    def normalized_rewards(self, obses, update_normalization=True):
+        assert_equal(obses.shape[1:], self.obs_shape)
+        n_steps = obses.shape[0]
 
-        return rs
+        ensemble_rs = self.unnormalized_rewards(obses)
+        logging.debug("Unnormalized rewards:\n%s", ensemble_rs)
+
+        # Normalize rewards
+
+        n_preds = 1
+        assert_equal(ensemble_rs.shape, (n_preds, n_steps))
+        rewards = ensemble_rs[0, :]
+
+        if global_variables.predicted_reward_normalization == PredictedRewardNormalization.OFF:
+            pass
+        elif global_variables.predicted_reward_normalization == PredictedRewardNormalization.RUNNING_STATS:
+            rewards = self.running_stats_normalize(rewards, update_normalization)
+        elif global_variables.predicted_reward_normalization == PredictedRewardNormalization.STATES:
+            rewards = self.worst_and_best_state_normalize(rewards, obses, update_normalization)
+        elif global_variables.predicted_reward_normalization == PredictedRewardNormalization.MANUAL:
+            rewards = self.manual_normalize(rewards)
+
+        self.reward_call_n += 1
+
+        assert_equal(rewards.shape, (n_steps,))
+        return rewards
 
     def train(self, prefs_train: PrefDB, prefs_val: PrefDB, val_interval, verbose=True):
         """
@@ -476,6 +457,8 @@ class RewardPredictorNetwork:
         with tf.control_dependencies([c1]):
             loss = tf.reduce_sum(_loss)
 
+        self.prediction_loss = loss
+
         l2_reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
         # l2_reg_losses is a list of L2 norms - one for each weight layer
         # (where each L2 norm is just a scalar - so this is a list of scalars)
@@ -483,7 +466,6 @@ class RewardPredictorNetwork:
         # reduce_sum is for when you have e.g. a matrix and you want to sum over one row.
         # If you want to sum over elements of a list, you use add_n.
         l2_reg_loss = tf.add_n(l2_reg_losses)
-        self.prediction_loss = loss
         loss += l2_reg_loss
 
         if core_network == net_cnn:
@@ -513,3 +495,10 @@ class RewardPredictorNetwork:
         self.loss = loss
         self.train = train
         self.l2_reg_loss = l2_reg_loss
+
+
+class PredictedRewardNormalization(Enum):
+    OFF = 0
+    RUNNING_STATS = 1
+    STATES = 2
+    MANUAL = 3

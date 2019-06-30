@@ -40,7 +40,7 @@ class DrawRewards(Wrapper):
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
         self.grapher_true_reward.values.append(reward)
-        predicted_reward = self.reward_predictor.reward(obs, action)
+        predicted_reward = self.reward_predictor.normalized_rewards(obs, action)
         self.grapher_predicted_reward.values.append(predicted_reward)
         return obs, reward, done, info
 

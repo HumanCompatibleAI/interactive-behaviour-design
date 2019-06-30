@@ -171,7 +171,7 @@ class TestRewardPredictor(unittest.TestCase):
         self.assertEqual(r1, r2)
 
     def predict_reward(self, reward_predictor, obs):
-        return reward_predictor.raw_rewards(np.array([obs]))[0][0]
+        return reward_predictor.unnormalized_rewards(np.array([obs]))[0][0]
 
     def save_load_reward_predictor(self, rp1, rp2, ckpt_path):
         rp1.save(ckpt_path)

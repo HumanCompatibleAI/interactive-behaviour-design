@@ -228,7 +228,7 @@ class VecRecordVideosWithPredictedRewardGraphs(VecEnvWrapper):
     def step_wait(self):
         obses, rewards, dones, infos = self.venv.step_wait()
         frames = self.venv.get_images()
-        predicted_rewards = self.reward_predictor.raw_rewards(obses)[0]
+        predicted_rewards = self.reward_predictor.unnormalized_rewards(obses)[0]
         self.reward_grapher.values.append(predicted_rewards[0])
         frame = self.reward_grapher.draw(frames[0])
 

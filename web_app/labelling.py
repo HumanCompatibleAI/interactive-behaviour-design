@@ -290,7 +290,7 @@ def render_probs(obses, images):
 
 
 def render_drlhp_reward(obses, images):
-    rews = _reward_selector.reward_predictor.reward(np.array(obses))
+    rews = _reward_selector.reward_predictor.normalized_rewards(np.array(obses))
     im_width = images[0].shape[1]
     graph = deque(maxlen=(im_width - 10))
     for image_n, image in enumerate(images):
