@@ -41,7 +41,7 @@ def start_app(base_url, env, port, seed, run_name, log_dir, extra_args, gpus):
 
 
 args = get_args()
-auto_train_prefs.args = args
+auto_train_prefs.global_args = args
 git_rev = get_git_rev()
 log_dir = os.path.abspath(os.path.join(args.log_dir, f'{args.run_name}_{int(time.time())}_{git_rev}'))
 os.makedirs(log_dir)
