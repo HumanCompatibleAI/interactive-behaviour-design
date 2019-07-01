@@ -114,6 +114,10 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
     imgs_dir = os.path.join(log_dir, 'reference_trajectory_reward_images')
     os.makedirs(imgs_dir)
 
+    if np.array(obses).shape[1] == 9:
+        # Recorded using old env
+        obses = np.array(obses)[:, :6]
+
     test_n = 0
 
     figure()
