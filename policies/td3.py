@@ -16,7 +16,7 @@ import global_variables
 from baselines.common.running_stat import RunningStat
 from baselines.common.vec_env import VecEnv
 from baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise
-from utils import TimerContext, LimitedRunningStat
+from utils import TimerContext, LimitedRunningStat, LogMilliseconds
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from policies.base_policy import Policy, PolicyTrainMode, EpisodeRewardLogger
@@ -323,23 +323,20 @@ class TD3Policy(Policy):
         self.ou_noise.x_prev[n, :] = np.zeros([self.act_dim])
 
     def test_agent(self):
-        timer = TimerContext(name=None, stdout=False)
         print("Running test episodes...")
         # Logging will be taken care of by the environment itself (see env.py)
         # Why do the env reset in this funny way? Because we need to end with a reset to trigger
         # SaveEpisodeStats to save the stats from the final episode.
         # (FYI: test_env is a SubprocVecEnv - see env.py for the reason)
         rewards = []
-        with timer:
-            for _ in range(self.test_rollouts_per_epoch):
-                obs, done = self.last_test_obs, False
-                episode_reward = 0
-                while not done:
-                    [obs], [reward], [done], _ = self.test_env.step([self.step(obs, deterministic=True)])
-                    episode_reward += reward
-                rewards.append(episode_reward)
-                self.last_test_obs = self.test_env.reset()[0]
-        self.logger.logkv(f'policy_{self.name}/test_env_time_ms', timer.duration_s * 1000)
+        for _ in range(self.test_rollouts_per_epoch):
+            obs, done = self.last_test_obs, False
+            episode_reward = 0
+            while not done:
+                [obs], [reward], [done], _ = self.test_env.step([self.step(obs, deterministic=True)])
+                episode_reward += reward
+            rewards.append(episode_reward)
+            self.last_test_obs = self.test_env.reset()[0]
         return rewards
 
     def run_train_env_episode(self):
@@ -440,13 +437,16 @@ class TD3Policy(Policy):
             action = self.train_step(self.obs1)
 
         # Step the env
-        obs2, reward, done, _ = self.train_env.step(action)
+        with LogMilliseconds('instrumentation/env_step_ms', self.logger, log_every=1000):
+            obs2, reward, done, _ = self.train_env.step(action)
         self.n_serial_steps += 1
 
         # Maybe replace rewards with e.g. predicted rewards
         orig_reward = np.copy(reward)
-        reward = self.process_rewards(obs2, reward)
-        self.reward_logger.log([orig_reward], [reward], [done])
+        with LogMilliseconds('instrumentation/process_rewards_ms', self.logger, log_every=1000):
+            reward = self.process_rewards(obs2, reward)
+        with LogMilliseconds('instrumentation/log_rewards_ms', self.logger, log_every=1000):
+            self.reward_logger.log([orig_reward], [reward], [done])
 
         if not self.reward_predictor_warmup_phase:
             # Store experience to replay buffer
@@ -493,7 +493,8 @@ class TD3Policy(Policy):
         if cycle_done:
             print(f"Cycle {self.cycle_n} done")
 
-            self._train_rl()
+            with LogMilliseconds('instrumentation/train_rl_ms', self.logger, log_every=10):
+                self._train_rl()
 
             for n in range(self.act_dim):
                 if self.action_stats.n > 0:
@@ -512,7 +513,8 @@ class TD3Policy(Policy):
             if self.cycle_n and self.cycle_n % self.cycles_per_epoch == 0:
                 self.epoch_n += 1
                 self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
-                self.test_agent()
+                with LogMilliseconds('instrumentation/test_episodes_ms', self.logger, log_every=1):
+                    self.test_agent()
 
             self.cycle_n += 1
 

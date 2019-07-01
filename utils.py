@@ -15,13 +15,14 @@ import subprocess
 import sys
 import tempfile
 import time
-from collections import deque, namedtuple
+from collections import deque, namedtuple, defaultdict
 from functools import partial
 from multiprocessing import Queue
 from os import path as osp
 from threading import Thread
 
 import cv2
+import easy_tf_log
 import numpy as np
 import psutil
 import tensorflow as tf
@@ -75,9 +76,12 @@ class TimerContext(object):
 
 
 class LogMilliseconds:
-    def __init__(self, name, easy_tf_log_logger):
+    _values = defaultdict(list)
+
+    def __init__(self, name, logger: easy_tf_log.Logger, log_every=1):
         self.name = name
-        self.logger = easy_tf_log_logger
+        self.logger = logger
+        self.log_every = log_every
 
     def __enter__(self):
         self.t_start = time.time()
@@ -85,7 +89,13 @@ class LogMilliseconds:
     def __exit__(self, type, value, traceback):
         t_end = time.time()
         duration_seconds = t_end - self.t_start
-        self.logger.logkv(self.name, duration_seconds * 1000)
+        duration_ms = duration_seconds * 1000
+        if self.log_every == 1:
+            self.logger.logkv(self.name, duration_ms)
+        else:
+            LogMilliseconds._values[self.name].append(duration_ms)
+            if len(LogMilliseconds._values) == self.log_every:
+                self.logger.log_list_stats(self.name, self._values[self.name])
 
 
 class RateMeasure:
