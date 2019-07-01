@@ -3,7 +3,7 @@ from functools import partial
 
 import gym
 import numpy as np
-from gym.core import ObservationWrapper
+from gym.core import ObservationWrapper, Wrapper
 from gym.envs import register as gym_register
 from gym.envs.robotics import FetchReachEnv
 from gym.spaces import Discrete
@@ -115,6 +115,20 @@ class FetchReachStatsWrapper(CollectEpisodeStats):
         return obs, reward, done, info
 
 
+class FetchReachObsSpaceWrapper(Wrapper):
+    def __init__(self, env):
+        super().__init__(env)
+        low = np.ones_like(self.observation_space.low) * 0
+        high = np.ones_like(self.observation_space.high) * 1.5
+        self.observation_space(low=low, high=high)
+
+    def step(self, action):
+        return self.env.step(action)
+
+    def reset(self):
+        return self.env.reset()
+
+
 def make_env(action_repeat, action_limit):
     env = FetchReachEnv(reward_type='dense')
     env = FlattenDictWrapper(env, ['observation', 'desired_goal'])
@@ -123,6 +137,7 @@ def make_env(action_repeat, action_limit):
     env = RepeatActions(env, action_repeat)
     env = CheckActionLimit(env, action_limit)
     env = LimitActions(env, action_limit)
+    env = FetchReachObsSpaceWrapper(env)
     return env
 
 
