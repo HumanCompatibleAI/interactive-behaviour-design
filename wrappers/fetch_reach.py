@@ -6,7 +6,7 @@ import numpy as np
 from gym.core import ObservationWrapper, Wrapper
 from gym.envs import register as gym_register
 from gym.envs.robotics import FetchReachEnv
-from gym.spaces import Discrete
+from gym.spaces import Discrete, Box
 from gym.wrappers import FlattenDictWrapper
 
 from wrappers.util_wrappers import CollectEpisodeStats, RepeatActions, LimitActions, CheckActionLimit
@@ -120,7 +120,7 @@ class FetchReachObsSpaceWrapper(Wrapper):
         super().__init__(env)
         low = np.ones_like(self.observation_space.low) * 0
         high = np.ones_like(self.observation_space.high) * 1.5
-        self.observation_space(low=low, high=high)
+        self.observation_space = Box(low=low, high=high)
 
     def step(self, action):
         return self.env.step(action)
