@@ -441,18 +441,18 @@ class RewardPredictorNetwork:
         # where 'unrolled batch size' is 'batch size' x 'n frames per segment'
         c1 = tf.assert_rank(_r1, 1)
         c2 = tf.assert_rank(_r2, 1)
-        with tf.control_dependencies([c1, c2]):
+        c3 = tf.assert_rank(_r_random_states, 1)
+        with tf.control_dependencies([c1, c2, c3]):
             # Re-roll to 'batch size' x 'n frames per segment'
             __r1 = tf.reshape(_r1, tf.shape(s1)[0:2])
             __r2 = tf.reshape(_r2, tf.shape(s2)[0:2])
+            r_random_states = _r_random_states
         # Shape should be 'batch size' x 'n frames per segment'
         c1 = tf.assert_rank(__r1, 2)
         c2 = tf.assert_rank(__r2, 2)
-        c3 = tf.assert_rank(_r_random_states, 2)
         with tf.control_dependencies([c1, c2, c3]):
             r1 = __r1
             r2 = __r2
-            r_random_states = _r_random_states
 
         # Sum rewards over all frames in each segment
         _rs1 = tf.reduce_sum(r1, axis=1)
@@ -504,7 +504,7 @@ class RewardPredictorNetwork:
             reward_norm_loss = tf.norm(r_random_states, ord=1)
         else:
             reward_norm_loss = tf.constant(0)
-        loss += reward_norm_loss
+        loss += 0.1 * reward_norm_loss
 
         if core_network == net_cnn:
             batchnorm_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
