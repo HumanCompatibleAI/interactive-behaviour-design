@@ -437,15 +437,15 @@ class TD3Policy(Policy):
             action = self.train_step(self.obs1)
 
         # Step the env
-        with LogMilliseconds('instrumentation/env_step_ms', self.logger, log_every=1000):
+        with LogMilliseconds('instrumentation/env_step_ms', self.logger, log_every=100):
             obs2, reward, done, _ = self.train_env.step(action)
         self.n_serial_steps += 1
 
         # Maybe replace rewards with e.g. predicted rewards
         orig_reward = np.copy(reward)
-        with LogMilliseconds('instrumentation/process_rewards_ms', self.logger, log_every=1000):
+        with LogMilliseconds('instrumentation/process_rewards_ms', self.logger, log_every=100):
             reward = self.process_rewards(obs2, reward)
-        with LogMilliseconds('instrumentation/log_rewards_ms', self.logger, log_every=1000):
+        with LogMilliseconds('instrumentation/log_rewards_ms', self.logger, log_every=100):
             self.reward_logger.log([orig_reward], [reward], [done])
 
         if not self.reward_predictor_warmup_phase:
@@ -493,7 +493,7 @@ class TD3Policy(Policy):
         if cycle_done:
             print(f"Cycle {self.cycle_n} done")
 
-            with LogMilliseconds('instrumentation/train_rl_ms', self.logger, log_every=10):
+            with LogMilliseconds('instrumentation/train_rl_ms', self.logger, log_every=1):
                 self._train_rl()
 
             for n in range(self.act_dim):

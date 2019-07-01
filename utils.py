@@ -94,7 +94,7 @@ class LogMilliseconds:
             self.logger.logkv(self.name, duration_ms)
         else:
             LogMilliseconds._values[self.name].append(duration_ms)
-            if len(LogMilliseconds._values) == self.log_every:
+            if len(LogMilliseconds._values[self.name]) == self.log_every:
                 self.logger.log_list_stats(self.name, self._values[self.name])
 
 
