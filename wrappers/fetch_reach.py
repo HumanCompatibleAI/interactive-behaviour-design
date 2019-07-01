@@ -33,8 +33,7 @@ class FetchReachObsWrapper(ObservationWrapper):
     def observation(self, orig_obs):
         obs_dict = decode_fetch_reach_obs(orig_obs)
         obs = np.concatenate([obs_dict['grip_pos'],
-                              obs_dict['goal_pos'],
-                              obs_dict['goal_rel_grip']])
+                              obs_dict['goal_pos']])
         return obs
 
     @staticmethod
@@ -42,7 +41,7 @@ class FetchReachObsWrapper(ObservationWrapper):
         obs_by_name = {
             'grip_pos': obs[:3],
             'goal_pos': obs[3:6],
-            'goal_rel_grip': obs[6:9]
+            'goal_rel_grip': obs[:3] - obs[3:6]
         }
         return obs_by_name
 
