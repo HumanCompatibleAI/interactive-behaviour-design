@@ -373,12 +373,14 @@ def main():
     checkpointer.checkpoint()
 
     reward_normalization = global_variables.predicted_reward_normalization
+    normalization_loss_coef = global_variables.predicted_reward_normalization_norm_loss_coef
     def make_reward_predictor_fn(name, gpu_n):
         return RewardPredictor(network=reward_predictor_network, network_args=reward_predictor_network_args,
                                log_dir=log_dir, obs_space=obs_space,
                                r_std=reward_predictor_std,
                                name=name, gpu_n=gpu_n,
-                               reward_normalization=reward_normalization)
+                               reward_normalization=reward_normalization,
+                               normalization_loss_coef=normalization_loss_coef)
 
     if gpu_ns:
         reward_predictor_inference_gpu_n = gpu_ns[0]

@@ -33,7 +33,7 @@ class PredictedRewardNormalization(Enum):
 class RewardPredictor:
 
     def __init__(self, obs_space, network, network_args, r_std, name, reward_normalization,
-                 lr=1e-4, log_dir=None, seed=None, gpu_n=None):
+                 normalization_loss_coef, lr=1e-4, log_dir=None, seed=None, gpu_n=None):
         self.min_reward_obs_so_far = None
         self.max_reward_obs_so_far = None
         self.obs_space = obs_space
@@ -59,7 +59,8 @@ class RewardPredictor:
                                                    network_args=network_args,
                                                    obs_shape=obs_space.shape,
                                                    lr=lr,
-                                                   reward_normalization=reward_normalization)]
+                                                   reward_normalization=reward_normalization,
+                                                   normalization_loss_coef=normalization_loss_coef)]
                 self.init_op = tf.global_variables_initializer()
             self.summaries = self.add_summary_ops()
 
@@ -411,7 +412,8 @@ class RewardPredictorNetwork:
     - pred      Predicted preference
     """
 
-    def __init__(self, core_network, network_args, obs_shape, lr, reward_normalization: PredictedRewardNormalization):
+    def __init__(self, core_network, network_args, obs_shape, lr, reward_normalization: PredictedRewardNormalization,
+                 normalization_loss_coef):
         training = tf.placeholder(tf.bool)
         # Each element of the batch is one trajectory segment.
         # (Dimensions are n segments x n frames per segment x ...)
@@ -504,7 +506,7 @@ class RewardPredictorNetwork:
             reward_norm_loss = tf.norm(r_random_states, ord=1)
         else:
             reward_norm_loss = tf.constant(0)
-        loss += 0.01 * reward_norm_loss
+        loss += normalization_loss_coef * reward_norm_loss
 
         if core_network == net_cnn:
             batchnorm_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
