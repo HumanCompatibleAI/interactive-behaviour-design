@@ -349,12 +349,7 @@ class RewardPredictor:
             feed_dict[rp.training] = True
 
         if self.reward_normalization == PredictedRewardNormalization.NORM_RANDOM_STATES:
-            n_random_states = 16
-            assert len(self.obs_space.shape) == 1
-            random_states = np.random.uniform(self.obs_space.low, self.obs_space.high,
-                                              size=[n_random_states, self.obs_space.shape[0]])
-            for rp in self.rps:
-                feed_dict[rp.random_states] = random_states
+            self.add_random_states_to_feed_dict(feed_dict)
 
         # Why do we only check the loss from the first reward predictor?
         # As a quick hack to get adaptive L2 regularization working quickly,
@@ -383,10 +378,22 @@ class RewardPredictor:
             feed_dict[rp.s2] = s2s
             feed_dict[rp.pref] = prefs
             feed_dict[rp.training] = False
+
+        if self.reward_normalization == PredictedRewardNormalization.NORM_RANDOM_STATES:
+            self.add_random_states_to_feed_dict(feed_dict)
+
         loss, summaries = self.sess.run([self.rps[0].prediction_loss, self.summaries], feed_dict)
         if self.n_steps % self.log_interval == 0:
             self.test_writer.add_summary(summaries, self.n_steps)
         return loss
+
+    def add_random_states_to_feed_dict(self, feed_dict):
+        n_random_states = 16
+        assert len(self.obs_space.shape) == 1
+        random_states = np.random.uniform(self.obs_space.low, self.obs_space.high,
+                                          size=[n_random_states, self.obs_space.shape[0]])
+        for rp in self.rps:
+            feed_dict[rp.random_states] = random_states
 
     def reset_normalisation(self):
         self.r_norm_limited = LimitedRunningStat()
@@ -419,11 +426,11 @@ class RewardPredictorNetwork:
         training = tf.placeholder(tf.bool)
         # Each element of the batch is one trajectory segment.
         # (Dimensions are n segments x n frames per segment x ...)
-        s1 = tf.placeholder(tf.float32, shape=(None, None) + obs_shape)
-        s2 = tf.placeholder(tf.float32, shape=(None, None) + obs_shape)
-        random_states = tf.placeholder(tf.float32, shape=(None,) + obs_shape)
+        s1 = tf.placeholder(tf.float32, shape=(None, None) + obs_shape, name='s1')
+        s2 = tf.placeholder(tf.float32, shape=(None, None) + obs_shape, name='s2')
+        random_states = tf.placeholder(tf.float32, shape=(None,) + obs_shape, name='random_states')
         # For each trajectory segment, there is one human judgement.
-        pref = tf.placeholder(tf.float32, shape=(None, 2))
+        pref = tf.placeholder(tf.float32, shape=(None, 2), name='pref')
 
         # Concatenate trajectory segments so that the first dimension is just
         # frames
@@ -438,7 +445,7 @@ class RewardPredictorNetwork:
                            **network_args)
         _r2 = core_network(s=s2_unrolled, reuse=True, training=training, regularizer=l2_reg,
                            **network_args)
-        r_random_states = core_network(s=random_states, reuse=True, training=training, regularizer=l2_reg,
+        r_random_states = core_network(s=random_states, reuse=True, training=False, regularizer=l2_reg,
                                        **network_args)
 
         # Shape should be 'unrolled batch size'
