@@ -153,7 +153,7 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
         savefig(os.path.join(imgs_dir, '{}.png'.format(test_n)))
 
         test_n += 1
-        time.sleep(10)
+        time.sleep(30)
 
 
 def main():
