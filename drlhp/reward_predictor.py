@@ -21,13 +21,24 @@ from utils import batch_iter, RateMeasure
 MIN_L2_REG_COEF = 0.001
 
 
+class PredictedRewardNormalization(Enum):
+    OFF = 0
+    RUNNING_STATS = 1
+    EXTREME_TRAINING_STATES = 2
+    NORM_RANDOM_STATES = 3
+    NORM_TRAINING_STATES = 5
+    MANUAL = 4
+
+
 class RewardPredictor:
 
-    def __init__(self, obs_shape, network, network_args, r_std, name, lr=1e-4, log_dir=None, seed=None, gpu_n=None,
-                 rs_norm_regularization=False):
+    def __init__(self, obs_space, network, network_args, r_std, name, reward_normalization,
+                 lr=1e-4, log_dir=None, seed=None, gpu_n=None):
         self.min_reward_obs_so_far = None
         self.max_reward_obs_so_far = None
-        self.obs_shape = obs_shape
+        self.obs_space = obs_space
+        self.obs_shape = obs_space.shape
+        self.reward_normalization = reward_normalization
         graph = tf.Graph()
         self.graph = graph
         config = tf.ConfigProto()
@@ -46,9 +57,9 @@ class RewardPredictor:
             with device_context:
                 self.rps = [RewardPredictorNetwork(core_network=network,
                                                    network_args=network_args,
-                                                   obs_shape=obs_shape,
+                                                   obs_shape=obs_space.shape,
                                                    lr=lr,
-                                                   rs_norm_regularization=rs_norm_regularization)]
+                                                   reward_normalization=reward_normalization)]
                 self.init_op = tf.global_variables_initializer()
             self.summaries = self.add_summary_ops()
 
@@ -208,7 +219,7 @@ class RewardPredictor:
 
         return rewards
 
-    def worst_and_best_state_normalize(self, obses, rewards, update_normalization):
+    def extreme_state_normalize(self, obses, rewards, update_normalization):
         rewards = np.copy(rewards)
         if not update_normalization and self.max_reward_obs_so_far is None:
             return rewards
@@ -266,15 +277,15 @@ class RewardPredictor:
         assert_equal(ensemble_rs.shape, (n_preds, n_steps))
         rewards = ensemble_rs[0, :]
 
-        if global_variables.predicted_reward_normalization == PredictedRewardNormalization.OFF:
+        if self.reward_normalization == PredictedRewardNormalization.OFF:
             pass
-        elif global_variables.predicted_reward_normalization == PredictedRewardNormalization.RUNNING_STATS:
+        elif self.reward_normalization == PredictedRewardNormalization.RUNNING_STATS:
             rewards = self.running_stats_normalize(rewards, update_normalization)
-        elif global_variables.predicted_reward_normalization == PredictedRewardNormalization.STATES:
-            rewards = self.worst_and_best_state_normalize(rewards, obses, update_normalization)
-        elif global_variables.predicted_reward_normalization == PredictedRewardNormalization.MANUAL:
+        elif self.reward_normalization == PredictedRewardNormalization.EXTREME_TRAINING_STATES:
+            rewards = self.extreme_state_normalize(rewards, obses, update_normalization)
+        elif self.reward_normalization == PredictedRewardNormalization.MANUAL:
             rewards = self.manual_normalize(rewards)
-        elif global_variables.predicted_reward_normalization == PredictedRewardNormalization.NORM:
+        elif self.reward_normalization == PredictedRewardNormalization.NORM_TRAINING_STATES:
             pass
 
         self.reward_call_n += 1
@@ -328,12 +339,20 @@ class RewardPredictor:
         s1s = [prefs_train.segments[k1] for k1, k2, pref, in batch]
         s2s = [prefs_train.segments[k2] for k1, k2, pref, in batch]
         prefs = [pref for k1, k2, pref, in batch]
+
         feed_dict = self.get_feed_dict()
         for rp in self.rps:
             feed_dict[rp.s1] = s1s
             feed_dict[rp.s2] = s2s
             feed_dict[rp.pref] = prefs
             feed_dict[rp.training] = True
+
+        if self.reward_normalization == PredictedRewardNormalization.NORM_RANDOM_STATES:
+            n_random_states = 16
+            random_states = np.random.uniform(self.obs_space.low, self.obs_space.high, size=n_random_states)
+            for rp in self.rps:
+                feed_dict[rp.random_states] = random_states
+
         # Why do we only check the loss from the first reward predictor?
         # As a quick hack to get adaptive L2 regularization working quickly,
         # assuming we're only using one reward predictor.
@@ -392,13 +411,13 @@ class RewardPredictorNetwork:
     - pred      Predicted preference
     """
 
-    def __init__(self, core_network, network_args, obs_shape, lr, rs_norm_regularization):
+    def __init__(self, core_network, network_args, obs_shape, lr, reward_normalization: PredictedRewardNormalization):
         training = tf.placeholder(tf.bool)
-        obs_shape = tuple(obs_shape)
         # Each element of the batch is one trajectory segment.
         # (Dimensions are n segments x n frames per segment x ...)
         s1 = tf.placeholder(tf.float32, shape=(None, None) + obs_shape)
         s2 = tf.placeholder(tf.float32, shape=(None, None) + obs_shape)
+        random_states = tf.placeholder(tf.float32, shape=(None,) + obs_shape)
         # For each trajectory segment, there is one human judgement.
         pref = tf.placeholder(tf.float32, shape=(None, 2))
 
@@ -415,6 +434,8 @@ class RewardPredictorNetwork:
                            **network_args)
         _r2 = core_network(s=s2_unrolled, reuse=True, training=training, regularizer=l2_reg,
                            **network_args)
+        _r_random_states = core_network(s=random_states, reuse=True, training=training, regularizer=l2_reg,
+                                        **network_args)
 
         # Shape should be 'unrolled batch size'
         # where 'unrolled batch size' is 'batch size' x 'n frames per segment'
@@ -427,9 +448,11 @@ class RewardPredictorNetwork:
         # Shape should be 'batch size' x 'n frames per segment'
         c1 = tf.assert_rank(__r1, 2)
         c2 = tf.assert_rank(__r2, 2)
-        with tf.control_dependencies([c1, c2]):
+        c3 = tf.assert_rank(_r_random_states, 2)
+        with tf.control_dependencies([c1, c2, c3]):
             r1 = __r1
             r2 = __r2
+            r_random_states = _r_random_states
 
         # Sum rewards over all frames in each segment
         _rs1 = tf.reduce_sum(r1, axis=1)
@@ -475,11 +498,13 @@ class RewardPredictorNetwork:
         l2_reg_loss = tf.add_n(l2_reg_losses)
         loss += l2_reg_loss
 
-        if rs_norm_regularization:
-            rs_norm_loss = tf.norm(r1, ord=1) + tf.norm(r2, ord=1)
+        if reward_normalization == PredictedRewardNormalization.NORM_TRAINING_STATES:
+            reward_norm_loss = tf.norm(r1, ord=1) + tf.norm(r2, ord=1)
+        elif reward_normalization == PredictedRewardNormalization.NORM_RANDOM_STATES:
+            reward_norm_loss = tf.norm(r_random_states, ord=1)
         else:
-            rs_norm_loss = tf.constant(0)
-        loss += rs_norm_loss
+            reward_norm_loss = tf.constant(0)
+        loss += reward_norm_loss
 
         if core_network == net_cnn:
             batchnorm_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
@@ -494,6 +519,7 @@ class RewardPredictorNetwork:
         self.training = training
         self.s1 = s1
         self.s2 = s2
+        self.random_states = random_states
         self.pref = pref
         self.l2_reg_coef = l2_reg_coef
 
@@ -509,12 +535,4 @@ class RewardPredictorNetwork:
         self.train = train
         self.l2_reg_loss = l2_reg_loss
 
-        self.rs_norm_loss = rs_norm_loss
-
-
-class PredictedRewardNormalization(Enum):
-    OFF = 0
-    RUNNING_STATS = 1
-    STATES = 2
-    MANUAL = 3
-    NORM = 4
+        self.rs_norm_loss = reward_norm_loss

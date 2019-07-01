@@ -372,15 +372,13 @@ def main():
     checkpointer = Checkpointer(ckpt_dir, policies, classifier, pref_db, pref_db_ckpt_name)
     checkpointer.checkpoint()
 
-    obs_shape = train_env.observation_space.shape
-
-    rs_norm_regularization = global_variables.predicted_reward_normalization == PredictedRewardNormalization.NORM
+    reward_normalization = global_variables.predicted_reward_normalization
     def make_reward_predictor_fn(name, gpu_n):
         return RewardPredictor(network=reward_predictor_network, network_args=reward_predictor_network_args,
-                               log_dir=log_dir, obs_shape=obs_shape,
+                               log_dir=log_dir, obs_space=obs_space,
                                r_std=reward_predictor_std,
                                name=name, gpu_n=gpu_n,
-                               rs_norm_regularization=rs_norm_regularization)
+                               reward_normalization=reward_normalization)
 
     if gpu_ns:
         reward_predictor_inference_gpu_n = gpu_ns[0]
