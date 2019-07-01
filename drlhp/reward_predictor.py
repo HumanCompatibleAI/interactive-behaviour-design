@@ -476,10 +476,10 @@ class RewardPredictorNetwork:
         loss += l2_reg_loss
 
         if rs_norm_regularization:
-            rs_norm_loss = tf.norm(rs, ord=1)
+            rs_norm_loss = tf.norm(r1, ord=1) + tf.norm(r2, ord=1)
         else:
             rs_norm_loss = tf.constant(0)
-        loss += 0.01 * rs_norm_loss
+        loss += rs_norm_loss
 
         if core_network == net_cnn:
             batchnorm_update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
