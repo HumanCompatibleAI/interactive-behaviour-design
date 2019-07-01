@@ -16,7 +16,7 @@ import throttler
 from drlhp.drlhp_utils import LimitedRunningStat, RunningStat
 from drlhp.pref_db import PrefDB
 from drlhp.reward_predictor_core_network import net_cnn
-from utils import batch_iter, RateMeasure
+from utils import batch_iter, RateMeasure, LogMilliseconds
 
 MIN_L2_REG_COEF = 0.001
 
@@ -194,7 +194,8 @@ class RewardPredictor:
             feed_dict[rp.s1] = [obs]
         # This will return nested lists of sizes n_preds x 1 x nsteps
         # (x 1 because of the batch size of 1)
-        rs = self.sess.run([rp.r1 for rp in self.rps], feed_dict)
+        with LogMilliseconds('instrumentation/reward_prediction', self.logger, log_every=1000):
+            rs = self.sess.run([rp.r1 for rp in self.rps], feed_dict)
         rs = np.array(rs)
         # Get rid of the extra x 1 dimension
         rs = rs[:, 0, :]
@@ -278,16 +279,17 @@ class RewardPredictor:
         assert_equal(ensemble_rs.shape, (n_preds, n_steps))
         rewards = ensemble_rs[0, :]
 
-        if self.reward_normalization == PredictedRewardNormalization.OFF:
-            pass
-        elif self.reward_normalization == PredictedRewardNormalization.RUNNING_STATS:
-            rewards = self.running_stats_normalize(rewards, update_normalization)
-        elif self.reward_normalization == PredictedRewardNormalization.EXTREME_TRAINING_STATES:
-            rewards = self.extreme_state_normalize(rewards, obses, update_normalization)
-        elif self.reward_normalization == PredictedRewardNormalization.MANUAL:
-            rewards = self.manual_normalize(rewards)
-        elif self.reward_normalization == PredictedRewardNormalization.NORM_TRAINING_STATES:
-            pass
+        with LogMilliseconds('reward_normalization', self.logger, log_every=1000):
+            if self.reward_normalization == PredictedRewardNormalization.OFF:
+                pass
+            elif self.reward_normalization == PredictedRewardNormalization.RUNNING_STATS:
+                rewards = self.running_stats_normalize(rewards, update_normalization)
+            elif self.reward_normalization == PredictedRewardNormalization.EXTREME_TRAINING_STATES:
+                rewards = self.extreme_state_normalize(rewards, obses, update_normalization)
+            elif self.reward_normalization == PredictedRewardNormalization.MANUAL:
+                rewards = self.manual_normalize(rewards)
+            elif self.reward_normalization == PredictedRewardNormalization.NORM_TRAINING_STATES:
+                pass
 
         self.reward_call_n += 1
 
