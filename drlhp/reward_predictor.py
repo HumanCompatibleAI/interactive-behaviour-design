@@ -438,23 +438,21 @@ class RewardPredictorNetwork:
                            **network_args)
         _r2 = core_network(s=s2_unrolled, reuse=True, training=training, regularizer=l2_reg,
                            **network_args)
-        _r_random_states = core_network(s=random_states, reuse=True, training=training, regularizer=l2_reg,
-                                        **network_args)
+        r_random_states = core_network(s=random_states, reuse=True, training=training, regularizer=l2_reg,
+                                       **network_args)
 
         # Shape should be 'unrolled batch size'
         # where 'unrolled batch size' is 'batch size' x 'n frames per segment'
         c1 = tf.assert_rank(_r1, 1)
         c2 = tf.assert_rank(_r2, 1)
-        c3 = tf.assert_rank(_r_random_states, 1)
-        with tf.control_dependencies([c1, c2, c3]):
+        with tf.control_dependencies([c1, c2]):
             # Re-roll to 'batch size' x 'n frames per segment'
             __r1 = tf.reshape(_r1, tf.shape(s1)[0:2])
             __r2 = tf.reshape(_r2, tf.shape(s2)[0:2])
-            r_random_states = _r_random_states
         # Shape should be 'batch size' x 'n frames per segment'
         c1 = tf.assert_rank(__r1, 2)
         c2 = tf.assert_rank(__r2, 2)
-        with tf.control_dependencies([c1, c2, c3]):
+        with tf.control_dependencies([c1, c2]):
             r1 = __r1
             r2 = __r2
 
