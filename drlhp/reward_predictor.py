@@ -350,7 +350,9 @@ class RewardPredictor:
 
         if self.reward_normalization == PredictedRewardNormalization.NORM_RANDOM_STATES:
             n_random_states = 16
-            random_states = np.random.uniform(self.obs_space.low, self.obs_space.high, size=n_random_states)
+            assert len(self.obs_space.shape) == 1
+            random_states = np.random.uniform(self.obs_space.low, self.obs_space.high,
+                                              size=[n_random_states, self.obs_space.shape[0]])
             for rp in self.rps:
                 feed_dict[rp.random_states] = random_states
 
