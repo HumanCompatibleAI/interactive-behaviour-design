@@ -93,12 +93,14 @@ def drlhp_load_loop(reward_predictor: RewardPredictor, ckpt_path, log_dir):
 
         try:
             latest_ckpt_path = reward_predictor.get_latest_checkpoint(ckpt_path)
-            if force_load:
-                reward_predictor.load(latest_ckpt_path)
-            else:
-                reward_predictor.load_polyak(latest_ckpt_path,
-                                             polyak_coef=global_variables.reward_predictor_load_polyak_coef)
-            reward_predictor.save(os.path.join(log_dir, 'checkpoints', 'reward_predictor_loaded.ckpt'))
+            with LogMilliseconds('instrumentation/reward_predictor_load', logger):
+                if force_load:
+                    polyak_coef = None
+                else:
+                    polyak_coef = global_variables.reward_predictor_load_polyak_coef
+                reward_predictor.load(latest_ckpt_path, polyak_coef=polyak_coef)
+            with LogMilliseconds('instrumentation/reward_predictor_main_load', logger):
+                reward_predictor.save(os.path.join(log_dir, 'checkpoints', 'reward_predictor_loaded.ckpt'))
             n_successful_loads += 1
             logger.logkv('reward_predictor_load_loop/n_loads', n_successful_loads)
         except:

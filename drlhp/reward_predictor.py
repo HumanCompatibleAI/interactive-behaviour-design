@@ -90,6 +90,29 @@ class RewardPredictor:
 
         self.init_network()
 
+        self.restore_placeholders = None
+        self.restore_ops = None
+        self.polyak_restore_ops = None
+        self.set_up_restore_ops()
+
+    def set_up_restore_ops(self):
+        with self.graph.as_default():
+            variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+
+            self.restore_placeholders = {}
+            for var in variables:
+                ph = tf.placeholder(tf.float32, var.shape)
+                self.restore_placeholders[var.name] = ph
+
+            self.restore_ops = []
+            self.polyak_restore_ops = []
+            self.polyak_ph = tf.placeholder(tf.float32)
+            for var in variables:
+                new_value = self.restore_placeholders[var.name]
+                self.restore_ops.append(var.assign(new_value))
+                polyak_new_value = self.polyak_ph * var + (1 - self.polyak_ph) * new_value
+                self.polyak_restore_ops.append(var.assign(polyak_new_value))
+
     def add_summary_ops(self):
         summary_ops = []
 
@@ -131,40 +154,18 @@ class RewardPredictor:
             for path in checkpoint_paths[:-max_to_keep]:
                 os.remove(path)
 
-    def load(self, ckpt_path):
-        variable_values = joblib.load(ckpt_path)
-        with self.graph.as_default():
-            variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-        assert len(variables) == len(variable_values)
-
-        # TODO this is going to leak memory, because we add operations to the graph on every call
-        restores = [variable.assign(variable_values[variable.name])
-                    for variable in variables]
-
-        self.sess.run(restores)
-
+    def load(self, ckpt_path, polyak_coef=None):
+        variables_values_dict = joblib.load(ckpt_path)
+        assert len(variables_values_dict) == len(self.restore_placeholders)
+        feed_dict = {self.restore_placeholders[var_name]: variables_values_dict[var_name]
+                     for var_name in variables_values_dict.keys()}
+        if polyak_coef is None:
+            op = self.restore_ops
+        else:
+            op = self.polyak_restore_ops
+            feed_dict[self.polyak_ph] = polyak_coef
+        self.sess.run(op, feed_dict)
         print("Restored reward predictor from checkpoint '{}'".format(ckpt_path))
-
-    def load_polyak(self, ckpt_path, polyak_coef=0.995):
-        cur_variable_value_dict = self.get_variable_value_dict()
-        new_variable_name_value_dict = joblib.load(ckpt_path)
-        assert len(cur_variable_value_dict) == len(new_variable_name_value_dict)
-
-        # TODO this is also going to leak memory
-        restores = []
-        for variable in cur_variable_value_dict.keys():
-            cur_value = cur_variable_value_dict[variable]
-            new_value = new_variable_name_value_dict[variable.name]
-            polyakked_new_value = polyak_coef * cur_value + (1 - polyak_coef) * new_value
-            assign = variable.assign(polyakked_new_value)
-            restores.append(assign)
-
-        self.sess.run(restores)
-
-        print("Restored reward predictor (with polyak) from checkpoint '{}'".format(ckpt_path))
-
-        self.polyak_min *= polyak_coef
-        self.logger.logkv('reward_predictor/polyak_min', self.polyak_min)
 
     @staticmethod
     def get_latest_checkpoint(path):
@@ -279,7 +280,7 @@ class RewardPredictor:
         assert_equal(ensemble_rs.shape, (n_preds, n_steps))
         rewards = ensemble_rs[0, :]
 
-        with LogMilliseconds('reward_normalization', self.logger, log_every=1000):
+        with LogMilliseconds('instrumentation/reward_normalization', self.logger, log_every=1000):
             if self.reward_normalization == PredictedRewardNormalization.OFF:
                 pass
             elif self.reward_normalization == PredictedRewardNormalization.RUNNING_STATS:
@@ -358,7 +359,8 @@ class RewardPredictor:
         # assuming we're only using one reward predictor.
         ops = [self.rps[0].prediction_loss, self.rps[0].rs_norm_loss,
                self.summaries, [rp.train for rp in self.rps]]
-        loss, norm_loss, summaries, _ = self.sess.run(ops, feed_dict)
+        with LogMilliseconds('instrumentation/reward_predictor_train_step_ms', self.logger, log_every=1000):
+            loss, norm_loss, summaries, _ = self.sess.run(ops, feed_dict)
         if self.n_steps % self.log_interval == 0:
             self.train_writer.add_summary(summaries, self.n_steps)
             self.logger.logkv('reward_predictor/rs_norm_loss', norm_loss)
@@ -514,7 +516,7 @@ class RewardPredictorNetwork:
         elif reward_normalization == PredictedRewardNormalization.NORM_RANDOM_STATES:
             reward_norm_loss = tf.norm(r_random_states, ord=1)
         else:
-            reward_norm_loss = tf.constant(0)
+            reward_norm_loss = tf.constant(0.0)
         loss += normalization_loss_coef * reward_norm_loss
 
         if core_network == net_cnn:

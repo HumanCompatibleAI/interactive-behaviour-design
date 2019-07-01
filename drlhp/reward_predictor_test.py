@@ -6,12 +6,13 @@ import unittest
 
 import numpy as np
 import tensorflow as tf
+from gym.spaces import Box
 
 sys.path.insert(0, '..')
 
 from drlhp.reward_predictor_core_network import net_mlp, net_cnn
 from drlhp.pref_db import PrefDB
-from drlhp.reward_predictor import RewardPredictor, MIN_L2_REG_COEF
+from drlhp.reward_predictor import RewardPredictor, MIN_L2_REG_COEF, PredictedRewardNormalization
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -154,8 +155,11 @@ class TestRewardPredictor(unittest.TestCase):
         return rp1, rp2
 
     def get_reward_predictor(self, net, network_args, obs_shape, tmp_dir, seed):
-        return RewardPredictor(obs_shape=obs_shape, network=net, network_args=network_args, r_std=0.1, seed=seed,
-                               log_dir=tmp_dir, name='test')
+        obs_space = Box(low=0, high=1, shape=obs_shape)
+        return RewardPredictor(obs_space=obs_space, network=net, network_args=network_args, r_std=0.1, seed=seed,
+                               log_dir=tmp_dir, name='test',
+                               reward_normalization=PredictedRewardNormalization.OFF,
+                               normalization_loss_coef=0.9)
 
     def check_reward_predictors_different(self, rp1, rp2):
         obs = np.random.random_sample(rp1.obs_shape)
@@ -175,11 +179,13 @@ class TestRewardPredictor(unittest.TestCase):
 
     def save_load_reward_predictor(self, rp1, rp2, ckpt_path):
         rp1.save(ckpt_path)
-        rp2.load(ckpt_path)
+        latest_ckpt_path = RewardPredictor.get_latest_checkpoint(ckpt_path)
+        rp2.load(latest_ckpt_path)
 
     def save_load_reward_predictor_polyak(self, rp1, rp2, ckpt_path, polyak_coef):
         rp1.save(ckpt_path)
-        rp2.load_polyak(ckpt_path, polyak_coef)
+        latest_ckpt_path = RewardPredictor.get_latest_checkpoint(ckpt_path)
+        rp2.load(latest_ckpt_path, polyak_coef=polyak_coef)
 
     def train_reward_predictor(self, reward_predictor):
         prefs_train, prefs_val = PrefDB(maxlen=10), PrefDB(maxlen=10)
