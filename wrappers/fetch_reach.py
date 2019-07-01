@@ -28,7 +28,7 @@ class FetchReachObsWrapper(ObservationWrapper):
     def __init__(self, env):
         ObservationWrapper.__init__(self, env)
         obs = self.observation(np.zeros(self.env.observation_space.shape))
-        self.observation_space = gym.spaces.Box(-np.inf, np.inf, shape=obs.shape, dtype='float32')
+        self.observation_space = gym.spaces.Box(low=0, high=1.5, shape=obs.shape, dtype='float32')
 
     def observation(self, orig_obs):
         obs_dict = decode_fetch_reach_obs(orig_obs)
@@ -115,20 +115,6 @@ class FetchReachStatsWrapper(CollectEpisodeStats):
         return obs, reward, done, info
 
 
-class FetchReachObsSpaceWrapper(Wrapper):
-    def __init__(self, env):
-        super().__init__(env)
-        low = np.ones_like(self.observation_space.low) * 0
-        high = np.ones_like(self.observation_space.high) * 1.5
-        self.observation_space = Box(low=low, high=high)
-
-    def step(self, action):
-        return self.env.step(action)
-
-    def reset(self):
-        return self.env.reset()
-
-
 def make_env(action_repeat, action_limit):
     env = FetchReachEnv(reward_type='dense')
     env = FlattenDictWrapper(env, ['observation', 'desired_goal'])
@@ -137,7 +123,6 @@ def make_env(action_repeat, action_limit):
     env = RepeatActions(env, action_repeat)
     env = CheckActionLimit(env, action_limit)
     env = LimitActions(env, action_limit)
-    env = FetchReachObsSpaceWrapper(env)
     return env
 
 
