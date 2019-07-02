@@ -243,8 +243,14 @@ class RewardPredictor:
                 self.min_reward_obs_so_far = obses[np.argmin(rewards)]
             min_reward = np.min(rewards)
 
-        scale = max_reward - min_reward
-        shift = (min_reward + max_reward) / 2
+        scale = 1 / (max_reward - min_reward)
+        shift = - (min_reward + max_reward) / 2
+
+        mean_std = global_variables.predicted_rewards_normalize_mean_std
+        if mean_std is not None:
+            scale, shift = map(float, mean_std.split(','))
+            scale *= scale
+            shift += shift
 
         if self.reward_call_n % global_variables.log_reward_normalisation_every_n_calls == 0:
             self.logger.logkv('reward_predictor/reward_cur_batch_min', np.min(rewards))
@@ -254,8 +260,8 @@ class RewardPredictor:
             self.logger.logkv('reward_predictor/scale', scale)
             self.logger.logkv('reward_predictor/shift', shift)
 
-        rewards /= scale
-        rewards -= shift
+        rewards *= scale
+        rewards += shift
 
     @staticmethod
     def manual_normalize(rewards):
