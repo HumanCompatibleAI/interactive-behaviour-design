@@ -90,6 +90,13 @@ def main():
             wandb_group = f"{env_shortname}-{ex.name}{run_suffix}_{git_rev}"
             for seed in seeds:
                 run_name = f"{env_shortname}-{seed}-{ex.name}{run_suffix}"
+                n_chars_each_field = 3
+                while len(run_name) > 128:
+                    run_name = ''.join([w[:n_chars_each_field]
+                                        for w in split_preserving_seps(run_name)])
+                    n_chars_each_field -= 1
+                    if n_chars_each_field == 0:
+                        raise Exception("Error: couldn't make run name short enough")
                 if args.test:
                     run_name += '_test'
                 cmd = ("python3 scripts/train/auto_train_prefs.py "
