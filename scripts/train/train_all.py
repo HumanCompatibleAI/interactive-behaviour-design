@@ -5,7 +5,7 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from utils import find_least_busy_gpu, get_git_rev, NoGPUsError
+from utils import find_least_busy_gpu, get_git_rev, NoGPUsError, split_preserving_seps
 
 rl_envs = [
     ('seaquest', 'SeaquestDeepMind-v0'),
