@@ -7,6 +7,7 @@ import sys
 import time
 from typing import Dict
 
+import easy_tf_log
 import gym
 import numpy as np
 from cloudpickle import cloudpickle
@@ -20,7 +21,7 @@ from global_constants import ROLLOUT_FPS
 from global_variables import RolloutMode, RolloutRandomness
 from rollouts import CompressedRollout
 from utils import EnvState, get_noop_action, save_video, make_small_change, find_latest_checkpoint, load_cpu_config, \
-    unwrap_to, OrnsteinUhlenbeckActionNoise
+    unwrap_to, OrnsteinUhlenbeckActionNoise, LogMilliseconds
 from wrappers.util_wrappers import ResetMode
 
 
@@ -253,6 +254,7 @@ class PolicyRollouter:
             show_from_end_seconds = rollout_len_seconds
         self.show_from_end_seconds = show_from_end_seconds
         self.noop_actions = True
+        self.logger = easy_tf_log.Logger(log_dir=os.path.join(log_dir, 'instrumentation'))
 
         # 'spawn' -> start a fresh process
         # (TensorFlow is not fork-safe)
@@ -328,13 +330,14 @@ class PolicyRollouter:
             self.env_state_queue.put(('redo', env_state, None, None, None, group_serial))
             n_rollouts += 1
 
-        while len(rollout_hashes) < n_rollouts:
-            group_serial_got, rollout_hash = self.rollout_queue.get()
-            if group_serial_got == group_serial:
-                rollout_hashes.append(rollout_hash)
-            else:  # this rollout belongs to another trajectory concurrently being generated
-                self.rollout_queue.put((group_serial_got, rollout_hash))
-        self.save_metadata(rollout_hashes, group_serial)
+        with LogMilliseconds('instrumentation/get_rollouts_ms', self.logger, log_every=1):
+            while len(rollout_hashes) < n_rollouts:
+                group_serial_got, rollout_hash = self.rollout_queue.get()
+                if group_serial_got == group_serial:
+                    rollout_hashes.append(rollout_hash)
+                else:  # this rollout belongs to another trajectory concurrently being generated
+                    self.rollout_queue.put((group_serial_got, rollout_hash))
+            self.save_metadata(rollout_hashes, group_serial)
 
         return group_serial
 

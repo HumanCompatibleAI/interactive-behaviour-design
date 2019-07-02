@@ -114,63 +114,68 @@ def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollo
                     del rollouts[h]
                     break
 
-            if rollout_choice == 'none':
-                continue_with_rollout_hash = random.sample(list(rollouts.keys()), 1)[0]
-                continue_with_rollout = rollouts[continue_with_rollout_hash]
-            elif rollout_choice == 'equal':
-                for r1, r2 in itertools.combinations(rollouts.values(), 2):
-                    add_pref(r1, r2, (0.5, 0.5))
-                continue_with_rollout_hash = random.sample(list(rollouts.keys()), 1)[0]
-                continue_with_rollout = rollouts[continue_with_rollout_hash]
-            else:
-                chosen_rollout = rollouts[rollout_choice]
-                add_demonstration_rollout(chosen_rollout)
-                add_reset_state_from_end_of_rollout(chosen_rollout)
-                rollouts_except_chosen = set(rollouts.values()) - {chosen_rollout}
-                for other_rollout in rollouts_except_chosen:
-                    add_pref(chosen_rollout, other_rollout, (1.0, 0.0))
-                continue_with_rollout_hash = rollout_choice
-                continue_with_rollout = chosen_rollout
-            print("Continuing with rollout {}".format(continue_with_rollout.hash))
-
-            # write which rollout was chosen for this group in the trajectory file
-            trajectory_filename = os.path.join(trajectory_dir, "trajectory_{}".format(trajectory_serial))
-            timestamp = str(time.time())
-            with open(trajectory_filename, 'a') as f:
-                f.write(group_name + "," + continue_with_rollout_hash + "," + timestamp + "," + rollout_choice + "\n")
-
-            trajectory_dir = get_trajectory_dir(trajectory_serial)
-            trajectory_filename = os.path.join(trajectory_dir, "trajectory_{}".format(trajectory_serial))
-            with open(trajectory_filename, 'r') as f:
-                n_rollouts_in_this_demonstration = len(f.readlines())
-            if web_globals._max_demonstration_length is not None and n_rollouts_in_this_demonstration == web_globals._max_demonstration_length:
-                print("Reached maximum demonstration length ({}); resetting".format(web_globals._max_demonstration_length))
-                force_reset = True
-            else:
-                force_reset = False
-
-            if force_reset or continue_with_rollout.final_env_state.done:
-                env = continue_with_rollout.final_env_state.env
-                if episode_stats_logger is None:
-                    episode_stats_logger = SaveEpisodeStats(env,
-                                                            os.path.join(_demonstration_rollouts_dir, 'demo_env'),
-                                                            suffix='_demo')
+            with LogMilliseconds('instrumentation/process_choice/check_rollouts_ms', logger, log_every=1):
+                if rollout_choice == 'none':
+                    continue_with_rollout_hash = random.sample(list(rollouts.keys()), 1)[0]
+                    continue_with_rollout = rollouts[continue_with_rollout_hash]
+                elif rollout_choice == 'equal':
+                    for r1, r2 in itertools.combinations(rollouts.values(), 2):
+                        add_pref(r1, r2, (0.5, 0.5))
+                    continue_with_rollout_hash = random.sample(list(rollouts.keys()), 1)[0]
+                    continue_with_rollout = rollouts[continue_with_rollout_hash]
                 else:
-                    episode_stats_logger.set_env(env)
-                episode_stats_logger.reset()  # trigger stats save
+                    chosen_rollout = rollouts[rollout_choice]
+                    add_demonstration_rollout(chosen_rollout)
+                    add_reset_state_from_end_of_rollout(chosen_rollout)
+                    rollouts_except_chosen = set(rollouts.values()) - {chosen_rollout}
+                    for other_rollout in rollouts_except_chosen:
+                        add_pref(chosen_rollout, other_rollout, (1.0, 0.0))
+                    continue_with_rollout_hash = rollout_choice
+                    continue_with_rollout = chosen_rollout
+                print("Continuing with rollout {}".format(continue_with_rollout.hash))
 
+            with LogMilliseconds('instrumentation/process_choice/write_chosen_rollout_ms', logger, log_every=1):
+                # write which rollout was chosen for this group in the trajectory file
+                trajectory_filename = os.path.join(trajectory_dir, "trajectory_{}".format(trajectory_serial))
+                timestamp = str(time.time())
+                with open(trajectory_filename, 'a') as f:
+                    f.write(group_name + "," + continue_with_rollout_hash + "," + timestamp + "," + rollout_choice + "\n")
+
+            with LogMilliseconds('instrumentation/process_choice/read_n_rollouts_ms', logger, log_every=1):
                 trajectory_dir = get_trajectory_dir(trajectory_serial)
-                vid_name = os.path.join(trajectory_dir, 'demonstrated_trajectory_{}.mp4'.format(trajectory_serial))
-                chosen_rollout_vid_paths = get_chosen_rollout_videos_for_trajectory(trajectory_serial)
-                concatenate_and_write_videos_to(chosen_rollout_vid_paths, vid_name)
-                trajectory_serial = start_new_trajectory()
-                n_trajectories_demonstrated.value += 1
-                logger.logkv('demonstrations/n_trajectories_demonstrated', n_trajectories_demonstrated.value)
+                trajectory_filename = os.path.join(trajectory_dir, "trajectory_{}".format(trajectory_serial))
+                with open(trajectory_filename, 'r') as f:
+                    n_rollouts_in_this_demonstration = len(f.readlines())
+                if web_globals._max_demonstration_length is not None and n_rollouts_in_this_demonstration == web_globals._max_demonstration_length:
+                    print("Reached maximum demonstration length ({}); resetting".format(web_globals._max_demonstration_length))
+                    force_reset = True
+                else:
+                    force_reset = False
 
-        group_serial = _policy_rollouter.generate_rollout_group(continue_with_rollout.final_env_state,
-                                                                continue_with_rollout.generating_policy, policy_names,
-                                                                force_reset)
-        trajectory_for_group_dict[group_serial] = trajectory_serial
+            with LogMilliseconds('instrumentation/process_choice/done_stuff_ms', logger, log_every=1):
+                if force_reset or continue_with_rollout.final_env_state.done:
+                    env = continue_with_rollout.final_env_state.env
+                    if episode_stats_logger is None:
+                        episode_stats_logger = SaveEpisodeStats(env,
+                                                                os.path.join(_demonstration_rollouts_dir, 'demo_env'),
+                                                                suffix='_demo')
+                    else:
+                        episode_stats_logger.set_env(env)
+                    episode_stats_logger.reset()  # trigger stats save
+
+                    trajectory_dir = get_trajectory_dir(trajectory_serial)
+                    vid_name = os.path.join(trajectory_dir, 'demonstrated_trajectory_{}.mp4'.format(trajectory_serial))
+                    chosen_rollout_vid_paths = get_chosen_rollout_videos_for_trajectory(trajectory_serial)
+                    concatenate_and_write_videos_to(chosen_rollout_vid_paths, vid_name)
+                    trajectory_serial = start_new_trajectory()
+                    n_trajectories_demonstrated.value += 1
+                    logger.logkv('demonstrations/n_trajectories_demonstrated', n_trajectories_demonstrated.value)
+
+        with LogMilliseconds('instrumentation/process_choice/generate_rollouts_ms', logger, log_every=1):
+            group_serial = _policy_rollouter.generate_rollout_group(continue_with_rollout.final_env_state,
+                                                                    continue_with_rollout.generating_policy, policy_names,
+                                                                    force_reset)
+            trajectory_for_group_dict[group_serial] = trajectory_serial
 
         n_rollouts_in_progress.value -= 1
 
@@ -224,7 +229,7 @@ def choose_rollout():
             shutil.move(vid_name, trajectory_dir)
 
         n_rollouts_in_progress.value += 1
-        print("No. rollouts in progress:", n_rollouts_in_progress)  # TODO debugging; deleteme
+        logger.logkv('instrumentation/n_rollouts_in_progress', n_rollouts_in_progress.value)  # TODO debugging; deleteme
         Thread(target=lambda: process_choice_and_generate_new_rollouts(rollouts, chosen_rollout_hash_str,
                                                                        group_name, trajectory_dir, trajectory_serial,
                                                                        policy_names, softmax_temp)).start()
