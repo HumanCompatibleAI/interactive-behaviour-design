@@ -5,7 +5,6 @@ import glob
 import multiprocessing
 import os
 import os.path as osp
-import pickle
 import platform
 import random
 import re
@@ -37,7 +36,7 @@ from checkpointer import Checkpointer
 from classifier_buffer import ClassifierDataBuffer
 from classifier_collection import ClassifierCollection
 from drlhp.pref_db import PrefDBTestTrain
-from drlhp.reward_predictor import RewardPredictor, PredictedRewardNormalization
+from drlhp.reward_predictor import RewardPredictor
 from drlhp.reward_predictor_core_network import net_mlp, net_cnn
 from drlhp.training import drlhp_train_loop, drlhp_load_loop
 from env import make_envs
@@ -51,7 +50,7 @@ from reward_switcher import RewardSelector
 from rollouts import RolloutsByHash, CompressedRollout
 from subproc_vec_env_custom import SubprocVecEnvNoAutoReset
 from utils import find_latest_checkpoint, MemoryProfiler, configure_cpus, \
-    load_cpu_config, register_debug_handler, get_available_gpu_ns, ObsRewardTuple
+    load_cpu_config, register_debug_handler, get_available_gpu_ns, ObsRewardTuple, load_reference_trajectory
 from web_app.app import run_web_app
 from web_app.comparisons import monitor_segments_dir_loop, write_segments_loop
 from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lander_reward, breakout_reward, enduro, \
@@ -90,15 +89,6 @@ def check_env(env_id):
         raise Exception(f"Env {env_id} not supported; try", ','.join(supported_envs))
 
 
-def load_reference_trajectory(env_id):
-    if env_id == 'FetchReach-CustomActionRepeat5ActionLimit0.2-v0':
-        with open('reference_trajectories/reach_reference_trajectory.pkl', 'rb') as f:
-            traj = pickle.load(f)
-    else:
-        traj = None
-    return traj
-
-
 def calculate_slopes(num_list):
     num_list = np.array(num_list)
     return num_list[1:] - num_list[:-1]
@@ -113,10 +103,6 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
     log_file = open(os.path.join(reference_trajectory_rewards_log_dir, 'predicted_rewards.txt'), 'w')
     imgs_dir = os.path.join(log_dir, 'reference_trajectory_reward_images')
     os.makedirs(imgs_dir)
-
-    if np.array(obses).shape[1] == 9:
-        # Recorded using old env
-        obses = np.array(obses)[:, :6]
 
     test_n = 0
 

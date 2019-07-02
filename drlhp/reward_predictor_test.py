@@ -3,18 +3,21 @@ import os
 import sys
 import tempfile
 import unittest
+from typing import List
 
 import numpy as np
 import tensorflow as tf
 from gym.spaces import Box
+from matplotlib.pyplot import plot, legend, show, grid
 
-sys.path.insert(0, '..')
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from drlhp.reward_predictor_core_network import net_mlp, net_cnn
 from drlhp.pref_db import PrefDB
 from drlhp.reward_predictor import RewardPredictor, MIN_L2_REG_COEF, PredictedRewardNormalization
 import global_variables
 import throttler
+from utils import ObsRewardTuple, load_reference_trajectory
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -91,6 +94,41 @@ class SmokeTests(unittest.TestCase):
 
             for _ in range(100):
                 rp.train(prefs_train, prefs_val, val_interval=1, verbose=verbose)
+
+
+class TestRewardNormalization(unittest.TestCase):
+    def _test(self):
+        ckpt_path = '/private/var/folders/z2/5bbsrgpj7y51rhv12n7w9q9h0000gn/T/tmp.LDcnFZqR/reward_predictor.ckpt.84'
+        obs_space = Box(low=float('-inf'), high=float('inf'), shape=(6,), dtype=np.float32)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            global_variables.log_reward_normalization_every_n_calls = 1000
+            global_variables.predicted_rewards_normalize_min_max = '-3.83,-0.05'
+            rp = RewardPredictor(obs_space=obs_space,
+                                 network=net_mlp,
+                                 network_args={},
+                                 r_std=1.0,
+                                 log_dir=tmp_dir,
+                                 seed=0,
+                                 reward_normalization=PredictedRewardNormalization.EXTREME_TRAINING_STATES,
+                                 normalization_loss_coef=0,
+                                 name='test')
+            rp.load(ckpt_path)
+
+            env_id = 'FetchReach-CustomActionRepeat5ActionLimit0.2-v0'
+            reference_trajectory = load_reference_trajectory(env_id)  # type: List[ObsRewardTuple]
+            obses = np.array([tup.obs for tup in reference_trajectory])
+            env_rewards = [tup.reward for tup in reference_trajectory]
+            print("Environment env_rewards range, scale:", np.min(env_rewards), np.max(env_rewards))
+
+            pred_rewards = rp.normalized_rewards(obses)
+            print("Predicted pred_rewards mean, std:", np.min(pred_rewards), np.max(env_rewards))
+
+            plot(env_rewards, label='Environment rewards')
+            plot(pred_rewards, label='Predicted rewards')
+            grid()
+            legend()
+            show()
+
 
 
 class TestRewardPredictor(unittest.TestCase):

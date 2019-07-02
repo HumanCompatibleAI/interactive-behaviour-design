@@ -67,6 +67,7 @@ def parse_args():
     parser.add_argument('--predicted_reward_normalization_norm_loss_coef', type=float, default=0.01)
     parser.add_argument('--log_reward_normalization_every_n_calls', type=int, default=1000)
     parser.add_argument('--predicted_rewards_normalize_mean_std')
+    parser.add_argument('--predicted_rewards_normalize_min_max')
     args = parser.parse_args()
 
     global_variables.segment_save_mode = args.segment_save_mode
@@ -85,6 +86,7 @@ def parse_args():
     global_variables.log_reward_normalization_every_n_calls = args.log_reward_normalization_every_n_calls
     global_variables.predicted_rewards_normalize_mean_std = args.predicted_rewards_normalize_mean_std
     global_variables.predicted_reward_normalization_norm_loss_coef = args.predicted_reward_normalization_norm_loss_coef
+    global_variables.predicted_rewards_normalize_min_max = args.predicted_rewards_normalize_min_max
     if args.target_n_prefs_per_24h == 0:
         global_variables.n_rl_steps_per_interaction = 0
     else:

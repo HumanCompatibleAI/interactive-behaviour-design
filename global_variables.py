@@ -35,6 +35,7 @@ reward_predictor_load_polyak_coef = None  # type: Union[float, None]
 predicted_reward_normalization = None
 log_reward_normalization_every_n_calls = None
 predicted_rewards_normalize_mean_std = None
+predicted_rewards_normalize_min_max = None
 predicted_reward_normalization_norm_loss_coef = None
 
 pids_to_proc_names = {}

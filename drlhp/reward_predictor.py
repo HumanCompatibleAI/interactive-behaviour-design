@@ -244,16 +244,23 @@ class RewardPredictor:
             min_reward = np.min(rewards)
 
         delta = max_reward - min_reward
-        if delta == 0:
-            return rewards
-        scale = 1 / delta
-        shift = - (min_reward + max_reward) / 2
-
-        mean_std = global_variables.predicted_rewards_normalize_mean_std
-        if mean_std is not None:
-            mean, std = map(float, mean_std.split(','))
-            scale *= std
-            shift += mean
+        specified_min_max = global_variables.predicted_rewards_normalize_min_max
+        if specified_min_max is not None:
+            specified_min, specified_max = map(float, specified_min_max.split(','))
+            scale = (specified_max - specified_min) / delta
+            shift = specified_min - min_reward
+            rewards -= min_reward
+            rewards *= scale
+            rewards += specified_min
+        else:
+            # Reward should span a range of 2, centered at 0
+            if delta == 0:
+                return rewards
+            scale = 2 / delta
+            shift = (min_reward + max_reward) / 2
+            rewards -= min_reward
+            rewards *= scale
+            rewards += shift
 
         if self.reward_call_n % global_variables.log_reward_normalization_every_n_calls == 0:
             self.logger.logkv('reward_predictor/reward_cur_batch_min', np.min(rewards))
@@ -263,8 +270,6 @@ class RewardPredictor:
             self.logger.logkv('reward_predictor/scale', scale)
             self.logger.logkv('reward_predictor/shift', shift)
 
-        rewards *= scale
-        rewards += shift
 
         return rewards
 

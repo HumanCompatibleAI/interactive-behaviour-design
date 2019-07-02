@@ -728,3 +728,18 @@ def split_preserving_seps(s, seps=('_', '-')):
             cur += c
     arr.append(cur)
     return arr
+
+
+def load_reference_trajectory(env_id):
+    if env_id == 'FetchReach-CustomActionRepeat5ActionLimit0.2-v0':
+        with open('reference_trajectories/reach_reference_trajectory.pkl', 'rb') as f:
+            traj = pickle.load(f)
+        new_traj = []
+        for n in range(len(traj)):
+            if traj[n].obs.shape == (9,):
+                # Recorded using old env
+                new_traj.append(ObsRewardTuple(traj[n].obs[:6], traj[n].reward))
+        traj = new_traj
+    else:
+        traj = None
+    return traj
