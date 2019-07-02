@@ -8,6 +8,7 @@ from enum import Enum
 import easy_tf_log
 import joblib
 import numpy as np
+import pysnooper
 import tensorflow as tf
 from numpy.testing import assert_equal
 
@@ -222,7 +223,8 @@ class RewardPredictor:
 
         return rewards
 
-    def extreme_state_normalize(self, obses, rewards, update_normalization):
+    @pysnooper.snoop()
+    def extreme_state_normalize(self, rewards, obses, update_normalization):
         rewards = np.copy(rewards)
         if not update_normalization and self.max_reward_obs_so_far is None:
             return rewards
@@ -287,22 +289,26 @@ class RewardPredictor:
         n_preds = 1
         assert_equal(ensemble_rs.shape, (n_preds, n_steps))
         rewards = ensemble_rs[0, :]
+        assert_equal(rewards.shape, (n_steps,))
 
         with LogMilliseconds('instrumentation/reward_normalization', self.logger, log_every=1000):
             if self.reward_normalization == PredictedRewardNormalization.OFF:
                 pass
             elif self.reward_normalization == PredictedRewardNormalization.RUNNING_STATS:
-                rewards = self.running_stats_normalize(rewards, update_normalization)
+                rewards = self.running_stats_normalize(rewards=rewards,
+                                                       update_normalization=update_normalization)
             elif self.reward_normalization == PredictedRewardNormalization.EXTREME_TRAINING_STATES:
-                rewards = self.extreme_state_normalize(rewards, obses, update_normalization)
+                rewards = self.extreme_state_normalize(rewards=rewards,
+                                                       obses=obses,
+                                                       update_normalization=update_normalization)
             elif self.reward_normalization == PredictedRewardNormalization.MANUAL:
-                rewards = self.manual_normalize(rewards)
+                rewards = self.manual_normalize(rewards=rewards)
             elif self.reward_normalization == PredictedRewardNormalization.NORM_TRAINING_STATES:
                 pass
 
         self.reward_call_n += 1
 
-        assert_equal(rewards.shape, (n_steps,)), rewards.shape
+        assert_equal(rewards.shape, (n_steps,))
         return rewards
 
     def train(self, prefs_train: PrefDB, prefs_val: PrefDB, val_interval, verbose=True):
