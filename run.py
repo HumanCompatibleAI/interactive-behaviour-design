@@ -135,11 +135,11 @@ def predict_reference_trajectory_reward_loop(reference_trajectory: List[ObsRewar
 
         true_slopes = np.sign(calculate_slopes(true_rewards))
         predicted_slopes = np.sign(calculate_slopes(predicted_rewards_unnormalized))
-        slope_match = np.sum(true_slopes == predicted_slopes)
+        slope_match = np.sum(true_slopes == predicted_slopes) / len(true_slopes)
 
         logger.logkv('reference_trajectory/predicted_reward_mean', np.mean(predicted_rewards_unnormalized))
         logger.logkv('reference_trajectory/predicted_reward_std', np.std(predicted_rewards_unnormalized))
-        logger.logkv('reference_trajectory/slope_match', slope_match)
+        logger.logkv('reference_trajectory/slope_match_pct', slope_match)
 
         log_file.write(f'Test {test_n}\n')
         for i in range(len(predicted_rewards_unnormalized)):
