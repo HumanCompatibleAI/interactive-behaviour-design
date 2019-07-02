@@ -436,7 +436,7 @@ def main():
         last_ckpt_name = find_latest_checkpoint(os.path.join(args.load_classifier_ckpt, 'classifiers-'))
         classifier.load_checkpoint(last_ckpt_name)
 
-    reward_selector = RewardSelector(classifier, reward_predictor)
+    reward_selector = RewardSelector(classifier, reward_predictor, log_dir)
     global_variables.reward_selector = reward_selector
 
     if isinstance(train_env.unwrapped, SubprocVecEnvNoAutoReset):
