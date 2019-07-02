@@ -212,7 +212,7 @@ class RewardPredictor:
                 self.r_norm_limited.push(reward)
                 self.r_norm.push(reward)
 
-        if self.reward_call_n % global_variables.log_reward_normalisation_every_n_calls == 0:
+        if self.reward_call_n % global_variables.log_reward_normalization_every_n_calls == 0:
             self.logger.logkv('reward_predictor/r_norm_mean_recent', self.r_norm_limited.mean)
             self.logger.logkv('reward_predictor/r_norm_std_recent', self.r_norm_limited.std)
             self.logger.logkv('reward_predictor/r_norm_mean', self.r_norm.mean)
@@ -254,7 +254,7 @@ class RewardPredictor:
             scale *= scale
             shift += shift
 
-        if self.reward_call_n % global_variables.log_reward_normalisation_every_n_calls == 0:
+        if self.reward_call_n % global_variables.log_reward_normalization_every_n_calls == 0:
             self.logger.logkv('reward_predictor/reward_cur_batch_min', np.min(rewards))
             self.logger.logkv('reward_predictor/reward_cur_batch_max', np.max(rewards))
             self.logger.logkv('reward_predictor/reward_max', max_reward)
