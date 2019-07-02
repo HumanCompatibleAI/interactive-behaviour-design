@@ -18,7 +18,7 @@ from threading import Thread
 import requests
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from utils import save_args, get_git_rev, read_events_file
+from utils import save_args, get_git_rev, read_events_file, split_preserving_seps
 import drlhp.training
 from drlhp.training import FileBasedEventPipe
 
@@ -386,6 +386,13 @@ def run_in_tmux_sess(sess_name, cmd, window_name, gpus):
     global global_args
     window_name += '_' + str(uuid.uuid4())[:4]
     cmd = f'WANDB_TAGS={global_args.tags} ' + cmd
+
+    n_chars_in_each_field = 3
+    while len(global_args.group) > 128:
+        global_args.group = ''.join([w[:n_chars_in_each_field]
+                                     for w in split_preserving_seps(global_args.group)])
+        n_chars_in_each_field -= 1
+
     cmd = f'WANDB_RUN_GROUP={global_args.group} ' + cmd
     cmd = f'WANDB_DESCRIPTION={global_args.run_name} ' + cmd
     cmd = f'CUDA_VISIBLE_DEVICES="{gpus}" ' + cmd

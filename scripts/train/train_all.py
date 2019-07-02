@@ -42,24 +42,6 @@ class Experiment:
         self.no_primitives_config = no_primitives_config
 
 
-def split_preserving_seps(s, seps=('_', '-')):
-    """
-    'foo-bar_1' => ['foo', '-', 'bar', '_', '1']
-    """
-    arr = []
-    cur = ""
-    for c in s:
-        if c in seps:
-            if cur:
-                arr.append(cur)
-            arr.append(c)
-            cur = ""
-        else:
-            cur += c
-    arr.append(cur)
-    return arr
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--seeds', default='0')
