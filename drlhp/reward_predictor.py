@@ -252,8 +252,8 @@ class RewardPredictor:
         mean_std = global_variables.predicted_rewards_normalize_mean_std
         if mean_std is not None:
             scale, shift = map(float, mean_std.split(','))
-            scale *= scale
-            shift += shift
+            scale /= scale
+            shift -= shift
 
         if self.reward_call_n % global_variables.log_reward_normalization_every_n_calls == 0:
             self.logger.logkv('reward_predictor/reward_cur_batch_min', np.min(rewards))
