@@ -263,6 +263,8 @@ class RewardPredictor:
         rewards *= scale
         rewards += shift
 
+        return rewards
+
     @staticmethod
     def manual_normalize(rewards):
         rewards = np.copy(rewards)
@@ -300,7 +302,7 @@ class RewardPredictor:
 
         self.reward_call_n += 1
 
-        assert_equal(rewards.shape, (n_steps,))
+        assert_equal(rewards.shape, (n_steps,)), rewards.shape
         return rewards
 
     def train(self, prefs_train: PrefDB, prefs_val: PrefDB, val_interval, verbose=True):
