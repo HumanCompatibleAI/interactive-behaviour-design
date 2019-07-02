@@ -125,11 +125,14 @@ def process_choice_and_generate_new_rollouts(rollouts: Dict[str, CompressedRollo
                     continue_with_rollout = rollouts[continue_with_rollout_hash]
                 else:
                     chosen_rollout = rollouts[rollout_choice]
-                    add_demonstration_rollout(chosen_rollout)
-                    add_reset_state_from_end_of_rollout(chosen_rollout)
-                    rollouts_except_chosen = set(rollouts.values()) - {chosen_rollout}
-                    for other_rollout in rollouts_except_chosen:
-                        add_pref(chosen_rollout, other_rollout, (1.0, 0.0))
+                    with LogMilliseconds('instrumentation/process_choice/add_demonstration_rollout_ms', logger):
+                        add_demonstration_rollout(chosen_rollout)
+                    with LogMilliseconds('instrumentation/process_choice/add_reset_state_ms', logger):
+                        add_reset_state_from_end_of_rollout(chosen_rollout)
+                    with LogMilliseconds('instrumentation/process_choice/add_prefs', logger):
+                        rollouts_except_chosen = set(rollouts.values()) - {chosen_rollout}
+                        for other_rollout in rollouts_except_chosen:
+                            add_pref(chosen_rollout, other_rollout, (1.0, 0.0))
                     continue_with_rollout_hash = rollout_choice
                     continue_with_rollout = chosen_rollout
                 print("Continuing with rollout {}".format(continue_with_rollout.hash))
