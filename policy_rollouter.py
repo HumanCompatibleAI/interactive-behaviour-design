@@ -70,6 +70,7 @@ class RolloutWorker:
         self.last_action = None
         self.log_dir = log_dir
         self.log_actions = log_actions
+        logger = easy_tf_log.Logger(log_dir=os.path.join(log_dir, f'worker_{worker_n}'))
         env = None
 
         mu = np.zeros(action_shape)
@@ -92,8 +93,9 @@ class RolloutWorker:
                 self.redo_rollout(env, env_state, group_serial)
             else:
                 self.load_policy_checkpoint(policy_name)
-                self.rollout(policy_name, env, env_state.obs, group_serial,
-                             noise, rollout_len_frames, show_frames, deterministic, noop_actions)
+                with LogMilliseconds('instrumentation/worker_rollout_ms', logger):
+                    self.rollout(policy_name, env, env_state.obs, group_serial,
+                                 noise, rollout_len_frames, show_frames, deterministic, noop_actions)
             # is sometimes slow to flush in processes; be more proactive so output is less confusing
             sys.stdout.flush()
 
@@ -254,7 +256,7 @@ class PolicyRollouter:
             show_from_end_seconds = rollout_len_seconds
         self.show_from_end_seconds = show_from_end_seconds
         self.noop_actions = True
-        self.logger = easy_tf_log.Logger(log_dir=os.path.join(log_dir, 'instrumentation'))
+        self.logger = easy_tf_log.Logger(log_dir=os.path.join(log_dir, 'policy_rollouter'))
 
         # 'spawn' -> start a fresh process
         # (TensorFlow is not fork-safe)
@@ -330,7 +332,7 @@ class PolicyRollouter:
             self.env_state_queue.put(('redo', env_state, None, None, None, group_serial))
             n_rollouts += 1
 
-        with LogMilliseconds('instrumentation/get_rollouts_ms', self.logger, log_every=1):
+        with LogMilliseconds('instrumentation/rollout_queue_ms', self.logger, log_every=1):
             while len(rollout_hashes) < n_rollouts:
                 group_serial_got, rollout_hash = self.rollout_queue.get()
                 if group_serial_got == group_serial:
