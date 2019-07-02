@@ -243,7 +243,6 @@ def choose_rollout():
 
 def add_demonstration_rollout(rollout):
     _demonstration_rollouts[rollout.hash] = rollout
-    _demonstration_rollouts.save(os.path.join(experience_dir, 'demonstration_rollouts.pkl'))
     print("Added rollout {} as a demonstration rollout".format(rollout.hash))
     n_demonstrations_given.value += 1
     logger.logkv('demonstrations/n_demonstrations', len(_demonstration_rollouts))
