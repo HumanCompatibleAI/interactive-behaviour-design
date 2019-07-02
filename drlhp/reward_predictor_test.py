@@ -13,9 +13,84 @@ sys.path.insert(0, '..')
 from drlhp.reward_predictor_core_network import net_mlp, net_cnn
 from drlhp.pref_db import PrefDB
 from drlhp.reward_predictor import RewardPredictor, MIN_L2_REG_COEF, PredictedRewardNormalization
+import global_variables
+import throttler
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.logging.set_verbosity(tf.logging.ERROR)
+
+throttler.throttle_sleep = lambda event_type: None
+throttler.mark_event = lambda event_type: None
+
+
+# Run me with
+#   coverage run --include reward_predictor.py reward_predictor_test.py SmokeTests
+# then
+#   coverage html
+class SmokeTests(unittest.TestCase):
+    def test(self):
+        global_variables.predicted_rewards_normalize_mean_std = '0,1'
+        global_variables.log_reward_normalization_every_n_calls = 1
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            for net, args in [(net_mlp, {}), (net_cnn, {'dropout': 0.0, 'batchnorm': False})]:
+                if net == net_cnn:
+                    obs_space = Box(low=-1, high=1, shape=(84, 84, 4), dtype=np.float32)
+                else:
+                    obs_space = Box(low=np.array([-1]), high=np.array([+1]), dtype=np.float32)
+                rp = RewardPredictor(obs_space=obs_space,
+                                     network=net,
+                                     network_args=args,
+                                     r_std=0.1,
+                                     log_dir=tmp_dir,
+                                     seed=0,
+                                     name='test',
+                                     reward_normalization=PredictedRewardNormalization.OFF,
+                                     normalization_loss_coef=0,
+                                     )
+            obs_space = Box(low=np.array([-1]), high=np.array([+1]), dtype=np.float32)
+            obses = np.random.rand(*((2,) + obs_space.shape))
+            for reward_normalization in PredictedRewardNormalization:
+                rp = RewardPredictor(obs_space=obs_space,
+                                     network=net_mlp,
+                                     network_args={},
+                                     r_std=0.1,
+                                     log_dir=tmp_dir,
+                                     seed=0,
+                                     name='test',
+                                     reward_normalization=reward_normalization,
+                                     normalization_loss_coef=0,
+                                     )
+                rp.unnormalized_rewards(obses)
+                for update_normalization in [False, True]:
+                    rp.normalized_rewards(obses[np.newaxis, 0], update_normalization=update_normalization)
+                    rp.normalized_rewards(obses, update_normalization=update_normalization)
+
+            prefs_train = PrefDB(maxlen=100)
+            prefs_train.append(np.array([obses[0]]), np.array([obses[1]]), [1, 0])
+            prefs_val = PrefDB(maxlen=100)
+            prefs_val.append(np.array([obses[0]]), np.array([obses[1]]), [1, 0])
+            for verbose in [True, False]:
+                for reward_normalization in PredictedRewardNormalization:
+                    rp.reward_normalization = reward_normalization
+                    rp.train(prefs_train, prefs_val, val_interval=1, verbose=verbose)
+            for _ in range(100):
+                obses = np.random.rand(*((2,) + obs_space.shape))
+                obs1 = np.array([obses[0]])
+                obs2 = np.array([obses[1]])
+                prefs_train.append(obs1, obs2, [1, 0])
+                prefs_val.append(obs1, obs2, [1, 0])
+            rp.train(prefs_train, prefs_val, val_interval=1)
+            ckpt_name = os.path.join(tmp_dir, 'ckpt')
+            for max_to_keep in [1, None]:
+                rp.save(ckpt_name, max_to_keep=max_to_keep)
+                rp.save(ckpt_name, max_to_keep=max_to_keep)
+            c = rp.get_latest_checkpoint(ckpt_name)
+            rp.load(c)
+            rp.load(c, polyak_coef=0)
+            rp.reset_normalisation()
+
+            for _ in range(100):
+                rp.train(prefs_train, prefs_val, val_interval=1, verbose=verbose)
 
 
 class TestRewardPredictor(unittest.TestCase):

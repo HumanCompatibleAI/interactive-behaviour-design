@@ -8,7 +8,6 @@ from enum import Enum
 import easy_tf_log
 import joblib
 import numpy as np
-import pysnooper
 import tensorflow as tf
 from numpy.testing import assert_equal
 
@@ -49,7 +48,7 @@ class RewardPredictor:
         if gpu_n is None:
             device_context = contextlib.suppress()
         else:
-            device_context = graph.device(f'/gpu:{gpu_n}')
+            device_context = graph.device(f'/gpu:{gpu_n}')  # pragma: no cover
 
         with graph.as_default():
             if seed is not None:
@@ -223,7 +222,6 @@ class RewardPredictor:
 
         return rewards
 
-    @pysnooper.snoop()
     def extreme_state_normalize(self, rewards, obses, update_normalization):
         rewards = np.copy(rewards)
         if not update_normalization and self.max_reward_obs_so_far is None:
@@ -245,7 +243,10 @@ class RewardPredictor:
                 self.min_reward_obs_so_far = obses[np.argmin(rewards)]
             min_reward = np.min(rewards)
 
-        scale = 1 / (max_reward - min_reward)
+        delta = max_reward - min_reward
+        if delta == 0:
+            return rewards
+        scale = 1 / delta
         shift = - (min_reward + max_reward) / 2
 
         mean_std = global_variables.predicted_rewards_normalize_mean_std
@@ -339,7 +340,7 @@ class RewardPredictor:
             ratio = val_loss / (train_loss + 1e-8)
             self.logger.logkv('reward_predictor/test_train_loss_ratio', ratio)
             if ratio > 1.5:
-                self.l2_reg_coef *= 1.5
+                self.l2_reg_coef *= 1.5  # pragma: no cover
             elif ratio < 1.1:
                 self.l2_reg_coef = max(self.l2_reg_coef / 1.1, MIN_L2_REG_COEF)
             self.logger.logkv('reward_predictor/reg_coef', self.l2_reg_coef)
