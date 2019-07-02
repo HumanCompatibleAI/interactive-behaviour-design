@@ -16,7 +16,7 @@ import global_variables
 import throttler
 from rollouts import CompressedRollout
 from throttler import check_throttle
-from utils import make_small_change, save_video
+from utils import make_small_change, save_video, LogMilliseconds
 from web_app import web_globals
 from web_app.utils import add_pref, nocache
 
@@ -124,36 +124,37 @@ def get_comparison():
 
 @comparisons_app.route('/prefer_segment', methods=['POST'])
 def choose_segment():
-    hash1 = request.form['hash1']
-    hash2 = request.form['hash2']
-    pref = json.loads(request.form['pref'])
-    print(hash1, hash2, pref)
+    with LogMilliseconds('instrumentation/choose_segment', logger, log_every=1):
+        hash1 = request.form['hash1']
+        hash2 = request.form['hash2']
+        pref = json.loads(request.form['pref'])
+        print(hash1, hash2, pref)
 
-    segments_being_compared.remove(hash1)
-    segments_being_compared.remove(hash2)
+        segments_being_compared.remove(hash1)
+        segments_being_compared.remove(hash2)
 
-    if pref is None:
-        chosen_segment_n = 'n'
-    elif pref == [0.5, 0.5]:
-        add_pref(get_segment(hash1), get_segment(hash2), [0.5, 0.5])
-        chosen_segment_n = 'e'
-    elif pref == [1, 0]:
-        chosen_segment = get_segment(hash1)
-        other_segment = get_segment(hash2)
-        add_pref(chosen_segment, other_segment, [1.0, 0.0])
-        chosen_segment_n = '1'
-    elif pref == [0, 1]:
-        chosen_segment = get_segment(hash2)
-        other_segment = get_segment(hash1)
-        add_pref(chosen_segment, other_segment, [1.0, 0.0])
-        chosen_segment_n = '2'
-    else:
-        return f"Error: invalid preference '{pref}'"
+        if pref is None:
+            chosen_segment_n = 'n'
+        elif pref == [0.5, 0.5]:
+            add_pref(get_segment(hash1), get_segment(hash2), [0.5, 0.5])
+            chosen_segment_n = 'e'
+        elif pref == [1, 0]:
+            chosen_segment = get_segment(hash1)
+            other_segment = get_segment(hash2)
+            add_pref(chosen_segment, other_segment, [1.0, 0.0])
+            chosen_segment_n = '1'
+        elif pref == [0, 1]:
+            chosen_segment = get_segment(hash2)
+            other_segment = get_segment(hash1)
+            add_pref(chosen_segment, other_segment, [1.0, 0.0])
+            chosen_segment_n = '2'
+        else:
+            return f"Error: invalid preference '{pref}'"
 
-    mark_compared(hash1, hash2, chosen_segment_n)
-    throttler.mark_event(throttler.EventType.INTERACTION)
+        mark_compared(hash1, hash2, chosen_segment_n)
+        throttler.mark_event(throttler.EventType.INTERACTION)
 
-    return ""
+        return ""
 
 
 def prune_old_segments(segments_dir, n_to_keep):
