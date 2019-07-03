@@ -74,8 +74,8 @@ class RewardSelector:
         if self.n_calls % 1000 == 0:
             self.logger.logkv('reward_selector/rewards_env_mean', self.reward_stats_env.mean)
             self.logger.logkv('reward_selector/rewards_env_std', self.reward_stats_env.std)
-            self.logger.logkv('reward_selector/rewards_env_pred', self.reward_stats_pred.mean)
-            self.logger.logkv('reward_selector/rewards_env_pred', self.reward_stats_pred.std)
+            self.logger.logkv('reward_selector/rewards_pred_mean', self.reward_stats_pred.mean)
+            self.logger.logkv('reward_selector/rewards_pred_std', self.reward_stats_pred.std)
 
         self.n_calls += 1
 
