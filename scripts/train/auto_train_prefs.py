@@ -50,7 +50,7 @@ def get_args():
     parser.add_argument('--no_pretrain', action='store_true')
     parser.add_argument('--port', type=int, default=-1)
     parser.add_argument('--tags')
-    parser.add_argument('--group')
+    parser.add_argument('--group', default='group')
     parser.add_argument('--just_pretrain', action='store_true')
     parser.add_argument('--train_using_reward_predictor_checkpoint', action='store_true')
     parser.add_argument('--reward_predictor_checkpoint')
