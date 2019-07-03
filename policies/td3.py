@@ -557,7 +557,8 @@ class TD3Policy(Policy):
 
             self.n_q_pretrain_batches = max(0, self.n_q_pretrain_batches - 1)
 
-        self.logger.logkv(f'policy_{self.name}/n_q_pretrain_batches', self.n_q_pretrain_batches)
+        if self.n_q_pretrain_batches > 0:
+            self.logger.logkv(f'policy_{self.name}/n_q_pretrain_batches', self.n_q_pretrain_batches)
 
         self.check_specific_states_qs()
 
