@@ -17,7 +17,7 @@ from gym.wrappers import TimeLimit
 from wrappers.wrappers_debug import RewardGrapher
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from drlhp.reward_predictor import RewardPredictor
+from drlhp.reward_predictor import RewardPredictor, PredictedRewardNormalization
 from drlhp.reward_predictor_core_network import net_cnn, net_mlp
 from wrappers.seaquest_reward import register as seaquest_register
 from wrappers.breakout_reward import register as breakout_register
@@ -31,7 +31,7 @@ class DrawRewards(Wrapper):
         super().__init__(env)
         self.reward_predictor = reward_predictor
         self.grapher_true_reward = RewardGrapher(scale=3, y=20, name='True reward')
-        self.grapher_predicted_reward = RewardGrapher(scale=2, y=150, name='Predicted reward')
+        self.grapher_predicted_reward = RewardGrapher(scale=10, y=150, name='Predicted reward')
 
     def step(self, action):
         obs, reward, done, info = self.env.step(action)
@@ -68,7 +68,7 @@ seaquest_register()
 breakout_register()
 fetch_reach_register()
 fetch_bs_register()
-env = gym.make(args.env_id)  # type: TimeLimit
+env = gym.make(args.env_id)
 env._max_episode_seconds = None
 env._max_episode_steps = None
 
@@ -81,9 +81,11 @@ else:
 reward_predictor = RewardPredictor(network=net,
                                    network_args=network_args,
                                    log_dir=tempfile.mkdtemp(),
-                                   obs_shape=env.observation_space.shape,
+                                   obs_space=env.observation_space,
                                    r_std=999,  # should be ignored
-                                   name='test')
+                                   name='test',
+                                   reward_normalization=PredictedRewardNormalization.OFF,
+                                   normalization_loss_coef=0)
 reward_predictor.load(args.drlhp_ckpt)
 
 env = DrawRewards(env, reward_predictor)
