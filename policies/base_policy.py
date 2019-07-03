@@ -1,3 +1,4 @@
+import datetime
 import multiprocessing
 import os
 from abc import abstractmethod
@@ -133,7 +134,7 @@ def write_rewards_loop(queue, n_envs, log_dir):
     while True:
         rewards = queue.get()  # type: Rewards
         f = log_files[rewards.env_n]
-        f.write(f'\nEpisode {episode_n[rewards.env_n]}\n')
+        f.write(f'\nEpisode {episode_n[rewards.env_n]} ({str(datetime.datetime.now())})\n')
         assert len(rewards.predicted_rewards) == len(rewards.env_rewards)
         for n in range(len(rewards.predicted_rewards)):
             f.write(f'{rewards.env_rewards[n]} {rewards.predicted_rewards[n]}\n')
