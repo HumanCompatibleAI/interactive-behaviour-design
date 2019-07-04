@@ -138,7 +138,7 @@ class TD3Policy(Policy):
 
             # Separate train ops for pi, q
             if pi_adam:
-                pi_optimizer = tf.train.AdamOptimizer(learning_rate=pi_lr)
+                pi_optimizer = tf.train.RMSPropOptimizer(learning_rate=pi_lr)
             else:
                 pi_optimizer = tf.train.GradientDescentOptimizer(learning_rate=pi_lr)
             train_pi_r_only_op = pi_optimizer.minimize(td3_pi_loss, var_list=get_vars('main/pi'))
@@ -151,7 +151,7 @@ class TD3Policy(Policy):
                 PolicyTrainMode.BC_ONLY: train_pi_bc_only_op,
                 PolicyTrainMode.R_PLUS_BC: train_pi_td3_plus_bc_op
             }
-            q_optimizer = tf.train.AdamOptimizer(learning_rate=q_lr)
+            q_optimizer = tf.train.RMSPropOptimizer(learning_rate=q_lr)
             train_q_op = q_optimizer.minimize(q_loss, var_list=get_vars('main/q'))
 
             # Polyak averaging for target variables
