@@ -551,6 +551,8 @@ class TD3Policy(Policy):
                 self.a_ph: batch.acts, self.r_ph: batch.rews, self.d_ph: batch.done,
             }
             self.train_q(feed_dict, results)
+            if batch_n % self.policy_delay == 0:
+                self.sess.run(self.target_update, feed_dict)
             # Delayed policy update
             if self.n_q_pretrain_batches == 0 and batch_n % self.policy_delay == 0:
                 self.train_pi(feed_dict, results)
