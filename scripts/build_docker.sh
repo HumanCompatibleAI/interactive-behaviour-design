@@ -6,17 +6,11 @@
 
 set -e
 
-mujoco_key_url=$1
-if [[ $mujoco_key_url == "" ]]; then
-    echo "Usage: $0 <MuJoCo key URL>" >&2
-    exit 1
-fi
-
 if ! git status | grep -q 'working tree clean'; then
     echo "Error: working tree not clean; refusing to build" >&2
     exit 1
 fi
 
-docker build -t ibd . --build-arg MUJOCO_KEY_URL=$mujoco_key_url
+docker build -t ibd .
 docker tag ibd:latest 109526153624.dkr.ecr.us-west-2.amazonaws.com/repository-0:latest
 docker push 109526153624.dkr.ecr.us-west-2.amazonaws.com/repository-0:latest

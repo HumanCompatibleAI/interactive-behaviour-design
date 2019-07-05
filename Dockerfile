@@ -20,8 +20,8 @@ ENV LANG C.UTF-8
 
 COPY . /interactive-behaviour-design
 
-ARG MUJOCO_KEY_URL
-RUN wget -O /root/.mujoco/mjkey.txt ${MUJOCO_KEY_URL}
+# This is enough to allow MuJoCo to build
+RUN touch /root/.mujoco/mjkey.txt
 
 # This isn't a perfect solution: different branches could have their own versions of the submodules
 # which could have different requirements. But this is good enough for now.
@@ -37,5 +37,5 @@ RUN cd interactive-behaviour-design && pipenv run pip uninstall -y gym && cd gym
 # (Keep Pipfile so we can still activate the virtualenv)
 RUN find interactive-behaviour-design -maxdepth 1 -mindepth 1 -not -name 'Pipfile' -exec rm -rf {} \;
 
-# The container is public, so we need to be careful about this
+# Prevent later confusion
 RUN rm /root/.mujoco/mjkey.txt
