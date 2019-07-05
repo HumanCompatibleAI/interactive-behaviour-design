@@ -388,13 +388,13 @@ class TD3Policy(Policy):
         self.logger.logkv(f'policy_{self.name}/bc_train_time_ms', timer.duration_s * 1000)
         return np.mean(loss_bc_pi_l)
 
-    def train_bc_only(self):
+    def train_bc_only(self, run_train_episodes=True):
         # Takes about 200 ms
         bc_loss = self.train_bc_batch()
 
         # Takes about 7 seconds
         # 300: run about every 60 seconds
-        if self.cycle_n % 300 == 0:
+        if run_train_episodes and self.cycle_n % 300 == 0:
             self.run_train_env_episode()
 
         # Takes about 3 minutes (because saves videos and rendering is slooooow)
@@ -722,7 +722,7 @@ class TD3Policy(Policy):
                 self.logger.logkv(f'policy_{self.name}/replay_buffer_demo_ptr', self.demonstrations_buffer.ptr)
                 time.sleep(1)
 
-        Thread(target=f).start()
+        Thread(target=f, daemon=True).start()
 
     def close(self):
         self.reward_logger.close()
