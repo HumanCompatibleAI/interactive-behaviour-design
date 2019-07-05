@@ -85,7 +85,7 @@ class TestUtils(unittest.TestCase):
     def test_ornstein_uhlenbeck_pickling(self):
         mu = np.array([0])
         sigma = np.array([0.2])
-        ou = UtilsOrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma)
+        ou = UtilsOrnsteinUhlenbeckActionNoise(mu=mu, sigma=sigma, seed=0)
         # Get to a noise state which is good and random
         for _ in range(10):
             ou()
