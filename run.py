@@ -18,7 +18,6 @@ import gym
 import numpy as np
 import psutil
 import tensorflow as tf
-import wandb
 from cloudpickle import cloudpickle
 from gym.envs.atari import AtariEnv
 from gym.envs.box2d import LunarLander
@@ -58,7 +57,6 @@ from wrappers import seaquest_reward, fetch_pick_and_place_register, lunar_lande
 from wrappers.util_wrappers import ResetMode, ResetStateCache, VecLogRewards, DummyRender, \
     VecSaveSegments
 
-run = wandb.init(project="interactive-behaviour-design")
 os.environ['OMPI_MCA_btl_base_warn_component_unused'] = '0'
 os.environ['OPENAI_LOG_FORMAT'] = ''
 tf.logging.set_verbosity(tf.logging.ERROR)
@@ -434,10 +432,6 @@ def main():
         train_env.reset()
     else:
         raise RuntimeError("train_env is neither SubprocVecEnvNoAutoReset nor SubprocVecEnvBaselines")
-
-    os.makedirs(os.path.join(wandb.run.dir, 'media'))
-    os.symlink(os.path.join(log_dir, 'test_env'), os.path.join(wandb.run.dir, 'media', 'test_env'))
-    os.symlink(os.path.join(log_dir, 'train_env'), os.path.join(wandb.run.dir, 'media', 'train_env'))
 
     time.sleep(5)  # Give time for processes to start
     mp = MemoryProfiler(pid=os.getpid(), log_path=os.path.join(log_dir, f'memory-self.txt'))

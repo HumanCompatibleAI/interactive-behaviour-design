@@ -87,7 +87,6 @@ def main():
             redo_config = f"{'--disable_redo' if ex.disable_redo else ''} "
             decay_config = f"{'--decay_label_rate' if ex.decay_label_rate else ''} "
             extra_args = f"{rollout_len_config} {ex.no_primitives_config} {args.extra_args}"
-            wandb_group = f"{env_shortname}-{ex.name}{run_suffix}_{git_rev}"
             for seed in seeds:
                 run_name = f"{env_shortname}-{seed}-{ex.name}{run_suffix}"
                 n_chars_each_field = 3
@@ -106,7 +105,7 @@ def main():
                        f"{args.harness_extra_args} "
                        f"--seed {seed} "
                        f"--extra_args ' {extra_args}' --gpus '{args.gpus}' "
-                       f"--tags {env_shortname},{ex.name} --group {wandb_group}")
+                       f"--tags {env_shortname},{ex.name}")
                 print(cmd)
 
 

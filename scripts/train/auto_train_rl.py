@@ -23,7 +23,6 @@ def get_args():
     default_log_dir = 'runs'
     parser.add_argument('--log_dir', default=default_log_dir)
     parser.add_argument('--tags')
-    parser.add_argument('--group')
     return parser.parse_args()
 
 

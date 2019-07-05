@@ -50,7 +50,6 @@ def get_args():
     parser.add_argument('--no_pretrain', action='store_true')
     parser.add_argument('--port', type=int, default=-1)
     parser.add_argument('--tags')
-    parser.add_argument('--group', default='group')
     parser.add_argument('--just_pretrain', action='store_true')
     parser.add_argument('--train_using_reward_predictor_checkpoint', action='store_true')
     parser.add_argument('--reward_predictor_checkpoint')
@@ -373,9 +372,6 @@ def get_n_demos(base_url):
 
 def start_tmux_sess_with_cmd(sess_name, cmd, gpus):
     global global_args
-    cmd = f'WANDB_TAGS={global_args.tags} ' + cmd
-    cmd = f'WANDB_RUN_GROUP={global_args.group} ' + cmd
-    cmd = f'WANDB_DESCRIPTION={global_args.run_name} ' + cmd
     cmd = f'CUDA_VISIBLE_DEVICES="{gpus}" ' + cmd
     cmd += '; echo; read -p "Press enter to exit..."'
     cmd = ['tmux', 'new-sess', '-d', '-s', sess_name, '-n', f'{sess_name}-main', cmd]
@@ -385,16 +381,7 @@ def start_tmux_sess_with_cmd(sess_name, cmd, gpus):
 def run_in_tmux_sess(sess_name, cmd, window_name, gpus):
     global global_args
     window_name += '_' + str(uuid.uuid4())[:4]
-    cmd = f'WANDB_TAGS={global_args.tags} ' + cmd
 
-    n_chars_in_each_field = 3
-    while len(global_args.group) > 128:
-        global_args.group = ''.join([w[:n_chars_in_each_field]
-                                     for w in split_preserving_seps(global_args.group)])
-        n_chars_in_each_field -= 1
-
-    cmd = f'WANDB_RUN_GROUP={global_args.group} ' + cmd
-    cmd = f'WANDB_DESCRIPTION={global_args.run_name} ' + cmd
     cmd = f'CUDA_VISIBLE_DEVICES="{gpus}" ' + cmd
     cmd += '; echo; read -p "Press enter to exit..."'
     tmux_cmd = ['tmux', 'new-window', '-ad', '-t', f'{sess_name}-main', '-n', window_name, cmd]
