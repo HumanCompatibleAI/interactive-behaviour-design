@@ -14,7 +14,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from drlhp.reward_predictor_core_network import net_mlp, net_cnn
 from drlhp.pref_db import PrefDB
-from drlhp.reward_predictor import RewardPredictor, MIN_L2_REG_COEF, PredictedRewardNormalization
+from drlhp.reward_predictor import RewardPredictor, PredictedRewardNormalization
 import global_variables
 import throttler
 from utils import ObsRewardTuple, load_reference_trajectory
@@ -31,7 +31,8 @@ throttler.mark_event = lambda event_type: None
 # then
 #   coverage html
 class SmokeTests(unittest.TestCase):
-    def test(self):
+    @staticmethod
+    def test():
         global_variables.predicted_rewards_normalize_mean_std = '0,1'
         global_variables.log_reward_normalization_every_n_calls = 1
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -97,7 +98,8 @@ class SmokeTests(unittest.TestCase):
 
 
 class TestRewardNormalization(unittest.TestCase):
-    def _test(self):
+    @staticmethod
+    def _test():
         ckpt_path = '/private/var/folders/z2/5bbsrgpj7y51rhv12n7w9q9h0000gn/T/tmp.LDcnFZqR/reward_predictor.ckpt.84'
         obs_space = Box(low=float('-inf'), high=float('inf'), shape=(6,), dtype=np.float32)
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -130,51 +132,62 @@ class TestRewardNormalization(unittest.TestCase):
             show()
 
 
-
 class TestRewardPredictor(unittest.TestCase):
+    def setUp(self):
+        np.random.seed(0)
+
     def test_l2_reg_mlp(self):
-        self.run_net_l2_test(net_mlp, {}, [10])
+        self._net_l2_test(net_mlp, {}, [10])
 
     def test_l2_reg_cnn(self):
-        self.run_net_l2_test(net_cnn, {'batchnorm': False, 'dropout': 0.0}, [84, 84, 4])
+        self._net_l2_test(net_cnn, {'batchnorm': False, 'dropout': 0.0}, [84, 84, 4])
 
-    def run_net_l2_test(self, net, net_args, obs_shape):
-        n_steps = 1
+    def _net_l2_test(self, net, net_args, obs_shape):
+        obs_space = Box(low=0, high=1, shape=obs_shape, dtype=np.float32)
         tmp_dir = tempfile.mkdtemp()
-        rp = RewardPredictor(obs_shape=obs_shape,
+        rp = RewardPredictor(obs_space=obs_space,
                              network=net,
                              network_args=net_args,
                              r_std=0.1,
                              log_dir=tmp_dir,
                              seed=0,
-                             name='test')
+                             name='test',
+                             normalization_loss_coef=0,
+                             reward_normalization=PredictedRewardNormalization.OFF)
         with rp.sess.graph.as_default():
             manual_l2_loss = tf.add_n([tf.norm(v) for v in tf.trainable_variables()])
 
         prefs_train = PrefDB(maxlen=10)
+        n_steps = 1
         s1 = np.random.rand(n_steps, *obs_shape)
         s2 = np.random.rand(n_steps, *obs_shape)
         prefs_train.append(s1, s2, pref=(1.0, 0.0))
 
         # Test 1: if we turn off L2 regularisation, does the L2 loss go up?
         rp.l2_reg_coef = 0.0
-        l2_start = rp.sess.run(manual_l2_loss)
-        for _ in range(100):
-            rp.train(prefs_train=prefs_train, prefs_val=prefs_train,
-                     val_interval=1000, verbose=False)
-        l2_end = rp.sess.run(manual_l2_loss)
-        # Threshold set empirically while writing test
-        self.assertTrue(l2_end > l2_start + 0.1)
+        self.check_l2_loss_increases(manual_l2_loss, prefs_train, rp)
 
         # Test 2: if we turn it back on, does it go down?
-        rp.l2_reg_coef = MIN_L2_REG_COEF
+        rp.l2_reg_coef = 0.1
+        self.check_l2_loss_decreases(manual_l2_loss, prefs_train, rp)
+
+    def check_l2_loss_increases(self, manual_l2_loss, prefs_train, rp):
         l2_start = rp.sess.run(manual_l2_loss)
         for _ in range(100):
             rp.train(prefs_train=prefs_train, prefs_val=prefs_train,
                      val_interval=1000, verbose=False)
         l2_end = rp.sess.run(manual_l2_loss)
         # Threshold set empirically while writing test
-        self.assertTrue(l2_end < l2_start - 0.5)
+        self.assertGreater(l2_end, l2_start + 0.1)
+
+    def check_l2_loss_decreases(self, manual_l2_loss, prefs_train, rp):
+        l2_start = rp.sess.run(manual_l2_loss)
+        for _ in range(100):
+            rp.train(prefs_train=prefs_train, prefs_val=prefs_train,
+                     val_interval=1000, verbose=False)
+        l2_end = rp.sess.run(manual_l2_loss)
+        # Threshold set empirically while writing test
+        self.assertLess(l2_end, l2_start - 1)
 
     def test_save_load(self):
         np.random.seed(0)
@@ -211,11 +224,11 @@ class TestRewardPredictor(unittest.TestCase):
             rp = self.get_reward_predictor(net, network_args, obs_shape, tmp_dir, 0)
             ckpt_path = os.path.join(tmp_dir, 'checkpoint')
             rp.save(ckpt_path, max_to_keep=2)
-            self.assertEqual(glob.glob(ckpt_path + '.*'), [ckpt_path + '.0'])
+            self.assertEqual(sorted(glob.glob(ckpt_path + '.*')), [ckpt_path + '.0'])
             rp.save(ckpt_path, max_to_keep=2)
-            self.assertEqual(glob.glob(ckpt_path + '.*'), [ckpt_path + '.0', ckpt_path + '.1'])
+            self.assertEqual(sorted(glob.glob(ckpt_path + '.*')), [ckpt_path + '.0', ckpt_path + '.1'])
             rp.save(ckpt_path, max_to_keep=2)
-            self.assertEqual(glob.glob(ckpt_path + '.*'), [ckpt_path + '.1', ckpt_path + '.2'])
+            self.assertEqual(sorted(glob.glob(ckpt_path + '.*')), [ckpt_path + '.1', ckpt_path + '.2'])
 
     def _test_polyak_save_load(self, net, network_args, obs_shape):
         obs = np.random.random_sample(obs_shape)
@@ -267,8 +280,9 @@ class TestRewardPredictor(unittest.TestCase):
         rp2 = self.get_reward_predictor(net, network_args, obs_shape, tmp_dir, seed=1)
         return rp1, rp2
 
-    def get_reward_predictor(self, net, network_args, obs_shape, tmp_dir, seed):
-        obs_space = Box(low=0, high=1, shape=obs_shape)
+    @staticmethod
+    def get_reward_predictor(net, network_args, obs_shape, tmp_dir, seed):
+        obs_space = Box(low=0, high=1, shape=obs_shape, dtype=np.float32)
         return RewardPredictor(obs_space=obs_space, network=net, network_args=network_args, r_std=0.1, seed=seed,
                                log_dir=tmp_dir, name='test',
                                reward_normalization=PredictedRewardNormalization.OFF,
@@ -287,20 +301,24 @@ class TestRewardPredictor(unittest.TestCase):
         r2 = self.predict_reward(rp2, obs)
         self.assertEqual(r1, r2)
 
-    def predict_reward(self, reward_predictor, obs):
+    @staticmethod
+    def predict_reward(reward_predictor, obs):
         return reward_predictor.unnormalized_rewards(np.array([obs]))[0][0]
 
-    def save_load_reward_predictor(self, rp1, rp2, ckpt_path):
+    @staticmethod
+    def save_load_reward_predictor(rp1, rp2, ckpt_path):
         rp1.save(ckpt_path)
         latest_ckpt_path = RewardPredictor.get_latest_checkpoint(ckpt_path)
         rp2.load(latest_ckpt_path)
 
-    def save_load_reward_predictor_polyak(self, rp1, rp2, ckpt_path, polyak_coef):
+    @staticmethod
+    def save_load_reward_predictor_polyak(rp1, rp2, ckpt_path, polyak_coef):
         rp1.save(ckpt_path)
         latest_ckpt_path = RewardPredictor.get_latest_checkpoint(ckpt_path)
         rp2.load(latest_ckpt_path, polyak_coef=polyak_coef)
 
-    def train_reward_predictor(self, reward_predictor):
+    @staticmethod
+    def train_reward_predictor(reward_predictor):
         prefs_train, prefs_val = PrefDB(maxlen=10), PrefDB(maxlen=10)
         n_steps = 10
         s1 = np.random.random_sample((n_steps,) + reward_predictor.obs_shape)
