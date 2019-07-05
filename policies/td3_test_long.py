@@ -2,6 +2,7 @@
 
 import copy
 import os
+import signal
 import sys
 import tempfile
 import unittest
@@ -181,7 +182,6 @@ class TestTD3(unittest.TestCase):
             print('Child pid is {}'.format(child.pid))
 
 
-
 class TestReplayBufferVecEnv(unittest.TestCase):
     """
     Test whether we get exactly the same replay buffer when using our
@@ -222,6 +222,7 @@ class TestReplayBufferVecEnv(unittest.TestCase):
                 self.assertEqual(v1, v2)
             else:
                 raise Exception()
+
 
 class Oracle:
     def __init__(self, mode):
@@ -329,4 +330,8 @@ def get_replay_buffer(env, env_id):
 
 
 if __name__ == '__main__':
-    unittest.main()
+    os.setpgrp()
+    try:
+        unittest.main()
+    finally:
+        os.killpg(0, signal.SIGKILL)
