@@ -121,11 +121,13 @@ def get_replay_buffer(env, env_id):
                        n_initial_episodes=3)
     policy.set_training_env(env, tempfile.mkdtemp())
     policy.init_logger(tempfile.mkdtemp())
+    tmp_dir = tempfile.mkdtemp()
     # noinspection PyTypeChecker
-    global_variables.reward_selector = RewardSelector(None, None)
+    global_variables.reward_selector = RewardSelector(None, None, log_dir=tmp_dir)
     global_variables.reward_selector.set_reward_source(RewardSource.ENV)
     while policy.initial_exploration_phase:
         policy.train()
+    policy.close()
     return copy.deepcopy(policy.replay_buffer)  # Should end at about -1.7 AverageTestEpRet
 
 
@@ -185,7 +187,7 @@ class TestTD3(unittest.TestCase):
                            **hyperparams)
 
         # noinspection PyTypeChecker
-        global_variables.reward_selector = RewardSelector(None, None)
+        global_variables.reward_selector = RewardSelector(None, None, log_dir=tmp_dir)
         global_variables.reward_selector.set_reward_source(RewardSource.ENV)
         policy.init_logger(tmp_dir)
         policy.set_training_env(train_env, tmp_dir)
@@ -277,12 +279,14 @@ class TestReplayBufferVecEnv(unittest.TestCase):
             env = FlattenDictWrapper(env, ['observation', 'desired_goal'])
             return env
 
+
         # Check 1: make sure we get deterministic results
         replay_buffers_correct = []
         for i in range(2):
             env = CustomDummyVecEnv(env_fn())
             replay_buffers_correct.append(get_replay_buffer(env, env_id))
             env.close()
+            return
         self.compare_buffers(replay_buffers_correct[0], replay_buffers_correct[1])
 
         # Check 2: confirm that the replay buffer using SubprocVecEnv is exactly the same

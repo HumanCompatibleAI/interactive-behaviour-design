@@ -174,6 +174,9 @@ class EpisodeRewardLogger():
         self.proc = ctx.Process(target=write_rewards_loop, args=(self.queue, n_envs, log_dir))
         self.proc.start()
 
+    def close(self):
+        self.proc.terminate()
+
     def log(self, env_rewards, predicted_rewards, dones):
         env_rewards = np.array(env_rewards)
         predicted_rewards = np.array(predicted_rewards)

@@ -724,6 +724,9 @@ class TD3Policy(Policy):
 
         Thread(target=f).start()
 
+    def close(self):
+        self.reward_logger.close()
+
 
 def combine_batches(b1, b2):
     assert b1.len == b2.len
