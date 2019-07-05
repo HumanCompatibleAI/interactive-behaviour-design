@@ -72,8 +72,14 @@ class TestTD3(unittest.TestCase):
         act_noise=0.1
     )
 
-    fetch_hyperparams = dict(hidden_sizes=(256, 256, 256, 256), pi_lr=1e-3, act_noise=0.1, batches_per_cycle=50,
-                             polyak=0.999995,)
+    fetch_hyperparams = dict(
+        hidden_sizes=(256, 256, 256, 256),
+        pi_lr=1e-3,
+        act_noise=0.1,
+        batches_per_cycle=50,
+        polyak=0.999995,
+        rollouts_per_worker=2
+    )
 
     @staticmethod
     def env_fn(seed, env_id):
