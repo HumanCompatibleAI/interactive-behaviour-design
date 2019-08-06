@@ -100,7 +100,7 @@ class TD3Policy(Policy):
                  bc_l2_coef=1e-4, train_mode=PolicyTrainMode.R_ONLY,
                  hidden_sizes=(128, 128, 128),
                  sess_config=None, test_rollouts_per_epoch=10,
-                 pi_adam=True):
+                 pi_adam=True, reset_noise_every_episode=True):
         assert policy_delay < batches_per_cycle
         assert noise_type in ['gaussian', 'ou']
         Policy.__init__(self, name, env_id, obs_space, ac_space, n_envs, seed)
@@ -252,6 +252,7 @@ class TD3Policy(Policy):
         self.test_rollouts_per_epoch = test_rollouts_per_epoch
         self.last_test_obs = None
         self.reward_logger = None
+        self.reset_noise_every_episode = reset_noise_every_episode
 
         self.reset_noise()
 
@@ -460,7 +461,8 @@ class TD3Policy(Policy):
                 with LogMilliseconds('instrumentation/done_check_ms', self.logger, log_every=1000):
                     for i in range(self.n_envs):
                         if done[i]:
-                            self.reset_noise_n(i)
+                            if self.reset_noise_every_episode:
+                                self.reset_noise_n(i)
                             # So that obs1 is immediately set to the first obs from the next episode
                             obs2[i] = self.train_env.reset_one_env(i)
                             if self.reward_predictor_warmup_phase:
