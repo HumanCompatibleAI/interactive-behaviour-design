@@ -78,7 +78,8 @@ class TestTD3(unittest.TestCase):
         act_noise=0.1,
         batches_per_cycle=50,
         polyak=0.999995,
-        rollouts_per_worker=2
+        rollouts_per_worker=2,
+        noise_sigma=0.2
     )
 
     @staticmethod
