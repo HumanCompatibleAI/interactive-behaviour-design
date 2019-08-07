@@ -475,6 +475,7 @@ class TD3Policy(Policy):
                 print("Finished reward predictor warmup phase at", str(datetime.datetime.now()))
                 self.reward_predictor_warmup_phase = False
                 self.initial_exploration_phase = True
+                return
 
         if self.initial_exploration_phase:
             self.logger.logkv(f'policy_{self.name}/n_initial_episodes', self.n_initial_episodes)
@@ -484,6 +485,7 @@ class TD3Policy(Policy):
                 self.initial_exploration_phase = False
                 print("Finished initial exploration at", str(datetime.datetime.now()))
                 print("Size of replay buffer:", self.replay_buffer.size)
+                return  # Don't accidentally trigger the first cycle being done
 
         if done[0]:
             self.serial_episode_n += 1
