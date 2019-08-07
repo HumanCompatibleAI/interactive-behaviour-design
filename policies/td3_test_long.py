@@ -44,7 +44,7 @@ class TestTD3(unittest.TestCase):
 
     def test_reach_parallel(self):
         test_ret = self.run_td3_rl('FetchReachDense-v1', n_envs=16, n_epochs=2, hyperparams=self.fetch_hyperparams)
-        self.assertGreater(test_ret, -1.0)
+        self.assertGreater(test_ret, -1.2)
 
     def test_pickplace_zigzag_demonstrations(self):
         oracle = Oracle('zigzag')
