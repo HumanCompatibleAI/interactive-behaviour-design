@@ -16,7 +16,7 @@ import global_variables
 from baselines.common.running_stat import RunningStat
 from baselines.common.vec_env import VecEnv
 from baselines.ddpg.noise import OrnsteinUhlenbeckActionNoise
-from utils import TimerContext, LimitedRunningStat, LogMilliseconds
+from utils import TimerContext, LimitedRunningStat
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from policies.base_policy import Policy, PolicyTrainMode, EpisodeRewardLogger
@@ -416,119 +416,107 @@ class TD3Policy(Policy):
         return reward_selector_rewards
 
     def train(self):
-        with LogMilliseconds('instrumentation/train', self.logger, log_every=1000):
-            with LogMilliseconds('instrumentation/half1_ms', self.logger, log_every=1000):
-                if self.train_env is None:
-                    raise Exception("env not set")
+        if self.train_env is None:
+            raise Exception("env not set")
 
-                if self.train_mode == PolicyTrainMode.NO_TRAINING:
-                    # Just run the environment to e.g. generate segments for DRLHP
-                    action = self.get_noise()
-                    action = np.clip(action, -self.act_limit, self.act_limit)
-                    _, _, dones, _ = self.train_env.step(action)
-                    for n, done in enumerate(dones):
-                        if done:
-                            self.train_env.reset_one_env(n)
-                    return
+        if self.train_mode == PolicyTrainMode.NO_TRAINING:
+            # Just run the environment to e.g. generate segments for DRLHP
+            action = self.get_noise()
+            action = np.clip(action, -self.act_limit, self.act_limit)
+            _, _, dones, _ = self.train_env.step(action)
+            for n, done in enumerate(dones):
+                if done:
+                    self.train_env.reset_one_env(n)
+            return
 
-                if self.train_mode == PolicyTrainMode.BC_ONLY:
-                    self.train_bc_only()
-                    return
+        if self.train_mode == PolicyTrainMode.BC_ONLY:
+            self.train_bc_only()
+            return
 
-                with LogMilliseconds('instrumentation/action_ms', self.logger, log_every=1000):
-                    if self.reward_predictor_warmup_phase or self.initial_exploration_phase:
-                        action = self.get_noise()
-                        action = np.clip(action, -self.act_limit, self.act_limit)
-                    else:
-                        action = self.train_step(self.obs1)
+        if self.reward_predictor_warmup_phase or self.initial_exploration_phase:
+            action = self.get_noise()
+            action = np.clip(action, -self.act_limit, self.act_limit)
+        else:
+            action = self.train_step(self.obs1)
 
-                # Step the env
-                with LogMilliseconds('instrumentation/env_step_ms', self.logger, log_every=100):
-                    obs2, reward, done, _ = self.train_env.step(action)
-                self.n_serial_steps += 1
+        # Step the env
+        obs2, reward, done, _ = self.train_env.step(action)
+        self.n_serial_steps += 1
 
-                # Maybe replace rewards with e.g. predicted rewards
-                orig_reward = np.copy(reward)
-                with LogMilliseconds('instrumentation/process_rewards_ms', self.logger, log_every=100):
-                    reward = self.process_rewards(obs2, reward)
-                with LogMilliseconds('instrumentation/log_rewards_ms', self.logger, log_every=100):
-                    self.reward_logger.log([orig_reward], [reward], [done])
+        # Maybe replace rewards with e.g. predicted rewards
+        orig_reward = np.copy(reward)
+        reward = self.process_rewards(obs2, reward)
+        self.reward_logger.log([orig_reward], [reward], [done])
 
-                with LogMilliseconds('instrumentation/buffer_store_ms', self.logger, log_every=1000):
-                    if not self.reward_predictor_warmup_phase:
-                        # Store experience to replay buffer
-                        for i in range(self.n_envs):
-                            self.replay_buffer.store(self.obs1[i], action[i], reward[i], obs2[i], done[i])
+        if not self.reward_predictor_warmup_phase:
+            # Store experience to replay buffer
+            for i in range(self.n_envs):
+                self.replay_buffer.store(self.obs1[i], action[i], reward[i], obs2[i], done[i])
 
-                with LogMilliseconds('instrumentation/done_check_ms', self.logger, log_every=1000):
-                    for i in range(self.n_envs):
-                        if done[i]:
-                            if self.reset_noise_every_episode:
-                                self.reset_noise_n(i)
-                            # So that obs1 is immediately set to the first obs from the next episode
-                            obs2[i] = self.train_env.reset_one_env(i)
-                            if self.reward_predictor_warmup_phase:
-                                self.n_reward_predictor_warmup_episodes = max(0, self.n_reward_predictor_warmup_episodes - 1)
-                            if self.initial_exploration_phase:
-                                self.n_initial_episodes = max(0, self.n_initial_episodes - 1)
-
-                self.obs1 = obs2
-
-            with LogMilliseconds('instrumentation/half2', self.logger, log_every=1000):
+        for i in range(self.n_envs):
+            if done[i]:
+                if self.reset_noise_every_episode:
+                    self.reset_noise_n(i)
+                # So that obs1 is immediately set to the first obs from the next episode
+                obs2[i] = self.train_env.reset_one_env(i)
                 if self.reward_predictor_warmup_phase:
-                    self.logger.logkv(f'policy_{self.name}/n_reward_predictor_warmup_episodes',
-                                      self.n_reward_predictor_warmup_episodes)
-                    if self.n_reward_predictor_warmup_episodes > 0:
-                        return
-                    else:
-                        print("Finished reward predictor warmup phase at", str(datetime.datetime.now()))
-                        self.reward_predictor_warmup_phase = False
-                        self.initial_exploration_phase = True
-
+                    self.n_reward_predictor_warmup_episodes = max(0, self.n_reward_predictor_warmup_episodes - 1)
                 if self.initial_exploration_phase:
-                    self.logger.logkv(f'policy_{self.name}/n_initial_episodes', self.n_initial_episodes)
-                    if self.n_initial_episodes > 0:
-                        return
-                    else:
-                        self.initial_exploration_phase = False
-                        print("Finished initial exploration at", str(datetime.datetime.now()))
-                        print("Size of replay buffer:", self.replay_buffer.size)
+                    self.n_initial_episodes = max(0, self.n_initial_episodes - 1)
 
-                if done[0]:
-                    self.serial_episode_n += 1
-                    cycle_done = (self.serial_episode_n % self.rollouts_per_worker == 0)
-                else:
-                    cycle_done = False
+        self.obs1 = obs2
 
-                if cycle_done:
-                    print(f"Cycle {self.cycle_n} done")
+        if self.reward_predictor_warmup_phase:
+            self.logger.logkv(f'policy_{self.name}/n_reward_predictor_warmup_episodes',
+                              self.n_reward_predictor_warmup_episodes)
+            if self.n_reward_predictor_warmup_episodes > 0:
+                return
+            else:
+                print("Finished reward predictor warmup phase at", str(datetime.datetime.now()))
+                self.reward_predictor_warmup_phase = False
+                self.initial_exploration_phase = True
 
-                    with LogMilliseconds('instrumentation/train_rl_ms', self.logger, log_every=1):
-                        self._train_rl()
+        if self.initial_exploration_phase:
+            self.logger.logkv(f'policy_{self.name}/n_initial_episodes', self.n_initial_episodes)
+            if self.n_initial_episodes > 0:
+                return
+            else:
+                self.initial_exploration_phase = False
+                print("Finished initial exploration at", str(datetime.datetime.now()))
+                print("Size of replay buffer:", self.replay_buffer.size)
 
-                    with LogMilliseconds('instrumentation/stats_ms', self.logger, log_every=1):
-                        for n in range(self.act_dim):
-                            if self.action_stats.n > 0:
-                                self.logger.logkv(f'policy_{self.name}/actions_mean_{n}', self.action_stats.mean[n])
-                                self.logger.logkv(f'policy_{self.name}/actions_std_{n}', self.action_stats.std[n])
-                            if self.noise_stats.n > 0:
-                                self.logger.logkv(f'policy_{self.name}/noise_mean_{n}', self.noise_stats.mean[n])
-                                self.logger.logkv(f'policy_{self.name}/noise_std_{n}', self.noise_stats.std[n])
-                        self.logger.logkv(f'policy_{self.name}/replay_buffer_ptr', self.replay_buffer.ptr)
-                        self.logger.logkv(f'policy_{self.name}/replay_buffer_demo_ptr', self.demonstrations_buffer.ptr)
-                        self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
-                        self.logger.logkv(f'policy_{self.name}/n_total_steps', self.n_total_steps())
-                        self.logger.measure_rate(f'policy_{self.name}/n_total_steps', self.n_total_steps(),
-                                                 f'policy_{self.name}/n_total_steps_per_second')
+        if done[0]:
+            self.serial_episode_n += 1
+            cycle_done = (self.serial_episode_n % self.rollouts_per_worker == 0)
+        else:
+            cycle_done = False
 
-                    if self.cycle_n and self.cycle_n % self.cycles_per_epoch == 0:
-                        print(f"Epoch {self.epoch_n} done")
-                        self.epoch_n += 1
-                        self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
-                        with LogMilliseconds('instrumentation/test_episodes_ms', self.logger, log_every=1):
-                            self.test_agent()
+        if cycle_done:
+            print(f"Cycle {self.cycle_n} done")
 
-                    self.cycle_n += 1
+            self._train_rl()
+
+            for n in range(self.act_dim):
+                if self.action_stats.n > 0:
+                    self.logger.logkv(f'policy_{self.name}/actions_mean_{n}', self.action_stats.mean[n])
+                    self.logger.logkv(f'policy_{self.name}/actions_std_{n}', self.action_stats.std[n])
+                if self.noise_stats.n > 0:
+                    self.logger.logkv(f'policy_{self.name}/noise_mean_{n}', self.noise_stats.mean[n])
+                    self.logger.logkv(f'policy_{self.name}/noise_std_{n}', self.noise_stats.std[n])
+            self.logger.logkv(f'policy_{self.name}/replay_buffer_ptr', self.replay_buffer.ptr)
+            self.logger.logkv(f'policy_{self.name}/replay_buffer_demo_ptr', self.demonstrations_buffer.ptr)
+            self.logger.logkv(f'policy_{self.name}/cycle', self.cycle_n)
+            self.logger.logkv(f'policy_{self.name}/n_total_steps', self.n_total_steps())
+            self.logger.measure_rate(f'policy_{self.name}/n_total_steps', self.n_total_steps(),
+                                     f'policy_{self.name}/n_total_steps_per_second')
+
+            if self.cycle_n and self.cycle_n % self.cycles_per_epoch == 0:
+                print(f"Epoch {self.epoch_n} done")
+                self.epoch_n += 1
+                self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
+                self.test_agent()
+
+            self.cycle_n += 1
 
     def _train_rl(self):
         results = defaultdict(list)
