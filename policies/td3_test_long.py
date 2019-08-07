@@ -67,9 +67,18 @@ class TestTD3(unittest.TestCase):
     # Helpers
 
     spinningup_hyperparams = dict(
-        rollouts_per_worker=1, hidden_sizes=(400, 300), batch_size=100, cycles_per_epoch=5, n_initial_episodes=10,
-        batches_per_cycle=1000, bc_l2_coef=0.0, noise_type='gaussian', polyak=0.995, pi_lr=1e-3,
-        act_noise=0.1, n_reward_predictor_warmup_episodes=0
+        hidden_sizes=(400, 300),
+        pi_lr=1e-3,
+        act_noise=0.1,
+        cycles_per_epoch=5,
+        polyak=0.995,
+        rollouts_per_worker=1,
+        noise_type='gaussian',
+        n_reward_predictor_warmup_episodes=0,
+        n_initial_episodes=10,
+        batch_size=100,
+        batches_per_cycle=1000,
+        bc_l2_coef=0.0,
     )
 
     fetch_hyperparams = dict(
