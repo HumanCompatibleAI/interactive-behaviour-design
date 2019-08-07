@@ -100,7 +100,8 @@ class TD3Policy(Policy):
                  bc_l2_coef=1e-4, train_mode=PolicyTrainMode.R_ONLY,
                  hidden_sizes=(128, 128, 128),
                  sess_config=None, test_rollouts_per_epoch=10,
-                 pi_adam=True, reset_noise_every_episode=True):
+                 pi_adam=True, reset_noise_every_episode=True,
+                 n_reward_predictor_warmup_episodes=200):
         assert policy_delay < batches_per_cycle
         assert noise_type in ['gaussian', 'ou']
         Policy.__init__(self, name, env_id, obs_space, ac_space, n_envs, seed)
@@ -240,7 +241,7 @@ class TD3Policy(Policy):
         self.saver = None
         self.graph = graph
         self.n_initial_episodes = n_initial_episodes
-        self.n_reward_predictor_warmup_episodes = 200
+        self.n_reward_predictor_warmup_episodes = n_reward_predictor_warmup_episodes
         self.n_q_pretrain_batches = 100
         self.action_stats = LimitedRunningStat(shape=(act_dim,), len=1000)
         self.noise_stats = RunningStat(act_dim)
@@ -338,6 +339,7 @@ class TD3Policy(Policy):
                 episode_reward += reward
             rewards.append(episode_reward)
             self.last_test_obs = self.test_env.reset()[0]
+        print(f"Test episodes return: {rewards}, average: {np.mean(rewards)}")
         return rewards
 
     def run_train_env_episode(self):
@@ -520,6 +522,7 @@ class TD3Policy(Policy):
                                                  f'policy_{self.name}/n_total_steps_per_second')
 
                     if self.cycle_n and self.cycle_n % self.cycles_per_epoch == 0:
+                        print(f"Epoch {self.epoch_n} done")
                         self.epoch_n += 1
                         self.logger.logkv(f'policy_{self.name}/epoch', self.epoch_n)
                         with LogMilliseconds('instrumentation/test_episodes_ms', self.logger, log_every=1):

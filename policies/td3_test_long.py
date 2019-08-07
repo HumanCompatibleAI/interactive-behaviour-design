@@ -67,9 +67,9 @@ class TestTD3(unittest.TestCase):
     # Helpers
 
     spinningup_hyperparams = dict(
-        rollouts_per_worker=1, hidden_sizes=(300,), batch_size=100, cycles_per_epoch=5, n_initial_episodes=10,
+        rollouts_per_worker=1, hidden_sizes=(400, 300), batch_size=100, cycles_per_epoch=5, n_initial_episodes=10,
         batches_per_cycle=1000, bc_l2_coef=0.0, noise_type='gaussian', polyak=0.995, pi_lr=1e-3,
-        act_noise=0.1
+        act_noise=0.1, n_reward_predictor_warmup_episodes=0
     )
 
     fetch_hyperparams = dict(
@@ -80,7 +80,8 @@ class TestTD3(unittest.TestCase):
         polyak=0.999995,
         rollouts_per_worker=2,
         noise_sigma=0.2,
-        reset_noise_every_episode=False
+        reset_noise_every_episode=False,
+        n_reward_predictor_warmup_episodes=0
     )
 
     @staticmethod
@@ -116,21 +117,11 @@ class TestTD3(unittest.TestCase):
         policy.init_logger(tmp_dir)
         policy.set_training_env(train_env, tmp_dir)
         policy.set_test_env(test_env, tmp_dir)
-        last_epoch_n = 0
         while policy.epoch_n <= n_epochs:
             policy.train()
-            if policy.epoch_n != last_epoch_n:
-                print("Epoch", policy.epoch_n - 1)
-                print("  Total steps:", policy.n_serial_steps)
-                test_return = np.mean(policy.test_agent())
-                print("  Average test return:", test_return)
-                last_epoch_n = policy.epoch_n
-                with policy.graph.as_default():
-                    var_sum = policy.sess.run(tf.reduce_sum([tf.reduce_sum(v) for v in tf.trainable_variables()]))
-                    print("  Policy hash:", var_sum)
             sys.stdout.flush()
         test_return = np.mean(policy.test_agent())
-        print("Average test return:", np.mean(test_return))
+        print("Final average test return:", np.mean(test_return))
         train_env.close()
         test_env.close()
 
