@@ -1,0 +1,3 @@
+[submodule "baselines_repo"]
+	path = baselines_repo
+	url = https://github.com/HumanCompatibleAI/interactive-behaviour-design-baselines
